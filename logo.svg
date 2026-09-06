@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" width="220" height="220">
+  <title>Ichi — one window, room to breathe</title>
+  <rect x="1" y="1" width="218" height="218" rx="10" fill="#f4efe6" stroke="#1c1a17" stroke-width="1.5"/>
+  <path fill="#1c1a17" d="M 34 117 C 29 104, 40 95, 53 99 C 61 101, 66 105, 72 104 C 110 101, 140 99, 165 93 C 176 89, 184 82, 192 75 C 193 81, 190 92, 184 101 C 177 110, 168 114, 158 116 C 120 119, 90 121, 66 122 C 52 123, 39 126, 34 117 Z"/>
+</svg>
