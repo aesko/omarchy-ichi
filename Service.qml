@@ -14,7 +14,7 @@ Item {
   // Injected by omarchy-shell.
   property var shell: null
 
-  readonly property string pluginId: "aesko.ichi"
+  readonly property string pluginId: "io.github.aesko.ichi"
   readonly property string home: Quickshell.env("HOME")
   readonly property string configDir: Quickshell.env("XDG_CONFIG_HOME") || (home + "/.config")
   readonly property string hyprlandLuaPath: configDir + "/hypr/hyprland.lua"
@@ -132,7 +132,7 @@ Item {
 
   // -------------------------------------------------------------- ipc --
   //
-  // omarchy-shell aesko.ichi <method> [args]
+  // omarchy-shell io.github.aesko.ichi <method> [args]
 
   IpcHandler {
     target: root.pluginId

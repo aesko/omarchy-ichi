@@ -2,7 +2,7 @@
 // tests/model.test.mjs can run it under plain node.
 .pragma library
 
-var PLUGIN_ID = "aesko.ichi"
+var PLUGIN_ID = "io.github.aesko.ichi"
 var LOADER_MARK = "-- " + PLUGIN_ID + ": loads Ichi's Hyprland-side logic if installed."
 var LOADER_LINE = LOADER_MARK + "\n" +
   'do local p = (os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")) .. ' +

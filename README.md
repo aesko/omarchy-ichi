@@ -57,7 +57,7 @@ avoided because Omarchy binds it to zoom reset, and `SUPER+ALT+arrows` because
 Omarchy uses those to move windows between groups.
 
 ```lua
--- Ichi (aesko.ichi)
+-- Ichi (io.github.aesko.ichi)
 o.bind("SUPER + CTRL + ALT + I", "Ichi: toggle", function()
   if ichi then ichi.toggle() end
 end)
@@ -91,24 +91,24 @@ Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` to get an entry under
   "icon": "",
   "label": "Ichi",
   "description": "Inset the lone window on this workspace",
-  "checked": "[ \"$(omarchy-shell aesko.ichi enabled)\" = true ]",
-  "action": "omarchy-shell aesko.ichi toggle"
+  "checked": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi toggle"
 },
 ```
 
 ## Command line
 
 ```bash
-omarchy-shell aesko.ichi status          # JSON for the focused workspace, plus defaults
-omarchy-shell aesko.ichi enabled         # true | false
-omarchy-shell aesko.ichi toggle
-omarchy-shell aesko.ichi reset
-omarchy-shell aesko.ichi adjust 5 0      # width +5 points, height unchanged
-omarchy-shell aesko.ichi aspect 4 3      # switch this workspace to 4:3
-omarchy-shell aesko.ichi defaults 65 85  # what a workspace gets when toggled on or reset
-omarchy-shell aesko.ichi step 10         # arrow-key increment, in percentage points
-omarchy-shell aesko.ichi adopt           # make this workspace's size the default
-omarchy-shell aesko.ichi refresh         # re-read the config and re-apply
+omarchy-shell io.github.aesko.ichi status          # JSON for the focused workspace, plus defaults
+omarchy-shell io.github.aesko.ichi enabled         # true | false
+omarchy-shell io.github.aesko.ichi toggle
+omarchy-shell io.github.aesko.ichi reset
+omarchy-shell io.github.aesko.ichi adjust 5 0      # width +5 points, height unchanged
+omarchy-shell io.github.aesko.ichi aspect 4 3      # switch this workspace to 4:3
+omarchy-shell io.github.aesko.ichi defaults 65 85  # what a workspace gets when toggled on or reset
+omarchy-shell io.github.aesko.ichi step 10         # arrow-key increment, in percentage points
+omarchy-shell io.github.aesko.ichi adopt           # make this workspace's size the default
+omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-apply
 ```
 
 The same functions are reachable from Lua as `ichi.toggle()`,
@@ -176,7 +176,7 @@ instead; the result is the same shape, per workspace.
 ## Uninstall
 
 ```bash
-omarchy plugin remove aesko.ichi
+omarchy plugin remove io.github.aesko.ichi
 ```
 
 The loader line in `hyprland.lua` checks that `ichi.lua` exists before loading
@@ -187,8 +187,8 @@ it, so it is harmless to leave; delete it if you like. Remove
 
 ```bash
 git clone https://github.com/aesko/omarchy-ichi
-ln -s "$PWD/omarchy-ichi" ~/.config/omarchy/plugins/aesko.ichi
-omarchy plugin enable aesko.ichi
+ln -s "$PWD/omarchy-ichi" ~/.config/omarchy/plugins/io.github.aesko.ichi
+omarchy plugin enable io.github.aesko.ichi
 tests/run.sh
 ```
 

@@ -1,4 +1,4 @@
--- Ichi: the Hyprland side of the aesko.ichi plugin.
+-- Ichi: the Hyprland side of the io.github.aesko.ichi plugin.
 --
 -- On an opted-in workspace holding exactly one tiled window, widen that
 -- workspace's outer gaps so the window occupies a percentage of the usable
