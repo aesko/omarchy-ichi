@@ -6,26 +6,21 @@
 
 <p align="center"><em>One window, room to breathe.</em></p>
 
-An Omarchy plugin that keeps a lone window from sprawling across a big screen.
+Ichi is an Omarchy plugin for the workspaces where you keep a single window —
+a terminal, a note, a chat — and that window doesn't need the whole screen.
 
-When an opted-in workspace holds exactly one tiled window, the workspace's
-outer gaps widen so that window occupies a chosen share of the screen — a
-percentage of width and height, or an aspect ratio — centred. Open a second
-window and the gaps snap back, so the space is never wasted. Each workspace
-decides for itself, the size is adjustable live from the keyboard, and the
-window stays tiled the whole time.
-
-That last part is the reason this is gaps rather than a floating rule: a
-tiled window is re-laid-out for free after a monitor teardown (hibernate,
-unplug, resolution change), where a floating one comes back at stale
-coordinates, half off-screen.
-
-Hyprland has a global version of this, `layout.single_window_aspect_ratio`,
-which Omarchy exposes as **1-Window Ratio** in the Toggle menu. It picks a
-shape and always maximises it, so it cannot make a window *smaller* than the
-screen's own ratio, and it applies to every workspace or none. Ichi's aspect
-mode covers what it does; size mode and per-workspace control are the parts
-it cannot.
+- **One key, one workspace.** `SUPER+CTRL+ALT+I` insets the lone window on the
+  workspace you're on. Every other workspace is left alone.
+- **Sized by feel.** Arrow keys nudge width and height in percentage steps.
+  When it looks right, `adopt` makes that the default everywhere.
+- **Never in the way.** Open a second window and the inset disappears — the
+  space is yours again. Close it and the inset comes back.
+- **Stays tiled.** The window is never floated, so hibernate, an unplugged
+  monitor or a resolution change can't leave it stranded off-screen.
+- **Two ways to size.** A share of the screen (70% × 80%) or an aspect ratio
+  (4:3, 1:1) — per workspace, with Hyprland's global 1-Window Ratio absorbed.
+- **Plain state.** One JSON file you can read, edit and keep in your dotfiles.
+  Edits apply within a second.
 
 ## Requirements
 
@@ -45,8 +40,9 @@ omarchy plugin add https://github.com/aesko/omarchy-ichi --enable
 ```
 
 On first run the service appends one guarded line to `~/.config/hypr/hyprland.lua`
-that loads `ichi.lua`. Nothing is enabled on any workspace until you toggle
-one, so installing changes nothing about how your desktop tiles.
+that loads `ichi.lua`, and tells you it did. Nothing is enabled on any
+workspace until you toggle one, so installing changes nothing about how your
+desktop tiles.
 
 ## Keybindings
 
@@ -61,7 +57,7 @@ Omarchy uses those to move windows between groups.
 o.bind("SUPER + CTRL + ALT + I", "Ichi: toggle", function()
   if ichi then ichi.toggle() end
 end)
-o.bind("SUPER + CTRL + ALT + A", "Ichi: reset size", function()
+o.bind("SUPER + CTRL + ALT + O", "Ichi: reset size", function()
   if ichi then ichi.reset() end
 end)
 o.bind("SUPER + CTRL + ALT + LEFT", "Ichi: narrower", function()
@@ -146,15 +142,25 @@ dropped; a malformed file keeps the last good document.
 
 Workspaces are identified by number. Named workspaces are not supported yet.
 
-## Behaviour
+## How it works
 
-- Applies only when the workspace holds exactly **one tiled** window. Floating
-  windows are neither counted nor touched, so Omarchy's floating dialogs,
-  pickers and TUIs are unaffected.
-- A second tiled window restores the normal gaps immediately; closing it
-  restores the inset.
+When an opted-in workspace holds exactly one tiled window, Ichi widens that
+workspace's outer gaps so the window occupies the chosen share of the screen,
+centred. A second tiled window restores the normal gaps immediately; closing
+it restores the inset.
+
+- Floating windows are neither counted nor touched, so Omarchy's floating
+  dialogs, pickers and TUIs are unaffected.
 - Special workspaces are ignored.
 - Sizes are recomputed whenever the monitor arrangement changes.
+
+### Why gaps, not floating
+
+A tiled window is re-laid-out for free after a monitor teardown — hibernate,
+unplug, resolution change — where a floating one comes back at stale
+coordinates, half off-screen. Gaps give the same inset look without ever
+leaving the tiling layout, which is also why a second window can take the
+space back instantly.
 
 ### Custom layouts
 
@@ -167,10 +173,16 @@ plugin ever wipes the other's settings.
 
 ### Hyprland's 1-Window Ratio
 
-If `layout.single_window_aspect_ratio` is set — Omarchy's **Toggle → 1-Window
-Ratio** — the compositor pads the window inside the area Ichi has already
-inset, and the two compound. Ichi warns once per session when it sees both
-active. Turn the built-in off and give the workspace an aspect mode entry
+Hyprland has a global version of this idea, `layout.single_window_aspect_ratio`,
+which Omarchy exposes as **Toggle → 1-Window Ratio**. It picks a shape and
+always maximises it, so it cannot make a window *smaller* than the screen's
+own ratio, and it applies to every workspace or none. Ichi's aspect mode
+covers what it does; size mode and per-workspace control are the parts it
+cannot.
+
+If both are on, the compositor pads the window inside the area Ichi has
+already inset and the two compound. Ichi warns once per session when it sees
+that. Turn the built-in off and give the workspace an aspect mode entry
 instead; the result is the same shape, per workspace.
 
 ## Uninstall
