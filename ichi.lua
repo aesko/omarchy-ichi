@@ -40,8 +40,8 @@ M.notify_levels = { never = 0, changes = 1, always = 2 }
 local function default_config()
   return {
     settings = { step = 5, fine_step = 1, notify = "always", all_workspaces = false, max_windows = 1, min_percent = 20 },
-    defaults = { width = 70, height = 80, step = 5, max_width = 0, max_height = 0 },
-    -- Ordered, first match wins: { key = "desc:..." or "DP-1", width?, height?, max_width?, max_height? }
+    defaults = { width = 70, height = 80, step = 5, max_width = 0, max_height = 0, align_x = 50, align_y = 50 },
+    -- Ordered, first match wins: { key = "desc:..." or "DP-1", width?, height?, max_width?, max_height?, align_x?, align_y? }
     monitors = {},
     -- Ordered, for cycling: { name = "reading", entry = <normalized entry> }
     presets = {},
@@ -126,7 +126,7 @@ function M.defaults_for(mon)
   end
   local block = M.monitor_block(mon)
   if block then
-    for _, k in ipairs({ "width", "height", "max_width", "max_height" }) do
+    for _, k in ipairs({ "width", "height", "max_width", "max_height", "align_x", "align_y" }) do
       if block[k] ~= nil then
         out[k] = block[k]
       end
@@ -154,13 +154,16 @@ function M.resolve(entry, mon)
   end
   out.max_width = defaults.max_width or 0
   out.max_height = defaults.max_height or 0
+  out.align_x = defaults.align_x or 50
+  out.align_y = defaults.align_y or 50
   return out
 end
 
--- Outer gaps that leave a centred box of the requested shape in a usable area.
--- Never smaller than the base gaps, so an inset of 100% is exactly normal.
--- A positive max_width or max_height on the entry caps the box in pixels; an
--- aspect box shrinks on both sides to keep its ratio.
+-- Outer gaps that leave a box of the requested shape in a usable area, centred
+-- unless align_x or align_y on the entry say otherwise (0 is the left or top
+-- edge, 100 the right or bottom). Never smaller than the base gaps, so an
+-- inset of 100% is exactly normal. A positive max_width or max_height caps
+-- the box in pixels; an aspect box shrinks on both sides to keep its ratio.
 function M.gaps_for(usable_w, usable_h, entry, base)
   local box_w, box_h
   local max_w, max_h = entry.max_width or 0, entry.max_height or 0
@@ -190,13 +193,14 @@ function M.gaps_for(usable_w, usable_h, entry, base)
     end
   end
 
-  local gap_h = math.floor((usable_w - box_w) / 2)
-  local gap_v = math.floor((usable_h - box_h) / 2)
+  local slack_w, slack_h = usable_w - box_w, usable_h - box_h
+  local left = math.floor(slack_w * (entry.align_x or 50) / 100)
+  local top = math.floor(slack_h * (entry.align_y or 50) / 100)
   return {
-    left = math.max(gap_h, base.left or 0),
-    right = math.max(gap_h, base.right or 0),
-    top = math.max(gap_v, base.top or 0),
-    bottom = math.max(gap_v, base.bottom or 0),
+    left = math.max(left, base.left or 0),
+    right = math.max(math.floor(slack_w) - left, base.right or 0),
+    top = math.max(top, base.top or 0),
+    bottom = math.max(math.floor(slack_h) - top, base.bottom or 0),
   }
 end
 
@@ -258,6 +262,8 @@ function M.parse_config(text)
   cfg.defaults.height = clamp(math.floor(number_field(defaults, "height") or 80), min, M.limits.max)
   cfg.defaults.max_width = math.max(0, math.floor(number_field(defaults, "max_width") or 0))
   cfg.defaults.max_height = math.max(0, math.floor(number_field(defaults, "max_height") or 0))
+  cfg.defaults.align_x = clamp(math.floor(number_field(defaults, "align_x") or 50), 0, 100)
+  cfg.defaults.align_y = clamp(math.floor(number_field(defaults, "align_y") or 50), 0, 100)
   -- `step` moved from defaults to settings in 0.2; the old place is still read.
   cfg.settings.step = clamp(math.floor(number_field(settings, "step") or number_field(defaults, "step") or 5), 1, 25)
   cfg.defaults.step = cfg.settings.step
@@ -283,6 +289,12 @@ function M.parse_config(text)
         local v = number_field(body, field)
         if v then
           block[field] = math.max(0, math.floor(v))
+        end
+      end
+      for _, field in ipairs({ "align_x", "align_y" }) do
+        local v = number_field(body, field)
+        if v then
+          block[field] = clamp(math.floor(v), 0, 100)
         end
       end
       cfg.monitors[#cfg.monitors + 1] = block
@@ -343,6 +355,12 @@ function M.encode_size(d)
   end
   for _, k in ipairs({ "max_width", "max_height" }) do
     if (d[k] or 0) > 0 then
+      parts[#parts + 1] = string.format('"%s": %d', k, d[k])
+    end
+  end
+  -- Alignment only when it is not the centre, which is what an absent field means.
+  for _, k in ipairs({ "align_x", "align_y" }) do
+    if d[k] ~= nil and d[k] ~= 50 then
       parts[#parts + 1] = string.format('"%s": %d', k, d[k])
     end
   end
@@ -732,6 +750,21 @@ function M.set_max(width, height)
     return v > 0 and (v .. "px") or "none"
   end
   notify(string.format("Ichi: max width %s, max height %s", show(d.max_width), show(d.max_height)))
+end
+
+-- Where the box sits in the slack: 0 is the left or top edge, 50 the centre,
+-- 100 the right or bottom. Nil keeps a value.
+function M.set_align(x, y)
+  local d = M.config.defaults
+  if tonumber(x) then
+    d.align_x = clamp(math.floor(tonumber(x)), 0, 100)
+  end
+  if tonumber(y) then
+    d.align_y = clamp(math.floor(tonumber(y)), 0, 100)
+  end
+  M.save()
+  M.refresh()
+  notify(string.format("Ichi: aligned at %d%% across, %d%% down", d.align_x, d.align_y))
 end
 
 -- Arrow-key increments in percentage points. Zero or nil keeps a value.

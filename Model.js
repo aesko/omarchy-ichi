@@ -64,6 +64,8 @@ function normalizeConfig(document) {
   if (isFinite(Number(defaults.height))) config.defaults.height = clamp(Math.floor(Number(defaults.height)), min, LIMITS.max)
   if (Number(defaults.max_width) > 0) config.defaults.max_width = Math.floor(Number(defaults.max_width))
   if (Number(defaults.max_height) > 0) config.defaults.max_height = Math.floor(Number(defaults.max_height))
+  if (isFinite(Number(defaults.align_x))) config.defaults.align_x = clamp(Math.floor(Number(defaults.align_x)), 0, 100)
+  if (isFinite(Number(defaults.align_y))) config.defaults.align_y = clamp(Math.floor(Number(defaults.align_y)), 0, 100)
   // `step` lived under defaults before 0.2; both places are read.
   var step = isFinite(Number(settings.step)) ? settings.step : defaults.step
   if (isFinite(Number(step))) config.settings.step = clamp(Math.floor(Number(step)), 1, 25)
@@ -81,6 +83,8 @@ function normalizeConfig(document) {
     if (isFinite(Number(raw.height))) block.height = clamp(Math.floor(Number(raw.height)), min, LIMITS.max)
     if (isFinite(Number(raw.max_width))) block.max_width = Math.max(0, Math.floor(Number(raw.max_width)))
     if (isFinite(Number(raw.max_height))) block.max_height = Math.max(0, Math.floor(Number(raw.max_height)))
+    if (isFinite(Number(raw.align_x))) block.align_x = clamp(Math.floor(Number(raw.align_x)), 0, 100)
+    if (isFinite(Number(raw.align_y))) block.align_y = clamp(Math.floor(Number(raw.align_y)), 0, 100)
     config.monitors.push(block)
   }
 
@@ -143,7 +147,7 @@ function defaultsFor(config, monitor) {
   for (var k in config.defaults) out[k] = config.defaults[k]
   var block = monitorBlock(config, monitor)
   if (block) {
-    ["width", "height", "max_width", "max_height"].forEach(function (field) {
+    ["width", "height", "max_width", "max_height", "align_x", "align_y"].forEach(function (field) {
       if (block[field] !== undefined) out[field] = block[field]
     })
   }

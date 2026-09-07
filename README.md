@@ -117,6 +117,7 @@ omarchy-shell io.github.aesko.ichi save_preset wide   # keep this workspace's si
 omarchy-shell io.github.aesko.ichi remove_preset wide
 omarchy-shell io.github.aesko.ichi defaults 65 85  # the size for workspaces that follow the defaults
 omarchy-shell io.github.aesko.ichi max 1800 0      # never wider than 1800px; 0 is no cap
+omarchy-shell io.github.aesko.ichi align 50 40     # where the box sits: 0-100 across, 0-100 down
 omarchy-shell io.github.aesko.ichi step 10 2       # arrow-key increments: step and fine step
 omarchy-shell io.github.aesko.ichi notify changes  # never | changes | always
 omarchy-shell io.github.aesko.ichi all on          # every workspace, unless it opts out
@@ -130,7 +131,7 @@ omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-a
 The same functions are reachable from Lua as `ichi.toggle()`,
 `ichi.adjust(dw, dh)`, `ichi.nudge(dx, dy, fine)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
 `ichi.preset(name)`, `ichi.cycle(delta)`, `ichi.save_preset(name)`, `ichi.remove_preset(name)`,
-`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.set_all_workspaces(on)`, `ichi.set_max_windows(n)`, `ichi.set_min_percent(n)`, `ichi.adopt_defaults(id, scope)`,
+`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_align(x, y)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.set_all_workspaces(on)`, `ichi.set_max_windows(n)`, `ichi.set_min_percent(n)`, `ichi.adopt_defaults(id, scope)`,
 `ichi.enable(id, entry)` and `ichi.disable(id)`, or from a shell with
 `hyprctl eval 'ichi.toggle()'`.
 
@@ -147,7 +148,7 @@ dropped; a malformed file keeps the last good document.
 ```json
 {
   "settings": { "step": 5, "fine_step": 1, "notify": "always", "all_workspaces": false, "max_windows": 1, "min_percent": 20 },
-  "defaults": { "width": 70, "height": 80, "max_width": 1800 },
+  "defaults": { "width": 70, "height": 80, "max_width": 1800, "align_y": 45 },
   "monitors": {
     "desc:ULTRAGEAR": { "width": 55 },
     "eDP-1": { "width": 95, "height": 95, "max_width": 0 }
@@ -187,12 +188,16 @@ dropped; a malformed file keeps the last good document.
   on a laptop can be a 2200px terminal on a 32-inch display; the cap holds it
   where it is readable. Omit or set to `0` for no cap. The caps apply to every
   workspace, in the units Hyprland reports the monitor size in.
+- `defaults.align_x` and `defaults.align_y` say where the box sits in the
+  space around it: `0` is the left or top edge, `50` the centre, `100` the
+  right or bottom. A little above centre, say `align_y: 45`, often looks
+  more centred than the centre does. Normal gaps are always kept.
 - `monitors` overrides the defaults per display, field by field, for every
   workspace that follows them. A key is a connector name such as `eDP-1`, or
   `desc:` followed by any part of the description Hyprland reports, which is
   the form that survives a dock being replugged. `hyprctl monitors` shows
   both. The first matching block wins. Fixed `size` and `aspect` entries keep
-  their own size but take the monitor's caps. `adopt monitor` writes a block
+  their own size but take the monitor's caps and alignment. `adopt monitor` writes a block
   for the current display from the workspace you have tuned.
 - `presets` are named entries in any of the three forms. `cycle` steps a
   workspace through them in file order, starting from the first when the
@@ -212,7 +217,7 @@ Workspaces are identified by number. Named workspaces are not supported yet.
 
 When an opted-in workspace holds one tiled window, or up to `max_windows`
 of them, Ichi widens that workspace's outer gaps so the windows occupy the
-chosen share of the screen, centred. One tiled window more than that
+chosen share of the screen, centred unless you align them elsewhere. One tiled window more than that
 restores the normal gaps immediately; closing it restores the inset.
 
 - Floating windows are neither counted nor touched, so Omarchy's floating

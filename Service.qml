@@ -187,6 +187,14 @@ Item {
       root.evaluate("if ichi then ichi.set_max(" + w + ", " + h + ") end")
     }
 
+    // Where the box sits, 0-100 across and down; e.g. align 50 40 for a
+    // little above centre. An empty argument keeps that axis.
+    function align(x: string, y: string): void {
+      var ax = x === "" || x === undefined ? "nil" : (Number(x) || 0)
+      var ay = y === "" || y === undefined ? "nil" : (Number(y) || 0)
+      root.evaluate("if ichi then ichi.set_align(" + ax + ", " + ay + ") end")
+    }
+
     // Arrow-key increments in percentage points, e.g. step 10 or step 10 2.
     function step(points: string, fine: string): void {
       var s = Number(points) || 0

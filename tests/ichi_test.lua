@@ -53,6 +53,17 @@ check("aspect 1:1 centres a 1414 box", square.left == 573, tostring(square.left)
 local tall = M.gaps_for(1000, 2000, { mode = "aspect", ratio_w = 4, ratio_h = 3 }, base)
 check("aspect 4:3 on a portrait area is width-limited", tall.left == 10 and tall.top == 625, tall.top)
 
+local left_aligned = M.gaps_for(usable_w, usable_h, { mode = "size", width = 70, height = 80, align_x = 0 }, base)
+check("align_x 0 puts the box at the left edge, base gap kept", left_aligned.left == 10 and left_aligned.right == 768
+  and left_aligned.top == 141, left_aligned.left .. "/" .. left_aligned.right)
+local bottom_aligned = M.gaps_for(usable_w, usable_h, { mode = "size", width = 70, height = 80, align_y = 100 }, base)
+check("align_y 100 puts the box at the bottom", bottom_aligned.top == 282 and bottom_aligned.bottom == 10
+  and bottom_aligned.left == 384, bottom_aligned.top .. "/" .. bottom_aligned.bottom)
+local raised = M.gaps_for(usable_w, usable_h, { mode = "size", width = 70, height = 80, align_y = 40 }, base)
+check("align_y 40 sits a little above centre", raised.top == 113 and raised.bottom == 169, raised.top .. "/" .. raised.bottom)
+local aligned_aspect = M.gaps_for(usable_w, usable_h, { mode = "aspect", ratio_w = 4, ratio_h = 3, align_x = 100 }, base)
+check("alignment applies to an aspect box too", aligned_aspect.left == 674 and aligned_aspect.right == 10, aligned_aspect.left)
+
 local capped = M.gaps_for(usable_w, usable_h, { mode = "size", width = 70, height = 80, max_width = 1600 }, base)
 check("max_width caps a size box", capped.left == 480 and capped.top == 141, capped.left)
 local capped_aspect = M.gaps_for(usable_w, usable_h, { mode = "aspect", ratio_w = 4, ratio_h = 3, max_width = 1600 }, base)
@@ -120,6 +131,19 @@ check("resolve turns default into the defaults' size", M.resolve({ mode = "defau
 check("resolve leaves a fixed entry alone", M.resolve(cfg.workspaces[5]).mode == "aspect")
 local with_caps = M.parse_config('{ "defaults": { "width": 60, "height": 60, "max_width": 1500, "max_height": -3 } }')
 check("parse reads caps and floors negatives at none", with_caps.defaults.max_width == 1500 and with_caps.defaults.max_height == 0)
+check("parse defaults alignment to the centre", with_caps.defaults.align_x == 50 and with_caps.defaults.align_y == 50)
+check("parse clamps alignment", M.parse_config('{ "defaults": { "align_x": 120, "align_y": -4 } }').defaults.align_x == 100
+  and M.parse_config('{ "defaults": { "align_x": 120, "align_y": -4 } }').defaults.align_y == 0)
+local with_align = M.parse_config('{ "defaults": { "align_x": 50, "align_y": 40 }, "monitors": { "eDP-1": { "align_y": 0 } } }')
+check("parse reads alignment in a monitor block", with_align.monitors[1].align_y == 0 and with_align.monitors[1].align_x == nil)
+check("encode writes alignment only off centre", M.encode_config(with_align):find('"align_y": 40', 1, true) ~= nil
+  and M.encode_config(with_align):find('"align_x"', 1, true) == nil
+  and M.encode_config(with_align):find('"eDP-1": { "align_y": 0 }', 1, true) ~= nil, M.encode_config(with_align))
+M.config = with_align
+check("resolve carries alignment, layered by monitor", M.resolve({ mode = "default" }).align_y == 40
+  and M.resolve({ mode = "default" }, { name = "eDP-1" }).align_y == 0
+  and M.resolve({ mode = "default" }, { name = "eDP-1" }).align_x == 50)
+M.config = M.parse_config("")
 check("encode writes only the caps that are set", M.encode_config(with_caps):find('"max_width": 1500', 1, true) ~= nil
   and M.encode_config(with_caps):find("max_height", 1, true) == nil)
 check("encode omits caps by default", M.encode_config(cfg):find("max_width", 1, true) == nil
@@ -304,6 +328,11 @@ check("set_max caps the applied box", fake.rules[4].left == 780, fake.rules[4].l
 check("set_max persists", M.parse_config(io.open(M.config_path):read("*a")).defaults.max_width == 1000)
 M.set_max(0, 0)
 check("set_max zero removes the cap", fake.rules[4].left == 704, fake.rules[4].left)
+M.set_align(nil, 0)
+check("set_align moves the applied box to the top", fake.rules[4].top == 10 and fake.rules[4].bottom > 10 and fake.rules[4].left == 704)
+check("set_align persists", M.parse_config(io.open(M.config_path):read("*a")).defaults.align_y == 0)
+M.set_align(50, 50)
+check("set_align back to centre", fake.rules[4].top == fake.rules[4].bottom)
 M.adjust(-15, 0, 4) -- 45 x 95 -> 30 x 95
 M.adopt_defaults(4, "monitor")
 check("adopt monitor writes a desc: block", #M.config.monitors == 1 and M.config.monitors[1].key == "desc:LG ULTRAGEAR"
