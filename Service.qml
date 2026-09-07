@@ -201,6 +201,11 @@ Item {
       root.evaluate("if ichi then ichi.nudge(" + dw + ", " + dh + ", " + (fine === "fine") + ") end")
     }
 
+    // The smallest share of the screen a size may be, e.g. min 10.
+    function min(percent: string): void {
+      root.evaluate("if ichi then ichi.set_min_percent(" + (Number(percent) || 20) + ") end")
+    }
+
     // How many tiled windows may share the box, e.g. windows 2.
     function windows(count: string): void {
       root.evaluate("if ichi then ichi.set_max_windows(" + (Number(count) || 1) + ") end")

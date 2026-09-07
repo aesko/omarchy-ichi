@@ -37,7 +37,7 @@ test("parseConfig normalizes and drops bad entries", () => {
     },
   }))
   assert.deepEqual(config.defaults, { width: 60, height: 75 })
-  assert.deepEqual(config.settings, { step: 25, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1 })
+  assert.deepEqual(config.settings, { step: 25, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1, min_percent: 20 })
   assert.deepEqual(config.workspaces["2"], { mode: "size", width: 70, height: 80 })
   assert.deepEqual(config.workspaces["5"], { mode: "aspect", ratio: [4, 3] })
   assert.equal(config.workspaces["7"], undefined)
@@ -48,7 +48,13 @@ test("parseConfig normalizes and drops bad entries", () => {
 
 test("settings block is read, with the pre-0.2 step location as a fallback", () => {
   const modern = Model.parseConfig(JSON.stringify({ settings: { step: 10, fine_step: 2, notify: "never", max_windows: 30 }, defaults: { step: 3 } }))
-  assert.deepEqual(modern.settings, { step: 10, fine_step: 2, notify: "never", all_workspaces: false, max_windows: 10 })
+  assert.deepEqual(modern.settings, { step: 10, fine_step: 2, notify: "never", all_workspaces: false, max_windows: 10, min_percent: 20 })
+  const floor = Model.parseConfig(JSON.stringify({ settings: { min_percent: 40 }, defaults: { width: 30 }, workspaces: { "1": { width: 10, height: 90 } } }))
+  assert.equal(floor.settings.min_percent, 40)
+  assert.equal(floor.defaults.width, 40)
+  assert.equal(floor.workspaces["1"].width, 40)
+  assert.equal(Model.parseConfig(JSON.stringify({ settings: { min_percent: 1 } })).settings.min_percent, 5)
+  assert.equal(Model.parseConfig(JSON.stringify({ settings: { min_percent: 10 }, workspaces: { "1": { width: 12, height: 12 } } })).workspaces["1"].width, 12)
   const legacy = Model.parseConfig(JSON.stringify({ defaults: { step: 3 } }))
   assert.equal(legacy.settings.step, 3)
   const capped = Model.parseConfig(JSON.stringify({ defaults: { max_width: 1600.7, max_height: -1 } }))
@@ -94,7 +100,7 @@ test("status reports the active workspace", () => {
   const config = Model.normalizeConfig({ workspaces: { "2": { width: 70, height: 80 }, "5": { mode: "aspect", ratio: [1, 1] } } })
   assert.deepEqual(Model.status(config, 2), {
     workspace: 2, enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
-    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1 }, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: [2, 5],
+    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1, min_percent: 20 }, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: [2, 5],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
   assert.equal(Model.status(config, 3).enabled, false)

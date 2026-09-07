@@ -26,7 +26,9 @@ M.config_path = CONFIG_DIR .. "/omarchy/ichi.json"
 M.legacy_json_path = CONFIG_DIR .. "/omarchy/workspace-inset.json"
 M.legacy_lines_path = STATE_DIR .. "/omarchy/workspace-inset"
 
-M.limits = { min = 30, max = 100 }
+-- The range settings.min_percent may take; sizes are clamped between that
+-- setting and 100.
+M.limits = { min = 5, max = 100 }
 -- Hyprland's own layouts. Anything else is a plugin-registered layout that
 -- owns how its workspace tiles, and Ichi yields to it.
 M.builtin_layouts = { dwindle = true, master = true, scrolling = true, monocle = true }
@@ -37,7 +39,7 @@ M.notify_levels = { never = 0, changes = 1, always = 2 }
 
 local function default_config()
   return {
-    settings = { step = 5, fine_step = 1, notify = "always", all_workspaces = false, max_windows = 1 },
+    settings = { step = 5, fine_step = 1, notify = "always", all_workspaces = false, max_windows = 1, min_percent = 20 },
     defaults = { width = 70, height = 80, step = 5, max_width = 0, max_height = 0 },
     -- Ordered, first match wins: { key = "desc:..." or "DP-1", width?, height?, max_width?, max_height? }
     monitors = {},
@@ -62,8 +64,14 @@ end
 
 -- Entry shapes: { mode = "default" } follows the defaults (JSON `true`),
 -- "size" is a share of the usable area, "aspect" a ratio.
-function M.normalize_entry(entry, defaults)
+-- The smallest share a size may be, per the config being built or the live one.
+local function floor_percent(cfg)
+  return (cfg or M.config).settings.min_percent
+end
+
+function M.normalize_entry(entry, defaults, min)
   defaults = defaults or M.config.defaults
+  min = min or floor_percent()
   if entry == true then
     return { mode = "default" }
   end
@@ -85,8 +93,8 @@ function M.normalize_entry(entry, defaults)
 
   return {
     mode = "size",
-    width = clamp(math.floor(tonumber(entry.width) or defaults.width), M.limits.min, M.limits.max),
-    height = clamp(math.floor(tonumber(entry.height) or defaults.height), M.limits.min, M.limits.max),
+    width = clamp(math.floor(tonumber(entry.width) or defaults.width), min, M.limits.max),
+    height = clamp(math.floor(tonumber(entry.height) or defaults.height), min, M.limits.max),
   }
 end
 
@@ -224,7 +232,7 @@ local function string_field(body, key)
 end
 
 -- One "{ ... }" entry body, or nil when it does not describe anything usable.
-local function parse_entry(body, defaults)
+local function parse_entry(body, defaults, min)
   local rw, rh = body:match('"ratio"%s*:%s*%[%s*(%d+%.?%d*)%s*,%s*(%d+%.?%d*)%s*%]')
   return M.normalize_entry({
     mode = body:match('"mode"%s*:%s*"(%a+)"'),
@@ -232,7 +240,7 @@ local function parse_entry(body, defaults)
     height = number_field(body, "height"),
     ratio_w = rw,
     ratio_h = rh,
-  }, defaults)
+  }, defaults, min)
 end
 
 function M.parse_config(text)
@@ -243,8 +251,11 @@ function M.parse_config(text)
 
   local defaults = find_object(text, "defaults") or ""
   local settings = find_object(text, "settings") or ""
-  cfg.defaults.width = clamp(math.floor(number_field(defaults, "width") or 70), M.limits.min, M.limits.max)
-  cfg.defaults.height = clamp(math.floor(number_field(defaults, "height") or 80), M.limits.min, M.limits.max)
+  -- Read first: every size below is clamped against it.
+  cfg.settings.min_percent = clamp(math.floor(number_field(settings, "min_percent") or 20), M.limits.min, M.limits.max)
+  local min = cfg.settings.min_percent
+  cfg.defaults.width = clamp(math.floor(number_field(defaults, "width") or 70), min, M.limits.max)
+  cfg.defaults.height = clamp(math.floor(number_field(defaults, "height") or 80), min, M.limits.max)
   cfg.defaults.max_width = math.max(0, math.floor(number_field(defaults, "max_width") or 0))
   cfg.defaults.max_height = math.max(0, math.floor(number_field(defaults, "max_height") or 0))
   -- `step` moved from defaults to settings in 0.2; the old place is still read.
@@ -265,7 +276,7 @@ function M.parse_config(text)
       for _, field in ipairs({ "width", "height" }) do
         local v = number_field(body, field)
         if v then
-          block[field] = clamp(math.floor(v), M.limits.min, M.limits.max)
+          block[field] = clamp(math.floor(v), min, M.limits.max)
         end
       end
       for _, field in ipairs({ "max_width", "max_height" }) do
@@ -295,7 +306,7 @@ function M.parse_config(text)
         pos = pos + 4
       elseif presets:sub(pos, pos) == "{" then
         local _, close = presets:find("%b{}", pos)
-        entry = close and parse_entry(presets:sub(pos + 1, close - 1), cfg.defaults)
+        entry = close and parse_entry(presets:sub(pos + 1, close - 1), cfg.defaults, min)
         pos = (close or pos) + 1
       end
       if entry then
@@ -314,7 +325,7 @@ function M.parse_config(text)
       cfg.workspaces[tonumber(id)] = false
     end
     for id, body in workspaces:gmatch('"(%d+)"%s*:%s*{(.-)}') do
-      cfg.workspaces[tonumber(id)] = parse_entry(body, cfg.defaults)
+      cfg.workspaces[tonumber(id)] = parse_entry(body, cfg.defaults, min)
     end
   end
 
@@ -384,12 +395,13 @@ function M.encode_config(cfg)
   end
 
   return string.format(
-    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s", "all_workspaces": %s, "max_windows": %d },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
+    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s", "all_workspaces": %s, "max_windows": %d, "min_percent": %d },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
     cfg.settings.step,
     cfg.settings.fine_step,
     cfg.settings.notify,
     tostring(cfg.settings.all_workspaces),
     cfg.settings.max_windows,
+    cfg.settings.min_percent,
     M.encode_size(cfg.defaults),
     encode_monitors(cfg.monitors),
     encode_presets(cfg.presets),
@@ -650,8 +662,8 @@ function M.adjust(delta_width, delta_height, id)
   if entry == nil or entry.mode ~= "size" then
     entry = M.resolve({ mode = "default" }, mon)
   end
-  entry.width = clamp(entry.width + (delta_width or 0), M.limits.min, M.limits.max)
-  entry.height = clamp(entry.height + (delta_height or 0), M.limits.min, M.limits.max)
+  entry.width = clamp(entry.width + (delta_width or 0), floor_percent(), M.limits.max)
+  entry.height = clamp(entry.height + (delta_height or 0), floor_percent(), M.limits.max)
   commit(id, entry, describe(id, entry), "always")
 end
 
@@ -700,8 +712,8 @@ end
 -- their own sizes. Zero or nil leaves a value as it is.
 function M.set_defaults(width, height, step)
   local d, s = M.config.defaults, M.config.settings
-  d.width = clamp(math.floor(positive(width, d.width)), M.limits.min, M.limits.max)
-  d.height = clamp(math.floor(positive(height, d.height)), M.limits.min, M.limits.max)
+  d.width = clamp(math.floor(positive(width, d.width)), floor_percent(), M.limits.max)
+  d.height = clamp(math.floor(positive(height, d.height)), floor_percent(), M.limits.max)
   s.step = clamp(math.floor(positive(step, s.step)), 1, 25)
   d.step = s.step -- kept in sync so bindings written against 0.1 still work
   M.save()
@@ -730,6 +742,14 @@ function M.set_step(step, fine)
   M.config.defaults.step = s.step
   M.save()
   notify(string.format("Ichi: step %d, fine step %d", s.step, s.fine_step))
+end
+
+-- The smallest share of the screen a size may be. Sizes already below the
+-- new floor are left as they are until they are next touched.
+function M.set_min_percent(n)
+  M.config.settings.min_percent = clamp(math.floor(tonumber(n) or 20), M.limits.min, M.limits.max)
+  M.save()
+  notify(string.format("Ichi: sizes go down to %d%%", M.config.settings.min_percent))
 end
 
 -- How many tiled windows may share the box before the inset gives way.

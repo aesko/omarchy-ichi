@@ -9,13 +9,15 @@ var LOADER_LINE = LOADER_MARK + "\n" +
   '"/omarchy/plugins/' + PLUGIN_ID + '/ichi.lua"; ' +
   'local f = io.open(p, "r"); if f then f:close(); dofile(p) end end\n'
 
-var LIMITS = { min: 30, max: 100 }
+// The range settings.min_percent may take; sizes are clamped between that
+// setting and 100.
+var LIMITS = { min: 5, max: 100 }
 
 var NOTIFY_LEVELS = ["never", "changes", "always"]
 
 function defaultConfig() {
   return {
-    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1 },
+    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1, min_percent: 20 },
     defaults: { width: 70, height: 80 },
     monitors: [],
     presets: [],
@@ -29,7 +31,7 @@ function clamp(value, lo, hi) {
 
 // `true` (or mode "default") follows the defaults; "size" and "aspect" are
 // fixed for that workspace.
-function normalizeEntry(entry, defaults) {
+function normalizeEntry(entry, defaults, min) {
   if (entry === true) return { mode: "default" }
   if (entry === false) return false
   if (!entry || typeof entry !== "object") return null
@@ -43,8 +45,8 @@ function normalizeEntry(entry, defaults) {
   var width = Number(entry.width), height = Number(entry.height)
   return {
     mode: "size",
-    width: clamp(Math.floor(isFinite(width) ? width : defaults.width), LIMITS.min, LIMITS.max),
-    height: clamp(Math.floor(isFinite(height) ? height : defaults.height), LIMITS.min, LIMITS.max),
+    width: clamp(Math.floor(isFinite(width) ? width : defaults.width), min, LIMITS.max),
+    height: clamp(Math.floor(isFinite(height) ? height : defaults.height), min, LIMITS.max),
   }
 }
 
@@ -55,8 +57,11 @@ function normalizeConfig(document) {
 
   var defaults = document.defaults || {}
   var settings = document.settings || {}
-  if (isFinite(Number(defaults.width))) config.defaults.width = clamp(Math.floor(Number(defaults.width)), LIMITS.min, LIMITS.max)
-  if (isFinite(Number(defaults.height))) config.defaults.height = clamp(Math.floor(Number(defaults.height)), LIMITS.min, LIMITS.max)
+  // Read first: every size below is clamped against it.
+  if (isFinite(Number(settings.min_percent))) config.settings.min_percent = clamp(Math.floor(Number(settings.min_percent)), LIMITS.min, LIMITS.max)
+  var min = config.settings.min_percent
+  if (isFinite(Number(defaults.width))) config.defaults.width = clamp(Math.floor(Number(defaults.width)), min, LIMITS.max)
+  if (isFinite(Number(defaults.height))) config.defaults.height = clamp(Math.floor(Number(defaults.height)), min, LIMITS.max)
   if (Number(defaults.max_width) > 0) config.defaults.max_width = Math.floor(Number(defaults.max_width))
   if (Number(defaults.max_height) > 0) config.defaults.max_height = Math.floor(Number(defaults.max_height))
   // `step` lived under defaults before 0.2; both places are read.
@@ -72,8 +77,8 @@ function normalizeConfig(document) {
     var raw = monitors[mkey]
     if (!raw || typeof raw !== "object") continue
     var block = { key: mkey }
-    if (isFinite(Number(raw.width))) block.width = clamp(Math.floor(Number(raw.width)), LIMITS.min, LIMITS.max)
-    if (isFinite(Number(raw.height))) block.height = clamp(Math.floor(Number(raw.height)), LIMITS.min, LIMITS.max)
+    if (isFinite(Number(raw.width))) block.width = clamp(Math.floor(Number(raw.width)), min, LIMITS.max)
+    if (isFinite(Number(raw.height))) block.height = clamp(Math.floor(Number(raw.height)), min, LIMITS.max)
     if (isFinite(Number(raw.max_width))) block.max_width = Math.max(0, Math.floor(Number(raw.max_width)))
     if (isFinite(Number(raw.max_height))) block.max_height = Math.max(0, Math.floor(Number(raw.max_height)))
     config.monitors.push(block)
@@ -81,14 +86,14 @@ function normalizeConfig(document) {
 
   var presets = document.presets || {}
   for (var name in presets) {
-    var preset = normalizeEntry(presets[name], config.defaults)
+    var preset = normalizeEntry(presets[name], config.defaults, min)
     if (preset) config.presets.push({ name: name, entry: preset })
   }
 
   var workspaces = document.workspaces || {}
   for (var key in workspaces) {
     if (!/^\d+$/.test(key)) continue
-    var entry = normalizeEntry(workspaces[key], config.defaults)
+    var entry = normalizeEntry(workspaces[key], config.defaults, min)
     if (entry !== null && entry !== undefined) config.workspaces[key] = entry
   }
   return config

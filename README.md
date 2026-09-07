@@ -121,6 +121,7 @@ omarchy-shell io.github.aesko.ichi step 10 2       # arrow-key increments: step 
 omarchy-shell io.github.aesko.ichi notify changes  # never | changes | always
 omarchy-shell io.github.aesko.ichi all on          # every workspace, unless it opts out
 omarchy-shell io.github.aesko.ichi windows 2       # keep the inset for up to two tiled windows
+omarchy-shell io.github.aesko.ichi min 10          # let sizes go down to 10%
 omarchy-shell io.github.aesko.ichi adopt           # make this workspace's size the default, and follow it
 omarchy-shell io.github.aesko.ichi adopt monitor   # the same, but only for this workspace's monitor
 omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-apply
@@ -129,7 +130,7 @@ omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-a
 The same functions are reachable from Lua as `ichi.toggle()`,
 `ichi.adjust(dw, dh)`, `ichi.nudge(dx, dy, fine)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
 `ichi.preset(name)`, `ichi.cycle(delta)`, `ichi.save_preset(name)`, `ichi.remove_preset(name)`,
-`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.set_all_workspaces(on)`, `ichi.set_max_windows(n)`, `ichi.adopt_defaults(id, scope)`,
+`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.set_all_workspaces(on)`, `ichi.set_max_windows(n)`, `ichi.set_min_percent(n)`, `ichi.adopt_defaults(id, scope)`,
 `ichi.enable(id, entry)` and `ichi.disable(id)`, or from a shell with
 `hyprctl eval 'ichi.toggle()'`.
 
@@ -145,7 +146,7 @@ dropped; a malformed file keeps the last good document.
 
 ```json
 {
-  "settings": { "step": 5, "fine_step": 1, "notify": "always", "all_workspaces": false, "max_windows": 1 },
+  "settings": { "step": 5, "fine_step": 1, "notify": "always", "all_workspaces": false, "max_windows": 1, "min_percent": 20 },
   "defaults": { "width": 70, "height": 80, "max_width": 1800 },
   "monitors": {
     "desc:ULTRAGEAR": { "width": 55 },
@@ -175,6 +176,8 @@ dropped; a malformed file keeps the last good document.
 - `settings.max_windows` is how many tiled windows may share the box before
   the inset gives way. One is the name of the plugin; two lets a terminal and
   a browser sit side by side in the same box.
+- `settings.min_percent` is the smallest share a size may be, from 5 to 100.
+  The default of 20 is plenty on a laptop; on an ultrawide you may want less.
 - `defaults` is the size of every workspace whose entry is `true`. Toggling a
   workspace on writes `true`; the first arrow-key nudge replaces that with a
   fixed `size` entry, and `reset` puts `true` back. Change the defaults and
@@ -198,7 +201,8 @@ dropped; a malformed file keeps the last good document.
   add some.
 - `size` mode is a percentage of the *usable* area — the monitor minus the bar
   — so the proportion holds on any display and the window sits centred.
-  Values are clamped to 30–100; at 100 the inset is exactly your normal gaps.
+  Values are clamped to `min_percent`–100; at 100 the inset is exactly your
+  normal gaps.
 - `aspect` mode is the largest box of that ratio, centred, which is what
   Hyprland's built-in setting does.
 

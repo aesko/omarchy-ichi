@@ -61,8 +61,9 @@ check("max_width shrinks an aspect box on both sides", capped_aspect.left == 480
 local uncapped = M.gaps_for(usable_w, usable_h, { mode = "size", width = 70, height = 80, max_width = 4000, max_height = 0 }, base)
 check("a cap above the box does nothing", uncapped.left == 384 and uncapped.top == 141)
 
-check("normalize clamps and floors", M.normalize_entry({ width = 12.9, height = 400 }).width == 30
+check("normalize clamps and floors", M.normalize_entry({ width = 12.9, height = 400 }).width == 20
   and M.normalize_entry({ width = 12.9, height = 400 }).height == 100)
+check("normalize takes a floor", M.normalize_entry({ width = 12.9, height = 400 }, nil, 10).width == 12)
 check("normalize rejects a bad aspect", M.normalize_entry({ mode = "aspect", ratio_w = 0, ratio_h = 3 }) == nil)
 check("normalize fills from defaults", M.normalize_entry({}, { width = 55, height = 66 }).width == 55)
 
@@ -88,6 +89,11 @@ check("parse reads fine_step", modern.settings.fine_step == 2 and cfg.settings.f
 check("parse reads notify", modern.settings.notify == "never")
 check("parse defaults all_workspaces to off", modern.settings.all_workspaces == false)
 check("parse defaults max_windows to one", modern.settings.max_windows == 1)
+local floored = M.parse_config('{ "settings": { "min_percent": 40 }, "defaults": { "width": 30 }, "workspaces": { "1": { "width": 10, "height": 90 } } }')
+check("parse clamps sizes against min_percent", floored.settings.min_percent == 40 and floored.defaults.width == 40
+  and floored.workspaces[1].width == 40)
+check("parse clamps min_percent itself", M.parse_config('{ "settings": { "min_percent": 1 } }').settings.min_percent == 5)
+check("a lower floor lets small sizes through", M.parse_config('{ "settings": { "min_percent": 10 }, "workspaces": { "1": { "width": 12, "height": 12 } } }').workspaces[1].width == 12)
 check("parse clamps max_windows", M.parse_config('{ "settings": { "max_windows": 40 } }').settings.max_windows == 10
   and M.parse_config('{ "settings": { "max_windows": 0 } }').settings.max_windows == 1)
 local everywhere = M.parse_config('{ "settings": { "all_workspaces": true }, "workspaces": { "2": false, "3": true } }')
@@ -216,7 +222,7 @@ M.config = M.parse_config("")
 local again = M.parse_config(M.encode_config(cfg))
 check("encode/parse round-trips", again.workspaces[2].width == 70 and again.workspaces[5].ratio_h == 3
   and again.settings.step == 10 and again.workspaces[8].mode == "default")
-check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "always", "all_workspaces": false, "max_windows": 1 }', 1, true) ~= nil)
+check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "always", "all_workspaces": false, "max_windows": 1, "min_percent": 20 }', 1, true) ~= nil)
 
 check("empty text gives defaults", M.parse_config("").defaults.width == 70 and next(M.parse_config("").workspaces) == nil)
 
@@ -313,6 +319,21 @@ M.reset(4)
 M.disable(4)
 check("disable resets the gaps", fake.rules[4].left == 10)
 M.set_defaults(65, 90)
+
+-- min_percent: the floor nudges and defaults are clamped to.
+M.config.workspaces[4] = { mode = "size", width = 25, height = 25 }
+M.adjust(-10, 0, 4)
+check("nudging stops at the default floor", M.config.workspaces[4].width == 20)
+M.set_min_percent(10)
+M.adjust(-10, 0, 4)
+check("a lower floor lets the nudge through", M.config.workspaces[4].width == 10)
+check("set_min_percent persists", M.parse_config(io.open(M.config_path):read("*a")).settings.min_percent == 10)
+M.set_min_percent(50)
+check("raising the floor leaves an existing size alone", M.config.workspaces[4].width == 10)
+M.adjust(1, 0, 4)
+check("the next nudge clamps to the new floor", M.config.workspaces[4].width == 50)
+M.set_min_percent(20)
+M.disable(4)
 
 -- max_windows: the inset gives way one window past the limit.
 M.enable(4)
