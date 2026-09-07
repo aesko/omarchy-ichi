@@ -16,7 +16,8 @@ a terminal, a note, a chat — and that window doesn't need the whole screen.
   and hold to keep going. When it looks right, `adopt` makes that the default
   for every workspace that has not been tuned by hand.
 - **Never in the way.** Open a second window and the inset disappears — the
-  space is yours again. Close it and the inset comes back.
+  space is yours again. Close it and the inset comes back. If you would
+  rather a pair shared the box, say so.
 - **Stays tiled.** The window is never floated, so hibernate, an unplugged
   monitor or a resolution change can't leave it stranded off-screen.
 - **Two ways to size.** A share of the screen (70% × 80%) or an aspect ratio
@@ -119,6 +120,7 @@ omarchy-shell io.github.aesko.ichi max 1800 0      # never wider than 1800px; 0 
 omarchy-shell io.github.aesko.ichi step 10 2       # arrow-key increments: step and fine step
 omarchy-shell io.github.aesko.ichi notify changes  # never | changes | always
 omarchy-shell io.github.aesko.ichi all on          # every workspace, unless it opts out
+omarchy-shell io.github.aesko.ichi windows 2       # keep the inset for up to two tiled windows
 omarchy-shell io.github.aesko.ichi adopt           # make this workspace's size the default, and follow it
 omarchy-shell io.github.aesko.ichi adopt monitor   # the same, but only for this workspace's monitor
 omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-apply
@@ -127,7 +129,7 @@ omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-a
 The same functions are reachable from Lua as `ichi.toggle()`,
 `ichi.adjust(dw, dh)`, `ichi.nudge(dx, dy, fine)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
 `ichi.preset(name)`, `ichi.cycle(delta)`, `ichi.save_preset(name)`, `ichi.remove_preset(name)`,
-`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.set_all_workspaces(on)`, `ichi.adopt_defaults(id, scope)`,
+`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.set_all_workspaces(on)`, `ichi.set_max_windows(n)`, `ichi.adopt_defaults(id, scope)`,
 `ichi.enable(id, entry)` and `ichi.disable(id)`, or from a shell with
 `hyprctl eval 'ichi.toggle()'`.
 
@@ -143,7 +145,7 @@ dropped; a malformed file keeps the last good document.
 
 ```json
 {
-  "settings": { "step": 5, "fine_step": 1, "notify": "always", "all_workspaces": false },
+  "settings": { "step": 5, "fine_step": 1, "notify": "always", "all_workspaces": false, "max_windows": 1 },
   "defaults": { "width": 70, "height": 80, "max_width": 1800 },
   "monitors": {
     "desc:ULTRAGEAR": { "width": 55 },
@@ -170,6 +172,9 @@ dropped; a malformed file keeps the last good document.
 - `settings.all_workspaces` turns every workspace on. A workspace with no
   entry then follows the defaults, and toggling one off writes `false` for
   it. This is the Hyprland built-in's reach with Ichi's sizing.
+- `settings.max_windows` is how many tiled windows may share the box before
+  the inset gives way. One is the name of the plugin; two lets a terminal and
+  a browser sit side by side in the same box.
 - `defaults` is the size of every workspace whose entry is `true`. Toggling a
   workspace on writes `true`; the first arrow-key nudge replaces that with a
   fixed `size` entry, and `reset` puts `true` back. Change the defaults and
@@ -201,10 +206,10 @@ Workspaces are identified by number. Named workspaces are not supported yet.
 
 ## How it works
 
-When an opted-in workspace holds exactly one tiled window, Ichi widens that
-workspace's outer gaps so the window occupies the chosen share of the screen,
-centred. A second tiled window restores the normal gaps immediately; closing
-it restores the inset.
+When an opted-in workspace holds one tiled window, or up to `max_windows`
+of them, Ichi widens that workspace's outer gaps so the windows occupy the
+chosen share of the screen, centred. One tiled window more than that
+restores the normal gaps immediately; closing it restores the inset.
 
 - Floating windows are neither counted nor touched, so Omarchy's floating
   dialogs, pickers and TUIs are unaffected.

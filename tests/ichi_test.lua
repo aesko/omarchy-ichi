@@ -87,6 +87,9 @@ check("parse prefers settings.step", modern.settings.step == 8 and modern.defaul
 check("parse reads fine_step", modern.settings.fine_step == 2 and cfg.settings.fine_step == 1)
 check("parse reads notify", modern.settings.notify == "never")
 check("parse defaults all_workspaces to off", modern.settings.all_workspaces == false)
+check("parse defaults max_windows to one", modern.settings.max_windows == 1)
+check("parse clamps max_windows", M.parse_config('{ "settings": { "max_windows": 40 } }').settings.max_windows == 10
+  and M.parse_config('{ "settings": { "max_windows": 0 } }').settings.max_windows == 1)
 local everywhere = M.parse_config('{ "settings": { "all_workspaces": true }, "workspaces": { "2": false, "3": true } }')
 check("parse reads all_workspaces and false entries", everywhere.settings.all_workspaces == true
   and everywhere.workspaces[2] == false and everywhere.workspaces[3].mode == "default")
@@ -113,7 +116,8 @@ local with_caps = M.parse_config('{ "defaults": { "width": 60, "height": 60, "ma
 check("parse reads caps and floors negatives at none", with_caps.defaults.max_width == 1500 and with_caps.defaults.max_height == 0)
 check("encode writes only the caps that are set", M.encode_config(with_caps):find('"max_width": 1500', 1, true) ~= nil
   and M.encode_config(with_caps):find("max_height", 1, true) == nil)
-check("encode omits caps by default", M.encode_config(cfg):find("max_", 1, true) == nil)
+check("encode omits caps by default", M.encode_config(cfg):find("max_width", 1, true) == nil
+  and M.encode_config(cfg):find("max_height", 1, true) == nil)
 M.config = with_caps
 check("resolve carries the caps onto a default entry", M.resolve({ mode = "default" }).max_width == 1500)
 check("resolve carries the caps onto a fixed entry", M.resolve({ mode = "aspect", ratio_w = 1, ratio_h = 1 }).max_width == 1500)
@@ -212,7 +216,7 @@ M.config = M.parse_config("")
 local again = M.parse_config(M.encode_config(cfg))
 check("encode/parse round-trips", again.workspaces[2].width == 70 and again.workspaces[5].ratio_h == 3
   and again.settings.step == 10 and again.workspaces[8].mode == "default")
-check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "always", "all_workspaces": false }', 1, true) ~= nil)
+check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "always", "all_workspaces": false, "max_windows": 1 }', 1, true) ~= nil)
 
 check("empty text gives defaults", M.parse_config("").defaults.width == 70 and next(M.parse_config("").workspaces) == nil)
 
@@ -309,6 +313,24 @@ M.reset(4)
 M.disable(4)
 check("disable resets the gaps", fake.rules[4].left == 10)
 M.set_defaults(65, 90)
+
+-- max_windows: the inset gives way one window past the limit.
+M.enable(4)
+fake.windows[4] = { { floating = false, monitor = screen }, { floating = false, monitor = screen }, { floating = true, monitor = screen } }
+M.refresh()
+check("two tiled windows restore plain gaps at the default limit", fake.rules[4].left == 10)
+M.set_max_windows(2)
+check("set_max_windows two keeps the inset for a pair", fake.rules[4].left ~= 10)
+check("set_max_windows persists", M.parse_config(io.open(M.config_path):read("*a")).settings.max_windows == 2)
+fake.windows[4][#fake.windows[4] + 1] = { floating = false, monitor = screen }
+M.refresh()
+check("a third tiled window is one too many", fake.rules[4].left == 10)
+fake.windows[4] = {}
+M.refresh()
+check("an empty workspace is not inset", fake.rules[4].left == 10)
+M.set_max_windows(1)
+fake.windows[4] = { { floating = false, monitor = screen } }
+M.disable(4)
 
 -- all_workspaces: every existing workspace is managed, false opts one out.
 fake.workspaces[6] = { id = 6, tiled_layout = "dwindle", monitor = screen }

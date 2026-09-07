@@ -201,6 +201,11 @@ Item {
       root.evaluate("if ichi then ichi.nudge(" + dw + ", " + dh + ", " + (fine === "fine") + ") end")
     }
 
+    // How many tiled windows may share the box, e.g. windows 2.
+    function windows(count: string): void {
+      root.evaluate("if ichi then ichi.set_max_windows(" + (Number(count) || 1) + ") end")
+    }
+
     // Every workspace on unless it opts out: all on | off.
     function all(state: string): void {
       root.evaluate("if ichi then ichi.set_all_workspaces(" + (state === "on" || state === "true") + ") end")

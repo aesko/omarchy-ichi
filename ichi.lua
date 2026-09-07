@@ -1,9 +1,10 @@
 -- Ichi: the Hyprland side of the io.github.aesko.ichi plugin.
 --
--- On an opted-in workspace holding exactly one tiled window, widen that
--- workspace's outer gaps so the window occupies a percentage of the usable
--- area (size mode) or the largest box of a given aspect ratio (aspect mode).
--- A second tiled window restores normal gaps. Floating windows are neither
+-- On an opted-in workspace holding one tiled window (or up to
+-- settings.max_windows of them), widen that workspace's outer gaps so the
+-- window occupies a percentage of the usable area (size mode) or the largest
+-- box of a given aspect ratio (aspect mode). One tiled window more than that
+-- restores normal gaps. Floating windows are neither
 -- counted nor touched. Nothing here floats or moves a window: a tiled window
 -- reflows on its own after a monitor teardown, which is the point.
 --
@@ -36,7 +37,7 @@ M.notify_levels = { never = 0, changes = 1, always = 2 }
 
 local function default_config()
   return {
-    settings = { step = 5, fine_step = 1, notify = "always", all_workspaces = false },
+    settings = { step = 5, fine_step = 1, notify = "always", all_workspaces = false, max_windows = 1 },
     defaults = { width = 70, height = 80, step = 5, max_width = 0, max_height = 0 },
     -- Ordered, first match wins: { key = "desc:..." or "DP-1", width?, height?, max_width?, max_height? }
     monitors = {},
@@ -255,6 +256,7 @@ function M.parse_config(text)
     cfg.settings.notify = notify
   end
   cfg.settings.all_workspaces = settings:match('"all_workspaces"%s*:%s*(%a+)') == "true"
+  cfg.settings.max_windows = clamp(math.floor(number_field(settings, "max_windows") or 1), 1, 10)
 
   local monitors = find_object(text, "monitors")
   if monitors then
@@ -382,11 +384,12 @@ function M.encode_config(cfg)
   end
 
   return string.format(
-    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s", "all_workspaces": %s },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
+    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s", "all_workspaces": %s, "max_windows": %d },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
     cfg.settings.step,
     cfg.settings.fine_step,
     cfg.settings.notify,
     tostring(cfg.settings.all_workspaces),
+    cfg.settings.max_windows,
     M.encode_size(cfg.defaults),
     encode_monitors(cfg.monitors),
     encode_presets(cfg.presets),
@@ -543,7 +546,7 @@ function M.apply(id)
       tiled = w
     end
   end
-  if count ~= 1 or tiled.monitor == nil then
+  if count == 0 or count > M.config.settings.max_windows or tiled.monitor == nil then
     plain()
     return
   end
@@ -727,6 +730,15 @@ function M.set_step(step, fine)
   M.config.defaults.step = s.step
   M.save()
   notify(string.format("Ichi: step %d, fine step %d", s.step, s.fine_step))
+end
+
+-- How many tiled windows may share the box before the inset gives way.
+function M.set_max_windows(n)
+  M.config.settings.max_windows = clamp(math.floor(tonumber(n) or 1), 1, 10)
+  M.save()
+  M.refresh()
+  notify(string.format("Ichi: inset holds up to %d window%s", M.config.settings.max_windows,
+    M.config.settings.max_windows == 1 and "" or "s"))
 end
 
 -- Every workspace on unless it opts out with a false entry.
