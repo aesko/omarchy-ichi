@@ -107,6 +107,42 @@ check("resolve carries the caps onto a default entry", M.resolve({ mode = "defau
 check("resolve carries the caps onto a fixed entry", M.resolve({ mode = "aspect", ratio_w = 1, ratio_h = 1 }).max_width == 1500)
 M.config = M.parse_config("")
 
+-- Monitors: a block overrides the defaults field by field for matching displays.
+local layered = M.parse_config([[
+{
+  "defaults": { "width": 60, "height": 90, "max_width": 2000 },
+  "monitors": {
+    "desc:ULTRAGEAR": { "width": 50, "max_width": 1600 },
+    "eDP-1": { "width": 95, "height": 95, "max_width": 0 }
+  },
+  "workspaces": { "3": true }
+}
+]])
+check("parse reads monitor blocks in order", #layered.monitors == 2 and layered.monitors[1].key == "desc:ULTRAGEAR"
+  and layered.monitors[1].width == 50 and layered.monitors[1].height == nil and layered.monitors[1].max_width == 1600
+  and layered.monitors[2].key == "eDP-1" and layered.monitors[2].max_width == 0)
+M.config = layered
+local big = { name = "DP-1", description = "LG Electronics LG ULTRAGEAR 011NTLE85288" }
+local laptop = { name = "eDP-1", description = "BOE 0x0BCA" }
+local other = { name = "HDMI-A-1", description = "" }
+check("desc: matches part of the description", M.monitor_block(big) == layered.monitors[1])
+check("a plain key matches the connector name", M.monitor_block(laptop) == layered.monitors[2])
+check("no block for an unknown monitor", M.monitor_block(other) == nil and M.monitor_block(nil) == nil)
+local on_big = M.resolve({ mode = "default" }, big)
+check("resolve layers the block over the defaults", on_big.width == 50 and on_big.height == 90 and on_big.max_width == 1600)
+local on_laptop = M.resolve({ mode = "default" }, laptop)
+check("a block can clear a cap with zero", on_laptop.width == 95 and on_laptop.max_width == 0)
+check("no block means the plain defaults", M.resolve({ mode = "default" }, other).width == 60
+  and M.resolve({ mode = "default" }, nil).max_width == 2000)
+check("a fixed entry keeps its size but takes the monitor's caps", M.resolve({ mode = "size", width = 80, height = 80 }, big).width == 80
+  and M.resolve({ mode = "size", width = 80, height = 80 }, big).max_width == 1600)
+local layered_text = M.encode_config(layered)
+check("encode writes the monitors block", layered_text:find('"desc:ULTRAGEAR": { "width": 50, "max_width": 1600 }', 1, true) ~= nil
+  and layered_text:find('"eDP-1": { "width": 95, "height": 95 }', 1, true) ~= nil, layered_text)
+check("encode/parse round-trips monitors", #M.parse_config(layered_text).monitors == 2)
+check("encode omits an empty monitors block", M.encode_config(M.parse_config("")):find("monitors", 1, true) == nil)
+M.config = M.parse_config("")
+
 local again = M.parse_config(M.encode_config(cfg))
 check("encode/parse round-trips", again.workspaces[2].width == 70 and again.workspaces[5].ratio_h == 3
   and again.settings.step == 10 and again.workspaces[8].mode == "default")
@@ -165,8 +201,10 @@ check("adopt_defaults ignores an unknown workspace", M.config.defaults.height ==
 
 -- Default entries: enabling follows the defaults and tracks changes to them.
 fake.config["general.gaps_out"] = base
-fake.workspaces[4] = { id = 4, tiled_layout = "dwindle" }
-fake.windows[4] = { { floating = false, monitor = { width = 2560, height = 1440, reserved = { top = 26 } } } }
+-- The window and its workspace report the same monitor, as in the compositor.
+local screen = { name = "DP-1", description = "LG ULTRAGEAR", width = 2560, height = 1440, reserved = { top = 26 } }
+fake.workspaces[4] = { id = 4, tiled_layout = "dwindle", monitor = screen }
+fake.windows[4] = { { floating = false, monitor = screen } }
 M.set_defaults(70, 80)
 fake.notes = {}
 M.enable(4)
@@ -190,6 +228,18 @@ check("set_max caps the applied box", fake.rules[4].left == 780, fake.rules[4].l
 check("set_max persists", M.parse_config(io.open(M.config_path):read("*a")).defaults.max_width == 1000)
 M.set_max(0, 0)
 check("set_max zero removes the cap", fake.rules[4].left == 704, fake.rules[4].left)
+M.adjust(-15, 0, 4) -- 45 x 95 -> 30 x 95
+M.adopt_defaults(4, "monitor")
+check("adopt monitor writes a desc: block", #M.config.monitors == 1 and M.config.monitors[1].key == "desc:LG ULTRAGEAR"
+  and M.config.monitors[1].width == 30 and M.config.monitors[1].height == 95)
+check("adopt monitor leaves the global defaults alone", M.config.defaults.width == 45)
+check("adopt monitor puts the workspace back on default", M.config.workspaces[4].mode == "default")
+check("adopt monitor applies the block", fake.rules[4].left == 896, fake.rules[4].left)
+M.adjust(10, 0, 4)
+M.adopt_defaults(4, "monitor")
+check("adopt monitor updates an existing block", #M.config.monitors == 1 and M.config.monitors[1].width == 40)
+M.config.monitors = {}
+M.reset(4)
 M.disable(4)
 check("disable resets the gaps", fake.rules[4].left == 10)
 M.set_defaults(65, 90)

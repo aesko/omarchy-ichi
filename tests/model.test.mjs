@@ -94,14 +94,33 @@ test("status reports the active workspace", () => {
   const config = Model.normalizeConfig({ workspaces: { "2": { width: 70, height: 80 }, "5": { mode: "aspect", ratio: [1, 1] } } })
   assert.deepEqual(Model.status(config, 2), {
     workspace: 2, enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
-    settings: { step: 5, fine_step: 1, notify: "always" }, defaults: { width: 70, height: 80 }, workspaces: [2, 5],
+    settings: { step: 5, fine_step: 1, notify: "always" }, defaults: { width: 70, height: 80 }, monitor: null, workspaces: [2, 5],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
+  assert.equal(Model.status(config, 3).enabled, false)
+  assert.equal(Model.status(config, null).workspace, null)
   const following = Model.normalizeConfig({ defaults: { width: 60, height: 90 }, workspaces: { "3": true } })
   assert.equal(Model.status(following, 3).summary, "60% x 90% (default)")
   assert.equal(Model.status(following, 3).enabled, true)
-  assert.equal(Model.status(config, 3).enabled, false)
-  assert.equal(Model.status(config, null).workspace, null)
+})
+
+test("monitor blocks override the defaults for a default entry", () => {
+  const config = Model.normalizeConfig({
+    defaults: { width: 60, height: 90 },
+    monitors: { "desc:ULTRAGEAR": { width: 50, max_width: 1600 }, "eDP-1": { width: 95, height: 95 } },
+    workspaces: { "3": true, "4": { width: 80, height: 80 } },
+  })
+  assert.deepEqual(config.monitors, [
+    { key: "desc:ULTRAGEAR", width: 50, max_width: 1600 }, { key: "eDP-1", width: 95, height: 95 },
+  ])
+  const big = { name: "DP-1", description: "LG Electronics LG ULTRAGEAR 011NTLE85288" }
+  const laptop = { name: "eDP-1", description: "BOE 0x0BCA" }
+  assert.equal(Model.status(config, 3, big).summary, "50% x 90% (default)")
+  assert.equal(Model.status(config, 3, laptop).summary, "95% x 95% (default)")
+  assert.equal(Model.status(config, 3, { name: "HDMI-A-1", description: "" }).summary, "60% x 90% (default)")
+  assert.equal(Model.status(config, 4, big).summary, "80% x 80%")
+  assert.equal(Model.status(config, 3, big).monitor.key, "desc:ULTRAGEAR")
+  assert.equal(Model.status(config, 3, null).monitor, null)
 })
 
 console.log(passed + " passed")

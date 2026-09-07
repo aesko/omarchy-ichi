@@ -38,6 +38,8 @@ local function default_config()
   return {
     settings = { step = 5, fine_step = 1, notify = "always" },
     defaults = { width = 70, height = 80, step = 5, max_width = 0, max_height = 0 },
+    -- Ordered, first match wins: { key = "desc:..." or "DP-1", width?, height?, max_width?, max_height? }
+    monitors = {},
     workspaces = {},
   }
 end
@@ -85,13 +87,51 @@ function M.normalize_entry(entry, defaults)
   }
 end
 
--- The concrete size or aspect an entry stands for, plus the pixel caps that
--- apply to it: a default entry becomes whatever the defaults say right now.
-function M.resolve(entry)
+-- A monitor block matches by connector name exactly, or, with a "desc:"
+-- prefix, by any part of the description Hyprland reports. Names change when
+-- a dock is replugged; descriptions do not.
+function M.monitor_block(mon)
+  if mon == nil then
+    return nil
+  end
+  for _, block in ipairs(M.config.monitors) do
+    local desc = block.key:match("^desc:(.*)$")
+    if desc then
+      if desc ~= "" and (mon.description or ""):find(desc, 1, true) then
+        return block
+      end
+    elseif block.key == mon.name then
+      return block
+    end
+  end
+  return nil
+end
+
+-- The defaults as seen from one monitor: its block overrides field by field.
+function M.defaults_for(mon)
+  local out = {}
+  for k, v in pairs(M.config.defaults) do
+    out[k] = v
+  end
+  local block = M.monitor_block(mon)
+  if block then
+    for _, k in ipairs({ "width", "height", "max_width", "max_height" }) do
+      if block[k] ~= nil then
+        out[k] = block[k]
+      end
+    end
+  end
+  return out
+end
+
+-- The concrete size or aspect an entry stands for on a monitor, plus the pixel
+-- caps that apply to it: a default entry becomes whatever the defaults, and
+-- the monitor's overrides, say right now.
+function M.resolve(entry, mon)
   if entry == nil then
     return nil
   end
-  local defaults = M.config.defaults
+  local defaults = M.defaults_for(mon)
   local out
   if entry.mode == "default" then
     out = M.normalize_entry({ mode = "size" }, defaults)
@@ -201,6 +241,26 @@ function M.parse_config(text)
     cfg.settings.notify = notify
   end
 
+  local monitors = find_object(text, "monitors")
+  if monitors then
+    for key, body in monitors:gmatch('"([^"]+)"%s*:%s*{(.-)}') do
+      local block = { key = key }
+      for _, field in ipairs({ "width", "height" }) do
+        local v = number_field(body, field)
+        if v then
+          block[field] = clamp(math.floor(v), M.limits.min, M.limits.max)
+        end
+      end
+      for _, field in ipairs({ "max_width", "max_height" }) do
+        local v = number_field(body, field)
+        if v then
+          block[field] = math.max(0, math.floor(v))
+        end
+      end
+      cfg.monitors[#cfg.monitors + 1] = block
+    end
+  end
+
   local workspaces = find_object(text, "workspaces")
   if workspaces then
     for id in workspaces:gmatch('"(%d+)"%s*:%s*true') do
@@ -221,16 +281,32 @@ function M.parse_config(text)
   return cfg
 end
 
--- The fields of a defaults-like table, caps only when set.
+-- The fields of a defaults-like table: width and height when present, caps
+-- only when set.
 function M.encode_size(d)
-  local parts = { string.format('"width": %d, "height": %d', d.width, d.height) }
-  if (d.max_width or 0) > 0 then
-    parts[#parts + 1] = string.format('"max_width": %d', d.max_width)
+  local parts = {}
+  for _, k in ipairs({ "width", "height" }) do
+    if d[k] ~= nil then
+      parts[#parts + 1] = string.format('"%s": %d', k, d[k])
+    end
   end
-  if (d.max_height or 0) > 0 then
-    parts[#parts + 1] = string.format('"max_height": %d', d.max_height)
+  for _, k in ipairs({ "max_width", "max_height" }) do
+    if (d[k] or 0) > 0 then
+      parts[#parts + 1] = string.format('"%s": %d', k, d[k])
+    end
   end
   return table.concat(parts, ", ")
+end
+
+local function encode_monitors(monitors)
+  if #monitors == 0 then
+    return ""
+  end
+  local lines = {}
+  for _, block in ipairs(monitors) do
+    lines[#lines + 1] = string.format('    "%s": { %s }', block.key, M.encode_size(block))
+  end
+  return '  "monitors": {\n' .. table.concat(lines, ",\n") .. "\n  },\n"
 end
 
 function M.encode_config(cfg)
@@ -253,11 +329,12 @@ function M.encode_config(cfg)
   end
 
   return string.format(
-    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s" },\n  "defaults": { %s },\n  "workspaces": {\n%s\n  }\n}\n',
+    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s" },\n  "defaults": { %s },\n%s  "workspaces": {\n%s\n  }\n}\n',
     cfg.settings.step,
     cfg.settings.fine_step,
     cfg.settings.notify,
     M.encode_size(cfg.defaults),
+    encode_monitors(cfg.monitors),
     table.concat(lines, ",\n")
   )
 end
@@ -349,9 +426,14 @@ local function builtin_aspect_active()
   return x > 0 and y > 0
 end
 
+local function workspace_monitor(id)
+  local ws = hl.get_workspace(id)
+  return ws and ws.monitor or nil
+end
+
 local function describe(id, entry)
   local suffix = entry.mode == "default" and " (default)" or ""
-  entry = M.resolve(entry)
+  entry = M.resolve(entry, workspace_monitor(id))
   if entry.mode == "aspect" then
     return string.format("Ichi: workspace %d at %g:%g%s", id, entry.ratio_w, entry.ratio_h, suffix)
   end
@@ -410,7 +492,7 @@ function M.apply(id)
   local usable_h = mon.height - (reserved.top or 0) - (reserved.bottom or 0)
 
   -- Named keys are mandatory here: a positional array is silently misparsed.
-  hl.workspace_rule({ workspace = tostring(id), gaps_out = M.gaps_for(usable_w, usable_h, M.resolve(entry), base) })
+  hl.workspace_rule({ workspace = tostring(id), gaps_out = M.gaps_for(usable_w, usable_h, M.resolve(entry, mon), base) })
 end
 
 function M.refresh()
@@ -472,9 +554,10 @@ function M.adjust(delta_width, delta_height, id)
   if id == nil then
     return
   end
-  local entry = M.resolve(M.config.workspaces[id])
+  local mon = workspace_monitor(id)
+  local entry = M.resolve(M.config.workspaces[id], mon)
   if entry == nil or entry.mode ~= "size" then
-    entry = M.resolve({ mode = "default" })
+    entry = M.resolve({ mode = "default" }, mon)
   end
   entry.width = clamp(entry.width + (delta_width or 0), M.limits.min, M.limits.max)
   entry.height = clamp(entry.height + (delta_height or 0), M.limits.min, M.limits.max)
@@ -564,13 +647,42 @@ function M.set_notify(level)
   notify("Ichi: notifications " .. level)
 end
 
+-- The key a monitor gets in the monitors block: its description when it has
+-- one, since that survives replugging, else its connector name.
+local function monitor_key(mon)
+  local desc = (mon.description or ""):gsub('[\\"]', "")
+  if desc ~= "" then
+    return "desc:" .. desc
+  end
+  return mon.name
+end
+
 -- Tune a workspace with the arrows, then make that the default for the rest.
 -- The workspace itself goes back to following the defaults, so a later
--- change to them reaches it too.
-function M.adopt_defaults(id)
+-- change to them reaches it too. With scope "monitor" the size goes into the
+-- block for the workspace's monitor instead, and only displays matching it
+-- follow.
+function M.adopt_defaults(id, scope)
   id = id or current_id()
   local entry = id and M.config.workspaces[id]
   if not entry or entry.mode ~= "size" then
+    return
+  end
+  if scope == "monitor" then
+    local mon = workspace_monitor(id)
+    if mon == nil then
+      return
+    end
+    local block = M.monitor_block(mon)
+    if block == nil then
+      block = { key = monitor_key(mon) }
+      M.config.monitors[#M.config.monitors + 1] = block
+    end
+    block.width, block.height = entry.width, entry.height
+    M.config.workspaces[id] = { mode = "default" }
+    M.save()
+    M.refresh()
+    notify(string.format("Ichi: %s at %d%% x %d%%", block.key, entry.width, entry.height))
     return
   end
   M.config.workspaces[id] = { mode = "default" }
@@ -602,9 +714,12 @@ if hl and hl.on then
   hl.on("window.update_rules", function()
     M.refresh()
   end)
-  hl.on("monitor.layout_changed", function()
-    M.refresh()
-  end)
+  -- A workspace's monitor decides which overrides apply, so follow moves.
+  for _, event in ipairs({ "monitor.layout_changed", "monitor.added", "monitor.removed", "workspace.move_to_monitor" }) do
+    hl.on(event, function()
+      M.refresh()
+    end)
+  end
 end
 
 return M

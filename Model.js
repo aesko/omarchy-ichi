@@ -17,6 +17,7 @@ function defaultConfig() {
   return {
     settings: { step: 5, fine_step: 1, notify: "always" },
     defaults: { width: 70, height: 80 },
+    monitors: [],
     workspaces: {},
   }
 }
@@ -62,6 +63,18 @@ function normalizeConfig(document) {
   if (isFinite(Number(settings.fine_step))) config.settings.fine_step = clamp(Math.floor(Number(settings.fine_step)), 1, 25)
   if (NOTIFY_LEVELS.indexOf(settings.notify) !== -1) config.settings.notify = settings.notify
 
+  var monitors = document.monitors || {}
+  for (var mkey in monitors) {
+    var raw = monitors[mkey]
+    if (!raw || typeof raw !== "object") continue
+    var block = { key: mkey }
+    if (isFinite(Number(raw.width))) block.width = clamp(Math.floor(Number(raw.width)), LIMITS.min, LIMITS.max)
+    if (isFinite(Number(raw.height))) block.height = clamp(Math.floor(Number(raw.height)), LIMITS.min, LIMITS.max)
+    if (isFinite(Number(raw.max_width))) block.max_width = Math.max(0, Math.floor(Number(raw.max_width)))
+    if (isFinite(Number(raw.max_height))) block.max_height = Math.max(0, Math.floor(Number(raw.max_height)))
+    config.monitors.push(block)
+  }
+
   var workspaces = document.workspaces || {}
   for (var key in workspaces) {
     if (!/^\d+$/.test(key)) continue
@@ -94,32 +107,62 @@ function hyprctlEvalArgs(lua) {
   return ["hyprctl", "eval", "do\n" + String(lua) + "\nend"]
 }
 
-// A default entry is shown with what it currently amounts to.
-function resolve(entry, config) {
+// Mirrors ichi.lua: exact connector name, or "desc:" matching any part of the
+// description; first block wins. `monitor` is { name, description } or null.
+function monitorBlock(config, monitor) {
+  if (!monitor) return null
+  for (var i = 0; i < config.monitors.length; i++) {
+    var block = config.monitors[i]
+    if (block.key.indexOf("desc:") === 0) {
+      var desc = block.key.slice(5)
+      if (desc !== "" && String(monitor.description || "").indexOf(desc) !== -1) return block
+    } else if (block.key === monitor.name) {
+      return block
+    }
+  }
+  return null
+}
+
+function defaultsFor(config, monitor) {
+  var out = {}
+  for (var k in config.defaults) out[k] = config.defaults[k]
+  var block = monitorBlock(config, monitor)
+  if (block) {
+    ["width", "height", "max_width", "max_height"].forEach(function (field) {
+      if (block[field] !== undefined) out[field] = block[field]
+    })
+  }
+  return out
+}
+
+// A default entry is shown with what it currently amounts to on this monitor.
+function resolve(entry, config, monitor) {
   if (entry && entry.mode === "default") {
-    return { mode: "size", width: config.defaults.width, height: config.defaults.height }
+    var d = defaultsFor(config, monitor)
+    return { mode: "size", width: d.width, height: d.height }
   }
   return entry
 }
 
-function describe(entry, config) {
+function describe(entry, config, monitor) {
   if (!entry) return "off"
   var suffix = entry.mode === "default" ? " (default)" : ""
-  entry = resolve(entry, config)
+  entry = resolve(entry, config, monitor)
   if (entry.mode === "aspect") return entry.ratio[0] + ":" + entry.ratio[1]
   return entry.width + "% x " + entry.height + "%" + suffix
 }
 
-function status(config, activeWorkspaceId) {
+function status(config, activeWorkspaceId, monitor) {
   var key = activeWorkspaceId === null || activeWorkspaceId === undefined ? null : String(activeWorkspaceId)
   var entry = key !== null ? (config.workspaces[key] || null) : null
   return {
     workspace: key === null ? null : Number(key),
     enabled: entry !== null,
     entry: entry,
-    summary: describe(entry, config),
+    summary: describe(entry, config, monitor),
     settings: config.settings,
     defaults: config.defaults,
+    monitor: monitorBlock(config, monitor),
     workspaces: Object.keys(config.workspaces).map(Number).sort(function (a, b) { return a - b }),
   }
 }

@@ -25,7 +25,10 @@ Item {
   property string lastError: ""
 
   readonly property var activeWorkspaceId: Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : null
-  readonly property var status: Model.status(config, activeWorkspaceId)
+  readonly property var activeMonitor: Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.monitor
+    ? { name: Hyprland.focusedWorkspace.monitor.name, description: Hyprland.focusedWorkspace.monitor.description }
+    : null
+  readonly property var status: Model.status(config, activeWorkspaceId, activeMonitor)
   readonly property bool enabled: status.enabled
 
   // ------------------------------------------------------------- eval --
@@ -204,9 +207,11 @@ Item {
       root.evaluate("if ichi then ichi.set_notify(\"" + level + "\") end")
     }
 
-    // Adopt the focused workspace's current size as the default.
-    function adopt(): void {
-      root.evaluate("if ichi then ichi.adopt_defaults() end")
+    // Adopt the focused workspace's current size as the default, or with
+    // "monitor", as the default for its monitor only.
+    function adopt(scope: string): void {
+      var lua = scope === "monitor" ? 'ichi.adopt_defaults(nil, "monitor")' : "ichi.adopt_defaults()"
+      root.evaluate("if ichi then " + lua + " end")
     }
 
     function refresh(): void {

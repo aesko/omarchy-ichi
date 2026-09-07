@@ -106,12 +106,13 @@ omarchy-shell io.github.aesko.ichi max 1800 0      # never wider than 1800px; 0 
 omarchy-shell io.github.aesko.ichi step 10 2       # arrow-key increments: step and fine step
 omarchy-shell io.github.aesko.ichi notify changes  # never | changes | always
 omarchy-shell io.github.aesko.ichi adopt           # make this workspace's size the default, and follow it
+omarchy-shell io.github.aesko.ichi adopt monitor   # the same, but only for this workspace's monitor
 omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-apply
 ```
 
 The same functions are reachable from Lua as `ichi.toggle()`,
 `ichi.adjust(dw, dh)`, `ichi.nudge(dx, dy, fine)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
-`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.adopt_defaults()`,
+`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.adopt_defaults(id, scope)`,
 `ichi.enable(id, entry)` and `ichi.disable(id)`, or from a shell with
 `hyprctl eval 'ichi.toggle()'`.
 
@@ -129,6 +130,10 @@ dropped; a malformed file keeps the last good document.
 {
   "settings": { "step": 5, "fine_step": 1, "notify": "always" },
   "defaults": { "width": 70, "height": 80, "max_width": 1800 },
+  "monitors": {
+    "desc:ULTRAGEAR": { "width": 55 },
+    "eDP-1": { "width": 95, "height": 95, "max_width": 0 }
+  },
   "workspaces": {
     "1": true,
     "2": { "mode": "size", "width": 70, "height": 80 },
@@ -151,6 +156,13 @@ dropped; a malformed file keeps the last good document.
   on a laptop can be a 2200px terminal on a 32-inch display; the cap holds it
   where it is readable. Omit or set to `0` for no cap. The caps apply to every
   workspace, in the units Hyprland reports the monitor size in.
+- `monitors` overrides the defaults per display, field by field, for every
+  workspace that follows them. A key is a connector name such as `eDP-1`, or
+  `desc:` followed by any part of the description Hyprland reports, which is
+  the form that survives a dock being replugged. `hyprctl monitors` shows
+  both. The first matching block wins. Fixed `size` and `aspect` entries keep
+  their own size but take the monitor's caps. `adopt monitor` writes a block
+  for the current display from the workspace you have tuned.
 - `size` mode is a percentage of the *usable* area — the monitor minus the bar
   — so the proportion holds on any display and the window sits centred.
   Values are clamped to 30–100; at 100 the inset is exactly your normal gaps.
