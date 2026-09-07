@@ -65,6 +65,7 @@ local text = [[
     "2": { "mode": "size", "width": 70, "height": 80 },
     "5": { "mode": "aspect", "ratio": [4, 3] },
     "7": { "mode": "size", "width": "garbage" },
+    "8": true,
     "x": { "mode": "size", "width": 50, "height": 50 }
   }
 }
@@ -82,10 +83,16 @@ check("parse size entry", cfg.workspaces[2] and cfg.workspaces[2].width == 70 an
 check("parse aspect entry", cfg.workspaces[5] and cfg.workspaces[5].mode == "aspect" and cfg.workspaces[5].ratio_w == 4)
 check("bad width falls back to defaults", cfg.workspaces[7] and cfg.workspaces[7].width == 60)
 check("non-numeric workspace key is ignored", cfg.workspaces.x == nil)
+check("parse reads a true entry as default mode", cfg.workspaces[8] and cfg.workspaces[8].mode == "default")
+check("encode writes a default entry as true", M.encode_config(cfg):find('"8": true', 1, true) ~= nil)
+check("normalize accepts true", M.normalize_entry(true).mode == "default")
+check("resolve turns default into the defaults' size", M.resolve({ mode = "default" }).width == 70
+  and M.resolve({ mode = "default" }).mode == "size")
+check("resolve leaves a fixed entry alone", M.resolve(cfg.workspaces[5]).mode == "aspect")
 
 local again = M.parse_config(M.encode_config(cfg))
 check("encode/parse round-trips", again.workspaces[2].width == 70 and again.workspaces[5].ratio_h == 3
-  and again.settings.step == 10)
+  and again.settings.step == 10 and again.workspaces[8].mode == "default")
 check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "always" }', 1, true) ~= nil)
 
 check("empty text gives defaults", M.parse_config("").defaults.width == 70 and next(M.parse_config("").workspaces) == nil)
@@ -138,6 +145,32 @@ M.adopt_defaults(5)
 check("adopt_defaults ignores an aspect entry", M.config.defaults.height == 90)
 M.adopt_defaults(9)
 check("adopt_defaults ignores an unknown workspace", M.config.defaults.height == 90)
+
+-- Default entries: enabling follows the defaults and tracks changes to them.
+fake.config["general.gaps_out"] = base
+fake.workspaces[4] = { id = 4, tiled_layout = "dwindle" }
+fake.windows[4] = { { floating = false, monitor = { width = 2560, height = 1440, reserved = { top = 26 } } } }
+M.set_defaults(70, 80)
+fake.notes = {}
+M.enable(4)
+check("enable without an entry follows the defaults", M.config.workspaces[4].mode == "default")
+check("enable says so", fake.notes[1] and fake.notes[1]:find("70% x 80% (default)", 1, true) ~= nil, fake.notes[1])
+check("a default entry is applied at the defaults' size", fake.rules[4] and fake.rules[4].left == 384, fake.rules[4] and fake.rules[4].left)
+M.set_defaults(50, 100)
+check("changing the defaults reaches a default entry", fake.rules[4].left == 640 and fake.rules[4].top == 10)
+check("the file keeps the entry as true", io.open(M.config_path):read("*a"):find('"4": true', 1, true) ~= nil)
+M.adjust(10, 0, 4)
+check("nudging a default entry fixes it from the defaults", M.config.workspaces[4].mode == "size"
+  and M.config.workspaces[4].width == 60 and M.config.workspaces[4].height == 100)
+M.reset(4)
+check("reset goes back to following the defaults", M.config.workspaces[4].mode == "default")
+M.adjust(-5, -5, 4)
+M.adopt_defaults(4)
+check("adopt copies the size into the defaults", M.config.defaults.width == 45 and M.config.defaults.height == 95)
+check("adopt leaves the workspace following the defaults", M.config.workspaces[4].mode == "default")
+M.disable(4)
+check("disable resets the gaps", fake.rules[4].left == 10)
+M.set_defaults(65, 90)
 
 -- Steps, nudges and notification levels, on a workspace of a known size.
 M.set_step(12, 3)

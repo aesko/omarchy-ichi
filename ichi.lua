@@ -55,10 +55,19 @@ local function clamp(value, lo, hi)
   return math.max(lo, math.min(hi, value))
 end
 
+-- Entry shapes: { mode = "default" } follows the defaults (JSON `true`),
+-- "size" is a share of the usable area, "aspect" a ratio.
 function M.normalize_entry(entry, defaults)
   defaults = defaults or M.config.defaults
+  if entry == true then
+    return { mode = "default" }
+  end
   if type(entry) ~= "table" then
     return nil
+  end
+
+  if entry.mode == "default" then
+    return { mode = "default" }
   end
 
   if entry.mode == "aspect" then
@@ -74,6 +83,18 @@ function M.normalize_entry(entry, defaults)
     width = clamp(math.floor(tonumber(entry.width) or defaults.width), M.limits.min, M.limits.max),
     height = clamp(math.floor(tonumber(entry.height) or defaults.height), M.limits.min, M.limits.max),
   }
+end
+
+-- The concrete size or aspect an entry stands for: a default entry becomes
+-- whatever the defaults say right now.
+function M.resolve(entry)
+  if entry == nil then
+    return nil
+  end
+  if entry.mode == "default" then
+    return M.normalize_entry({ mode = "size" }, M.config.defaults)
+  end
+  return entry
 end
 
 -- Outer gaps that leave a centred box of the requested shape in a usable area.
@@ -155,6 +176,9 @@ function M.parse_config(text)
 
   local workspaces = find_object(text, "workspaces")
   if workspaces then
+    for id in workspaces:gmatch('"(%d+)"%s*:%s*true') do
+      cfg.workspaces[tonumber(id)] = { mode = "default" }
+    end
     for id, body in workspaces:gmatch('"(%d+)"%s*:%s*{(.-)}') do
       local rw, rh = body:match('"ratio"%s*:%s*%[%s*(%d+%.?%d*)%s*,%s*(%d+%.?%d*)%s*%]')
       cfg.workspaces[tonumber(id)] = M.normalize_entry({
@@ -180,7 +204,9 @@ function M.encode_config(cfg)
   local lines = {}
   for _, id in ipairs(ids) do
     local e = cfg.workspaces[id]
-    if e.mode == "aspect" then
+    if e.mode == "default" then
+      lines[#lines + 1] = string.format('    "%d": true', id)
+    elseif e.mode == "aspect" then
       lines[#lines + 1] = string.format('    "%d": { "mode": "aspect", "ratio": [%g, %g] }', id, e.ratio_w, e.ratio_h)
     else
       lines[#lines + 1] = string.format('    "%d": { "mode": "size", "width": %d, "height": %d }', id, e.width, e.height)
@@ -286,10 +312,12 @@ local function builtin_aspect_active()
 end
 
 local function describe(id, entry)
+  local suffix = entry.mode == "default" and " (default)" or ""
+  entry = M.resolve(entry)
   if entry.mode == "aspect" then
-    return string.format("Ichi: workspace %d at %g:%g", id, entry.ratio_w, entry.ratio_h)
+    return string.format("Ichi: workspace %d at %g:%g%s", id, entry.ratio_w, entry.ratio_h, suffix)
   end
-  return string.format("Ichi: workspace %d at %d%% x %d%%", id, entry.width, entry.height)
+  return string.format("Ichi: workspace %d at %d%% x %d%%%s", id, entry.width, entry.height, suffix)
 end
 
 function M.apply(id)
@@ -344,7 +372,7 @@ function M.apply(id)
   local usable_h = mon.height - (reserved.top or 0) - (reserved.bottom or 0)
 
   -- Named keys are mandatory here: a positional array is silently misparsed.
-  hl.workspace_rule({ workspace = tostring(id), gaps_out = M.gaps_for(usable_w, usable_h, entry, base) })
+  hl.workspace_rule({ workspace = tostring(id), gaps_out = M.gaps_for(usable_w, usable_h, M.resolve(entry), base) })
 end
 
 function M.refresh()
@@ -368,12 +396,14 @@ local function commit(id, entry, message, level)
   notify(message, level)
 end
 
+-- Without an explicit entry the workspace follows the defaults, now and
+-- whenever they change.
 function M.enable(id, entry)
   id = id or current_id()
   if id == nil then
     return
   end
-  entry = M.normalize_entry(entry or M.config.defaults) or M.normalize_entry(M.config.defaults)
+  entry = M.normalize_entry(entry) or { mode = "default" }
   commit(id, entry, describe(id, entry))
 end
 
@@ -404,9 +434,9 @@ function M.adjust(delta_width, delta_height, id)
   if id == nil then
     return
   end
-  local entry = M.config.workspaces[id]
+  local entry = M.resolve(M.config.workspaces[id])
   if entry == nil or entry.mode ~= "size" then
-    entry = M.normalize_entry(M.config.defaults)
+    entry = M.resolve({ mode = "default" })
   end
   entry.width = clamp(entry.width + (delta_width or 0), M.limits.min, M.limits.max)
   entry.height = clamp(entry.height + (delta_height or 0), M.limits.min, M.limits.max)
@@ -432,13 +462,14 @@ function M.set_aspect(ratio_w, ratio_h, id)
   commit(id, entry, describe(id, entry))
 end
 
+-- Back to following the defaults.
 function M.reset(id)
   id = id or current_id()
   if id == nil or M.config.workspaces[id] == nil then
     return
   end
-  local entry = M.normalize_entry(M.config.defaults)
-  commit(id, entry, describe(id, entry) .. " (reset)")
+  local entry = { mode = "default" }
+  commit(id, entry, describe(id, entry))
 end
 
 local function positive(value, fallback)
@@ -458,7 +489,8 @@ function M.set_defaults(width, height, step)
   s.step = clamp(math.floor(positive(step, s.step)), 1, 25)
   d.step = s.step -- kept in sync so bindings written against 0.1 still work
   M.save()
-  notify(string.format("Ichi: defaults %d%% x %d%%, step %d", d.width, d.height, s.step))
+  M.refresh() -- workspaces that follow the defaults pick the change up
+  notify(string.format("Ichi: defaults %d%% x %d%%", d.width, d.height))
 end
 
 -- Arrow-key increments in percentage points. Zero or nil keeps a value.
@@ -482,12 +514,15 @@ function M.set_notify(level)
 end
 
 -- Tune a workspace with the arrows, then make that the default for the rest.
+-- The workspace itself goes back to following the defaults, so a later
+-- change to them reaches it too.
 function M.adopt_defaults(id)
   id = id or current_id()
   local entry = id and M.config.workspaces[id]
   if not entry or entry.mode ~= "size" then
     return
   end
+  M.config.workspaces[id] = { mode = "default" }
   M.set_defaults(entry.width, entry.height)
 end
 

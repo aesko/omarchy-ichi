@@ -25,8 +25,12 @@ function clamp(value, lo, hi) {
   return Math.max(lo, Math.min(hi, value))
 }
 
+// `true` (or mode "default") follows the defaults; "size" and "aspect" are
+// fixed for that workspace.
 function normalizeEntry(entry, defaults) {
+  if (entry === true) return { mode: "default" }
   if (!entry || typeof entry !== "object") return null
+  if (entry.mode === "default") return { mode: "default" }
   if (entry.mode === "aspect") {
     var ratio = Array.isArray(entry.ratio) ? entry.ratio : []
     var rw = Number(ratio[0]), rh = Number(ratio[1])
@@ -88,10 +92,20 @@ function hyprctlEvalArgs(lua) {
   return ["hyprctl", "eval", "do\n" + String(lua) + "\nend"]
 }
 
-function describe(entry) {
+// A default entry is shown with what it currently amounts to.
+function resolve(entry, config) {
+  if (entry && entry.mode === "default") {
+    return { mode: "size", width: config.defaults.width, height: config.defaults.height }
+  }
+  return entry
+}
+
+function describe(entry, config) {
   if (!entry) return "off"
+  var suffix = entry.mode === "default" ? " (default)" : ""
+  entry = resolve(entry, config)
   if (entry.mode === "aspect") return entry.ratio[0] + ":" + entry.ratio[1]
-  return entry.width + "% x " + entry.height + "%"
+  return entry.width + "% x " + entry.height + "%" + suffix
 }
 
 function status(config, activeWorkspaceId) {
@@ -101,7 +115,7 @@ function status(config, activeWorkspaceId) {
     workspace: key === null ? null : Number(key),
     enabled: entry !== null,
     entry: entry,
-    summary: describe(entry),
+    summary: describe(entry, config),
     settings: config.settings,
     defaults: config.defaults,
     workspaces: Object.keys(config.workspaces).map(Number).sort(function (a, b) { return a - b }),

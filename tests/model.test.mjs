@@ -31,6 +31,8 @@ test("parseConfig normalizes and drops bad entries", () => {
       "2": { mode: "size", width: 70, height: 80 },
       "5": { mode: "aspect", ratio: [4, 3] },
       "7": { mode: "aspect", ratio: [0, 3] },
+      "8": true,
+      "9": { mode: "default", width: 40 },
       "x": { mode: "size", width: 50, height: 50 },
     },
   }))
@@ -39,6 +41,8 @@ test("parseConfig normalizes and drops bad entries", () => {
   assert.deepEqual(config.workspaces["2"], { mode: "size", width: 70, height: 80 })
   assert.deepEqual(config.workspaces["5"], { mode: "aspect", ratio: [4, 3] })
   assert.equal(config.workspaces["7"], undefined)
+  assert.deepEqual(config.workspaces["8"], { mode: "default" })
+  assert.deepEqual(config.workspaces["9"], { mode: "default" })
   assert.equal(config.workspaces["x"], undefined)
 })
 
@@ -90,6 +94,9 @@ test("status reports the active workspace", () => {
     settings: { step: 5, fine_step: 1, notify: "always" }, defaults: { width: 70, height: 80 }, workspaces: [2, 5],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
+  const following = Model.normalizeConfig({ defaults: { width: 60, height: 90 }, workspaces: { "3": true } })
+  assert.equal(Model.status(following, 3).summary, "60% x 90% (default)")
+  assert.equal(Model.status(following, 3).enabled, true)
   assert.equal(Model.status(config, 3).enabled, false)
   assert.equal(Model.status(config, null).workspace, null)
 })

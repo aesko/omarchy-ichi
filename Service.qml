@@ -170,7 +170,7 @@ Item {
       root.evaluate("if ichi then ichi.set_aspect(" + rw + ", " + rh + ") end")
     }
 
-    // What a workspace gets when toggled on or reset, e.g. defaults 65 85.
+    // What a workspace that follows the defaults gets, e.g. defaults 65 85.
     function defaults(width: string, height: string): void {
       var w = Number(width) || 0
       var h = Number(height) || 0

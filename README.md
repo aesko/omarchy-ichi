@@ -13,7 +13,7 @@ a terminal, a note, a chat — and that window doesn't need the whole screen.
   workspace you're on. Every other workspace is left alone.
 - **Sized by feel.** Arrow keys nudge width and height in percentage steps,
   and hold to keep going. When it looks right, `adopt` makes that the default
-  everywhere.
+  for every workspace that has not been tuned by hand.
 - **Never in the way.** Open a second window and the inset disappears — the
   space is yours again. Close it and the inset comes back.
 - **Stays tiled.** The window is never floated, so hibernate, an unplugged
@@ -101,10 +101,10 @@ omarchy-shell io.github.aesko.ichi reset
 omarchy-shell io.github.aesko.ichi adjust 5 0      # width +5 points, height unchanged
 omarchy-shell io.github.aesko.ichi nudge -1 0      # one step narrower; add "fine" for the fine step
 omarchy-shell io.github.aesko.ichi aspect 4 3      # switch this workspace to 4:3
-omarchy-shell io.github.aesko.ichi defaults 65 85  # what a workspace gets when toggled on or reset
+omarchy-shell io.github.aesko.ichi defaults 65 85  # the size for workspaces that follow the defaults
 omarchy-shell io.github.aesko.ichi step 10 2       # arrow-key increments: step and fine step
 omarchy-shell io.github.aesko.ichi notify changes  # never | changes | always
-omarchy-shell io.github.aesko.ichi adopt           # make this workspace's size the default
+omarchy-shell io.github.aesko.ichi adopt           # make this workspace's size the default, and follow it
 omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-apply
 ```
 
@@ -115,7 +115,8 @@ The same functions are reachable from Lua as `ichi.toggle()`,
 `hyprctl eval 'ichi.toggle()'`.
 
 The quickest way to a default you like: turn a workspace on, tune it with the
-arrows, then `adopt`.
+arrows, then `adopt`. That workspace then follows the defaults again, so it
+moves with any later `defaults` change as well.
 
 ## Configuration
 
@@ -128,6 +129,7 @@ dropped; a malformed file keeps the last good document.
   "settings": { "step": 5, "fine_step": 1, "notify": "always" },
   "defaults": { "width": 70, "height": 80 },
   "workspaces": {
+    "1": true,
     "2": { "mode": "size", "width": 70, "height": 80 },
     "5": { "mode": "aspect", "ratio": [4, 3] }
   }
@@ -139,7 +141,10 @@ dropped; a malformed file keeps the last good document.
 - `settings.notify` is how much Ichi says: `never` is silent, `changes`
   reports toggles, resets and setting changes, `always` also reports every
   arrow-key nudge.
-- `defaults` is what a workspace gets when toggled on or reset.
+- `defaults` is the size of every workspace whose entry is `true`. Toggling a
+  workspace on writes `true`; the first arrow-key nudge replaces that with a
+  fixed `size` entry, and `reset` puts `true` back. Change the defaults and
+  every `true` workspace follows within a second.
 - `size` mode is a percentage of the *usable* area — the monitor minus the bar
   — so the proportion holds on any display and the window sits centred.
   Values are clamped to 30–100; at 100 the inset is exactly your normal gaps.
