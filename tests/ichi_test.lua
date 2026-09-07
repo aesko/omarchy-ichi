@@ -107,6 +107,60 @@ check("resolve carries the caps onto a default entry", M.resolve({ mode = "defau
 check("resolve carries the caps onto a fixed entry", M.resolve({ mode = "aspect", ratio_w = 1, ratio_h = 1 }).max_width == 1500)
 M.config = M.parse_config("")
 
+-- Presets: parsed in file order, cycled in that order, saved from a workspace.
+local with_presets = M.parse_config([[
+{
+  "presets": {
+    "reading": { "mode": "size", "width": 55, "height": 85 },
+    "square": { "mode": "aspect", "ratio": [1, 1] },
+    "home": true,
+    "bad": { "mode": "aspect", "ratio": [0, 1] }
+  },
+  "workspaces": { "2": { "mode": "size", "width": 55, "height": 85 } }
+}
+]])
+check("parse keeps preset order and drops a bad one", #with_presets.presets == 3 and with_presets.presets[1].name == "reading"
+  and with_presets.presets[2].entry.mode == "aspect" and with_presets.presets[3].entry.mode == "default")
+local presets_text = M.encode_config(with_presets)
+check("encode writes presets in order", presets_text:find('"reading": { "mode": "size", "width": 55, "height": 85 },\n    "square": { "mode": "aspect", "ratio": [1, 1] },\n    "home": true', 1, true) ~= nil, presets_text)
+check("encode/parse round-trips presets", #M.parse_config(presets_text).presets == 3)
+check("encode omits an empty presets block", M.encode_config(M.parse_config("")):find("presets", 1, true) == nil)
+M.config = with_presets
+M.cycle(1, 2)
+check("cycle moves from a matching preset to the next", M.config.workspaces[2].mode == "aspect")
+M.cycle(1, 2)
+check("cycle reaches the default preset", M.config.workspaces[2].mode == "default")
+M.cycle(1, 2)
+check("cycle wraps around", M.config.workspaces[2].mode == "size" and M.config.workspaces[2].width == 55)
+M.cycle(-1, 2)
+check("cycle backwards wraps the other way", M.config.workspaces[2].mode == "default")
+M.config.workspaces[2] = { mode = "size", width = 61, height = 61 }
+M.cycle(1, 2)
+check("cycle from an unmatched size starts at the first", M.config.workspaces[2].width == 55)
+M.config.workspaces[2] = { mode = "size", width = 61, height = 61 }
+M.cycle(-1, 2)
+check("cycle backwards from an unmatched size starts at the last", M.config.workspaces[2].mode == "default")
+M.cycle(1, 9)
+check("cycle turns an off workspace on with the first preset", M.config.workspaces[9] and M.config.workspaces[9].width == 55)
+M.preset("square", 9)
+check("preset by name", M.config.workspaces[9].mode == "aspect")
+M.preset("nope", 9)
+check("an unknown preset changes nothing", M.config.workspaces[9].mode == "aspect")
+M.config.workspaces[9] = { mode = "size", width = 40, height = 40 }
+M.save_preset("tiny", 9)
+check("save_preset appends", #M.config.presets == 4 and M.config.presets[4].name == "tiny" and M.config.presets[4].entry.width == 40)
+M.config.workspaces[9] = { mode = "size", width = 41, height = 41 }
+M.save_preset("tiny", 9)
+check("save_preset replaces by name in place", #M.config.presets == 4 and M.config.presets[4].entry.width == 41)
+M.remove_preset("square")
+check("remove_preset drops it", #M.config.presets == 3 and M.config.presets[2].name == "home")
+M.config.workspaces[9] = nil
+fake.notes = {}
+M.config.presets = {}
+M.cycle(1, 2)
+check("cycle with no presets says so", #fake.notes == 1 and fake.notes[1]:find("no presets", 1, true) ~= nil)
+M.config = M.parse_config("")
+
 -- Monitors: a block overrides the defaults field by field for matching displays.
 local layered = M.parse_config([[
 {

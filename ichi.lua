@@ -40,6 +40,8 @@ local function default_config()
     defaults = { width = 70, height = 80, step = 5, max_width = 0, max_height = 0 },
     -- Ordered, first match wins: { key = "desc:..." or "DP-1", width?, height?, max_width?, max_height? }
     monitors = {},
+    -- Ordered, for cycling: { name = "reading", entry = <normalized entry> }
+    presets = {},
     workspaces = {},
   }
 end
@@ -220,6 +222,18 @@ local function string_field(body, key)
   return body:match('"' .. key .. '"%s*:%s*"([^"]*)"')
 end
 
+-- One "{ ... }" entry body, or nil when it does not describe anything usable.
+local function parse_entry(body, defaults)
+  local rw, rh = body:match('"ratio"%s*:%s*%[%s*(%d+%.?%d*)%s*,%s*(%d+%.?%d*)%s*%]')
+  return M.normalize_entry({
+    mode = body:match('"mode"%s*:%s*"(%a+)"'),
+    width = number_field(body, "width"),
+    height = number_field(body, "height"),
+    ratio_w = rw,
+    ratio_h = rh,
+  }, defaults)
+end
+
 function M.parse_config(text)
   local cfg = default_config()
   if type(text) ~= "string" then
@@ -261,20 +275,39 @@ function M.parse_config(text)
     end
   end
 
+  -- Presets keep file order, which is the cycling order; `true` entries and
+  -- object entries are collected in one pass so the order holds.
+  local presets = find_object(text, "presets")
+  if presets then
+    local pos = 1
+    while true do
+      local _, colon, name = presets:find('"([^"]+)"%s*:%s*', pos)
+      if colon == nil then
+        break
+      end
+      local entry
+      pos = colon + 1
+      if presets:sub(pos, pos + 3) == "true" then
+        entry = { mode = "default" }
+        pos = pos + 4
+      elseif presets:sub(pos, pos) == "{" then
+        local _, close = presets:find("%b{}", pos)
+        entry = close and parse_entry(presets:sub(pos + 1, close - 1), cfg.defaults)
+        pos = (close or pos) + 1
+      end
+      if entry then
+        cfg.presets[#cfg.presets + 1] = { name = name, entry = entry }
+      end
+    end
+  end
+
   local workspaces = find_object(text, "workspaces")
   if workspaces then
     for id in workspaces:gmatch('"(%d+)"%s*:%s*true') do
       cfg.workspaces[tonumber(id)] = { mode = "default" }
     end
     for id, body in workspaces:gmatch('"(%d+)"%s*:%s*{(.-)}') do
-      local rw, rh = body:match('"ratio"%s*:%s*%[%s*(%d+%.?%d*)%s*,%s*(%d+%.?%d*)%s*%]')
-      cfg.workspaces[tonumber(id)] = M.normalize_entry({
-        mode = body:match('"mode"%s*:%s*"(%a+)"'),
-        width = number_field(body, "width"),
-        height = number_field(body, "height"),
-        ratio_w = rw,
-        ratio_h = rh,
-      }, cfg.defaults)
+      cfg.workspaces[tonumber(id)] = parse_entry(body, cfg.defaults)
     end
   end
 
@@ -309,6 +342,26 @@ local function encode_monitors(monitors)
   return '  "monitors": {\n' .. table.concat(lines, ",\n") .. "\n  },\n"
 end
 
+function M.encode_entry(e)
+  if e.mode == "default" then
+    return "true"
+  elseif e.mode == "aspect" then
+    return string.format('{ "mode": "aspect", "ratio": [%g, %g] }', e.ratio_w, e.ratio_h)
+  end
+  return string.format('{ "mode": "size", "width": %d, "height": %d }', e.width, e.height)
+end
+
+local function encode_presets(presets)
+  if #presets == 0 then
+    return ""
+  end
+  local lines = {}
+  for _, p in ipairs(presets) do
+    lines[#lines + 1] = string.format('    "%s": %s', p.name, M.encode_entry(p.entry))
+  end
+  return '  "presets": {\n' .. table.concat(lines, ",\n") .. "\n  },\n"
+end
+
 function M.encode_config(cfg)
   local ids = {}
   for id in pairs(cfg.workspaces) do
@@ -318,23 +371,17 @@ function M.encode_config(cfg)
 
   local lines = {}
   for _, id in ipairs(ids) do
-    local e = cfg.workspaces[id]
-    if e.mode == "default" then
-      lines[#lines + 1] = string.format('    "%d": true', id)
-    elseif e.mode == "aspect" then
-      lines[#lines + 1] = string.format('    "%d": { "mode": "aspect", "ratio": [%g, %g] }', id, e.ratio_w, e.ratio_h)
-    else
-      lines[#lines + 1] = string.format('    "%d": { "mode": "size", "width": %d, "height": %d }', id, e.width, e.height)
-    end
+    lines[#lines + 1] = string.format('    "%d": %s', id, M.encode_entry(cfg.workspaces[id]))
   end
 
   return string.format(
-    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s" },\n  "defaults": { %s },\n%s  "workspaces": {\n%s\n  }\n}\n',
+    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s" },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
     cfg.settings.step,
     cfg.settings.fine_step,
     cfg.settings.notify,
     M.encode_size(cfg.defaults),
     encode_monitors(cfg.monitors),
+    encode_presets(cfg.presets),
     table.concat(lines, ",\n")
   )
 end
@@ -645,6 +692,94 @@ function M.set_notify(level)
   M.config.settings.notify = level
   M.save()
   notify("Ichi: notifications " .. level)
+end
+
+-- ---------------------------------------------------------------- presets --
+
+local function same_entry(a, b)
+  if a == nil or b == nil or a.mode ~= b.mode then
+    return false
+  end
+  if a.mode == "aspect" then
+    return a.ratio_w == b.ratio_w and a.ratio_h == b.ratio_h
+  end
+  return a.mode == "default" or (a.width == b.width and a.height == b.height)
+end
+
+local function preset_index(name_or_entry)
+  for i, p in ipairs(M.config.presets) do
+    if p.name == name_or_entry or same_entry(p.entry, name_or_entry) then
+      return i
+    end
+  end
+  return nil
+end
+
+local function apply_preset(id, preset)
+  local entry = M.normalize_entry(preset.entry)
+  commit(id, entry, describe(id, entry) .. string.format(" (%s)", preset.name))
+end
+
+-- Give the workspace a preset by name.
+function M.preset(name, id)
+  id = id or current_id()
+  local i = id and preset_index(name)
+  if i == nil then
+    notify(string.format("Ichi: no preset called '%s'", tostring(name)))
+    return
+  end
+  apply_preset(id, M.config.presets[i])
+end
+
+-- Step through the presets in file order; a workspace on none of them starts
+-- at the first (or, going backwards, the last).
+function M.cycle(delta, id)
+  id = id or current_id()
+  if id == nil then
+    return
+  end
+  local n = #M.config.presets
+  if n == 0 then
+    notify("Ichi: no presets yet; save one with ichi.save_preset('name')")
+    return
+  end
+  delta = tonumber(delta) or 1
+  local i = preset_index(M.config.workspaces[id])
+  if i == nil then
+    i = delta < 0 and n or 1
+  else
+    i = (i - 1 + delta) % n + 1
+  end
+  apply_preset(id, M.config.presets[i])
+end
+
+-- Keep the workspace's current entry as a preset, replacing one of that name.
+function M.save_preset(name, id)
+  id = id or current_id()
+  local entry = id and M.config.workspaces[id]
+  name = tostring(name or ""):gsub('[\\"]', "")
+  if entry == nil or name == "" then
+    return
+  end
+  local i = preset_index(name)
+  local preset = { name = name, entry = M.normalize_entry(entry) }
+  if i then
+    M.config.presets[i] = preset
+  else
+    M.config.presets[#M.config.presets + 1] = preset
+  end
+  M.save()
+  notify(string.format("Ichi: preset '%s' saved", name))
+end
+
+function M.remove_preset(name)
+  local i = preset_index(name)
+  if i == nil then
+    return
+  end
+  table.remove(M.config.presets, i)
+  M.save()
+  notify(string.format("Ichi: preset '%s' removed", tostring(name)))
 end
 
 -- The key a monitor gets in the monitors block: its description when it has

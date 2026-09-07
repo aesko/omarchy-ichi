@@ -207,6 +207,25 @@ Item {
       root.evaluate("if ichi then ichi.set_notify(\"" + level + "\") end")
     }
 
+    // Give the focused workspace a preset by name.
+    function preset(name: string): void {
+      root.evaluate("if ichi then ichi.preset(" + JSON.stringify(String(name)) + ") end")
+    }
+
+    // Next preset, or the previous one with "back".
+    function cycle(direction: string): void {
+      root.evaluate("if ichi then ichi.cycle(" + (direction === "back" ? -1 : 1) + ") end")
+    }
+
+    // Keep the focused workspace's current size as a named preset.
+    function save_preset(name: string): void {
+      root.evaluate("if ichi then ichi.save_preset(" + JSON.stringify(String(name)) + ") end")
+    }
+
+    function remove_preset(name: string): void {
+      root.evaluate("if ichi then ichi.remove_preset(" + JSON.stringify(String(name)) + ") end")
+    }
+
     // Adopt the focused workspace's current size as the default, or with
     // "monitor", as the default for its monitor only.
     function adopt(scope: string): void {

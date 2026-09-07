@@ -71,6 +71,14 @@ for key, dw, dh in ("LEFT,-1,0 RIGHT,1,0 UP,0,1 DOWN,0,-1"):gmatch("(%a+),(-?%d)
 end
 ```
 
+A binding to step through your presets, if you keep some:
+
+```lua
+o.bind("SUPER + CTRL + ALT + P", "Ichi: next preset", function()
+  if ichi then ichi.cycle() end
+end)
+```
+
 Every binding acts on the workspace you are currently on. Nudging the size of a
 workspace that is off turns it on. `repeating` lets you hold the key; the
 plain arrows move by `step` (5 points) and the shifted ones by `fine_step`
@@ -101,6 +109,10 @@ omarchy-shell io.github.aesko.ichi reset
 omarchy-shell io.github.aesko.ichi adjust 5 0      # width +5 points, height unchanged
 omarchy-shell io.github.aesko.ichi nudge -1 0      # one step narrower; add "fine" for the fine step
 omarchy-shell io.github.aesko.ichi aspect 4 3      # switch this workspace to 4:3
+omarchy-shell io.github.aesko.ichi preset reading  # give this workspace a preset
+omarchy-shell io.github.aesko.ichi cycle           # next preset; "cycle back" for the previous
+omarchy-shell io.github.aesko.ichi save_preset wide   # keep this workspace's size as a preset
+omarchy-shell io.github.aesko.ichi remove_preset wide
 omarchy-shell io.github.aesko.ichi defaults 65 85  # the size for workspaces that follow the defaults
 omarchy-shell io.github.aesko.ichi max 1800 0      # never wider than 1800px; 0 is no cap
 omarchy-shell io.github.aesko.ichi step 10 2       # arrow-key increments: step and fine step
@@ -112,6 +124,7 @@ omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-a
 
 The same functions are reachable from Lua as `ichi.toggle()`,
 `ichi.adjust(dw, dh)`, `ichi.nudge(dx, dy, fine)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
+`ichi.preset(name)`, `ichi.cycle(delta)`, `ichi.save_preset(name)`, `ichi.remove_preset(name)`,
 `ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.adopt_defaults(id, scope)`,
 `ichi.enable(id, entry)` and `ichi.disable(id)`, or from a shell with
 `hyprctl eval 'ichi.toggle()'`.
@@ -133,6 +146,11 @@ dropped; a malformed file keeps the last good document.
   "monitors": {
     "desc:ULTRAGEAR": { "width": 55 },
     "eDP-1": { "width": 95, "height": 95, "max_width": 0 }
+  },
+  "presets": {
+    "reading": { "mode": "size", "width": 55, "height": 85 },
+    "wide": { "mode": "size", "width": 90, "height": 90 },
+    "home": true
   },
   "workspaces": {
     "1": true,
@@ -163,6 +181,11 @@ dropped; a malformed file keeps the last good document.
   both. The first matching block wins. Fixed `size` and `aspect` entries keep
   their own size but take the monitor's caps. `adopt monitor` writes a block
   for the current display from the workspace you have tuned.
+- `presets` are named entries in any of the three forms. `cycle` steps a
+  workspace through them in file order, starting from the first when the
+  workspace is on none of them, and `preset <name>` jumps to one. Tune a
+  workspace, then `save_preset <name>` to keep it. There are none until you
+  add some.
 - `size` mode is a percentage of the *usable* area — the monitor minus the bar
   — so the proportion holds on any display and the window sits centred.
   Values are clamped to 30–100; at 100 the inset is exactly your normal gaps.

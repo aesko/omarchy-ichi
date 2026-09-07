@@ -18,6 +18,7 @@ function defaultConfig() {
     settings: { step: 5, fine_step: 1, notify: "always" },
     defaults: { width: 70, height: 80 },
     monitors: [],
+    presets: [],
     workspaces: {},
   }
 }
@@ -73,6 +74,12 @@ function normalizeConfig(document) {
     if (isFinite(Number(raw.max_width))) block.max_width = Math.max(0, Math.floor(Number(raw.max_width)))
     if (isFinite(Number(raw.max_height))) block.max_height = Math.max(0, Math.floor(Number(raw.max_height)))
     config.monitors.push(block)
+  }
+
+  var presets = document.presets || {}
+  for (var name in presets) {
+    var preset = normalizeEntry(presets[name], config.defaults)
+    if (preset) config.presets.push({ name: name, entry: preset })
   }
 
   var workspaces = document.workspaces || {}
@@ -152,6 +159,20 @@ function describe(entry, config, monitor) {
   return entry.width + "% x " + entry.height + "%" + suffix
 }
 
+function sameEntry(a, b) {
+  if (!a || !b || a.mode !== b.mode) return false
+  if (a.mode === "aspect") return a.ratio[0] === b.ratio[0] && a.ratio[1] === b.ratio[1]
+  return a.mode === "default" || (a.width === b.width && a.height === b.height)
+}
+
+// The name of the preset the entry matches, if any.
+function presetName(config, entry) {
+  for (var i = 0; i < config.presets.length; i++) {
+    if (sameEntry(config.presets[i].entry, entry)) return config.presets[i].name
+  }
+  return null
+}
+
 function status(config, activeWorkspaceId, monitor) {
   var key = activeWorkspaceId === null || activeWorkspaceId === undefined ? null : String(activeWorkspaceId)
   var entry = key !== null ? (config.workspaces[key] || null) : null
@@ -163,6 +184,8 @@ function status(config, activeWorkspaceId, monitor) {
     settings: config.settings,
     defaults: config.defaults,
     monitor: monitorBlock(config, monitor),
+    preset: presetName(config, entry),
+    presets: config.presets.map(function (p) { return p.name }),
     workspaces: Object.keys(config.workspaces).map(Number).sort(function (a, b) { return a - b }),
   }
 }

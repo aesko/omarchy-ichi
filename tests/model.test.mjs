@@ -94,7 +94,7 @@ test("status reports the active workspace", () => {
   const config = Model.normalizeConfig({ workspaces: { "2": { width: 70, height: 80 }, "5": { mode: "aspect", ratio: [1, 1] } } })
   assert.deepEqual(Model.status(config, 2), {
     workspace: 2, enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
-    settings: { step: 5, fine_step: 1, notify: "always" }, defaults: { width: 70, height: 80 }, monitor: null, workspaces: [2, 5],
+    settings: { step: 5, fine_step: 1, notify: "always" }, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: [2, 5],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
   assert.equal(Model.status(config, 3).enabled, false)
@@ -102,6 +102,18 @@ test("status reports the active workspace", () => {
   const following = Model.normalizeConfig({ defaults: { width: 60, height: 90 }, workspaces: { "3": true } })
   assert.equal(Model.status(following, 3).summary, "60% x 90% (default)")
   assert.equal(Model.status(following, 3).enabled, true)
+})
+
+test("presets keep their order and name the matching entry", () => {
+  const config = Model.normalizeConfig({
+    presets: { reading: { width: 55, height: 85 }, square: { mode: "aspect", ratio: [1, 1] }, home: true, bad: { mode: "aspect", ratio: [0, 1] } },
+    workspaces: { "2": { width: 55, height: 85 }, "3": true, "4": { width: 56, height: 85 } },
+  })
+  assert.deepEqual(config.presets.map(p => p.name), ["reading", "square", "home"])
+  assert.equal(Model.status(config, 2).preset, "reading")
+  assert.equal(Model.status(config, 3).preset, "home")
+  assert.equal(Model.status(config, 4).preset, null)
+  assert.deepEqual(Model.status(config, 4).presets, ["reading", "square", "home"])
 })
 
 test("monitor blocks override the defaults for a default entry", () => {
