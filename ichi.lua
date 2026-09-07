@@ -36,7 +36,7 @@ M.notify_levels = { never = 0, changes = 1, always = 2 }
 
 local function default_config()
   return {
-    settings = { step = 5, fine_step = 1, notify = "always" },
+    settings = { step = 5, fine_step = 1, notify = "always", all_workspaces = false },
     defaults = { width = 70, height = 80, step = 5, max_width = 0, max_height = 0 },
     -- Ordered, first match wins: { key = "desc:..." or "DP-1", width?, height?, max_width?, max_height? }
     monitors = {},
@@ -254,6 +254,7 @@ function M.parse_config(text)
   if M.notify_levels[notify] then
     cfg.settings.notify = notify
   end
+  cfg.settings.all_workspaces = settings:match('"all_workspaces"%s*:%s*(%a+)') == "true"
 
   local monitors = find_object(text, "monitors")
   if monitors then
@@ -306,6 +307,10 @@ function M.parse_config(text)
     for id in workspaces:gmatch('"(%d+)"%s*:%s*true') do
       cfg.workspaces[tonumber(id)] = { mode = "default" }
     end
+    -- An explicit off, which only means something with all_workspaces on.
+    for id in workspaces:gmatch('"(%d+)"%s*:%s*false') do
+      cfg.workspaces[tonumber(id)] = false
+    end
     for id, body in workspaces:gmatch('"(%d+)"%s*:%s*{(.-)}') do
       cfg.workspaces[tonumber(id)] = parse_entry(body, cfg.defaults)
     end
@@ -343,7 +348,9 @@ local function encode_monitors(monitors)
 end
 
 function M.encode_entry(e)
-  if e.mode == "default" then
+  if e == false then
+    return "false"
+  elseif e.mode == "default" then
     return "true"
   elseif e.mode == "aspect" then
     return string.format('{ "mode": "aspect", "ratio": [%g, %g] }', e.ratio_w, e.ratio_h)
@@ -375,10 +382,11 @@ function M.encode_config(cfg)
   end
 
   return string.format(
-    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s" },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
+    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s", "all_workspaces": %s },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
     cfg.settings.step,
     cfg.settings.fine_step,
     cfg.settings.notify,
+    tostring(cfg.settings.all_workspaces),
     M.encode_size(cfg.defaults),
     encode_monitors(cfg.monitors),
     encode_presets(cfg.presets),
@@ -473,6 +481,20 @@ local function builtin_aspect_active()
   return x > 0 and y > 0
 end
 
+-- What a workspace is set to once all_workspaces is taken into account: an
+-- explicit entry wins, false is off, and with nothing written the workspace
+-- follows the defaults when all_workspaces is on.
+function M.entry_for(id)
+  local entry = M.config.workspaces[id]
+  if entry == false then
+    return nil
+  end
+  if entry == nil and M.config.settings.all_workspaces then
+    return { mode = "default" }
+  end
+  return entry
+end
+
 local function workspace_monitor(id)
   local ws = hl.get_workspace(id)
   return ws and ws.monitor or nil
@@ -494,7 +516,7 @@ function M.apply(id)
   end
 
   local base = base_gaps()
-  local entry = M.config.workspaces[id]
+  local entry = M.entry_for(id)
   local function plain()
     hl.workspace_rule({ workspace = tostring(id), gaps_out = base })
   end
@@ -546,6 +568,15 @@ function M.refresh()
   for id in pairs(M.config.workspaces) do
     touched[id] = true
   end
+  -- With all_workspaces on, every workspace is Ichi's to manage; they stay in
+  -- `touched` afterwards so turning the setting off resets their gaps.
+  if M.config.settings.all_workspaces and hl.get_workspaces then
+    for _, ws in ipairs(hl.get_workspaces() or {}) do
+      if not ws.special then
+        touched[ws.id] = true
+      end
+    end
+  end
   for id in pairs(touched) do
     M.apply(id)
   end
@@ -564,22 +595,32 @@ local function commit(id, entry, message, level)
 end
 
 -- Without an explicit entry the workspace follows the defaults, now and
--- whenever they change.
+-- whenever they change. With all_workspaces on that is what an absent entry
+-- already means, so the file stays clean.
 function M.enable(id, entry)
   id = id or current_id()
   if id == nil then
     return
   end
-  entry = M.normalize_entry(entry) or { mode = "default" }
-  commit(id, entry, describe(id, entry))
+  entry = M.normalize_entry(entry)
+  local message = describe(id, entry or { mode = "default" })
+  if entry == nil and not M.config.settings.all_workspaces then
+    entry = { mode = "default" }
+  end
+  commit(id, entry, message)
 end
 
+-- Off; written as false when all_workspaces would otherwise turn it on.
 function M.disable(id)
   id = id or current_id()
   if id == nil then
     return
   end
-  commit(id, nil, string.format("Ichi: workspace %d off", id))
+  local entry = nil
+  if M.config.settings.all_workspaces then
+    entry = false
+  end
+  commit(id, entry, string.format("Ichi: workspace %d off", id))
 end
 
 function M.toggle(id)
@@ -587,7 +628,7 @@ function M.toggle(id)
   if id == nil then
     return
   end
-  if M.config.workspaces[id] then
+  if M.entry_for(id) then
     M.disable(id)
   else
     M.enable(id)
@@ -602,7 +643,7 @@ function M.adjust(delta_width, delta_height, id)
     return
   end
   local mon = workspace_monitor(id)
-  local entry = M.resolve(M.config.workspaces[id], mon)
+  local entry = M.resolve(M.entry_for(id), mon)
   if entry == nil or entry.mode ~= "size" then
     entry = M.resolve({ mode = "default" }, mon)
   end
@@ -633,11 +674,15 @@ end
 -- Back to following the defaults.
 function M.reset(id)
   id = id or current_id()
-  if id == nil or M.config.workspaces[id] == nil then
+  if id == nil or M.entry_for(id) == nil then
     return
   end
   local entry = { mode = "default" }
-  commit(id, entry, describe(id, entry))
+  local written = entry
+  if M.config.settings.all_workspaces then
+    written = nil
+  end
+  commit(id, written, describe(id, entry))
 end
 
 local function positive(value, fallback)
@@ -682,6 +727,14 @@ function M.set_step(step, fine)
   M.config.defaults.step = s.step
   M.save()
   notify(string.format("Ichi: step %d, fine step %d", s.step, s.fine_step))
+end
+
+-- Every workspace on unless it opts out with a false entry.
+function M.set_all_workspaces(on)
+  M.config.settings.all_workspaces = on == true or on == "true" or on == "on"
+  M.save()
+  M.refresh()
+  notify("Ichi: all workspaces " .. (M.config.settings.all_workspaces and "on" or "off"))
 end
 
 -- "never", "changes" or "always"; see M.notify_levels.
@@ -744,7 +797,7 @@ function M.cycle(delta, id)
     return
   end
   delta = tonumber(delta) or 1
-  local i = preset_index(M.config.workspaces[id])
+  local i = preset_index(M.entry_for(id))
   if i == nil then
     i = delta < 0 and n or 1
   else
@@ -756,7 +809,7 @@ end
 -- Keep the workspace's current entry as a preset, replacing one of that name.
 function M.save_preset(name, id)
   id = id or current_id()
-  local entry = id and M.config.workspaces[id]
+  local entry = id and M.entry_for(id)
   name = tostring(name or ""):gsub('[\\"]', "")
   if entry == nil or name == "" then
     return
@@ -836,6 +889,9 @@ if hl and hl.on then
     M.refresh()
   end)
   hl.on("window.open", function()
+    M.refresh()
+  end)
+  hl.on("workspace.created", function()
     M.refresh()
   end)
   hl.on("window.destroy", function()

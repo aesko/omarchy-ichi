@@ -37,7 +37,7 @@ test("parseConfig normalizes and drops bad entries", () => {
     },
   }))
   assert.deepEqual(config.defaults, { width: 60, height: 75 })
-  assert.deepEqual(config.settings, { step: 25, fine_step: 1, notify: "always" })
+  assert.deepEqual(config.settings, { step: 25, fine_step: 1, notify: "always", all_workspaces: false })
   assert.deepEqual(config.workspaces["2"], { mode: "size", width: 70, height: 80 })
   assert.deepEqual(config.workspaces["5"], { mode: "aspect", ratio: [4, 3] })
   assert.equal(config.workspaces["7"], undefined)
@@ -48,7 +48,7 @@ test("parseConfig normalizes and drops bad entries", () => {
 
 test("settings block is read, with the pre-0.2 step location as a fallback", () => {
   const modern = Model.parseConfig(JSON.stringify({ settings: { step: 10, fine_step: 2, notify: "never" }, defaults: { step: 3 } }))
-  assert.deepEqual(modern.settings, { step: 10, fine_step: 2, notify: "never" })
+  assert.deepEqual(modern.settings, { step: 10, fine_step: 2, notify: "never", all_workspaces: false })
   const legacy = Model.parseConfig(JSON.stringify({ defaults: { step: 3 } }))
   assert.equal(legacy.settings.step, 3)
   const capped = Model.parseConfig(JSON.stringify({ defaults: { max_width: 1600.7, max_height: -1 } }))
@@ -94,7 +94,7 @@ test("status reports the active workspace", () => {
   const config = Model.normalizeConfig({ workspaces: { "2": { width: 70, height: 80 }, "5": { mode: "aspect", ratio: [1, 1] } } })
   assert.deepEqual(Model.status(config, 2), {
     workspace: 2, enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
-    settings: { step: 5, fine_step: 1, notify: "always" }, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: [2, 5],
+    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false }, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: [2, 5],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
   assert.equal(Model.status(config, 3).enabled, false)
@@ -102,6 +102,20 @@ test("status reports the active workspace", () => {
   const following = Model.normalizeConfig({ defaults: { width: 60, height: 90 }, workspaces: { "3": true } })
   assert.equal(Model.status(following, 3).summary, "60% x 90% (default)")
   assert.equal(Model.status(following, 3).enabled, true)
+})
+
+test("all_workspaces turns absent entries on and false entries off", () => {
+  const config = Model.normalizeConfig({ settings: { all_workspaces: true }, workspaces: { "2": false, "3": { width: 50, height: 50 } } })
+  assert.equal(config.settings.all_workspaces, true)
+  assert.equal(config.workspaces["2"], false)
+  assert.equal(Model.status(config, 1).enabled, true)
+  assert.equal(Model.status(config, 1).summary, "70% x 80% (default)")
+  assert.equal(Model.status(config, 2).enabled, false)
+  assert.equal(Model.status(config, 3).summary, "50% x 50%")
+  assert.deepEqual(Model.status(config, 1).workspaces, [3])
+  const off = Model.normalizeConfig({ workspaces: { "2": false } })
+  assert.equal(Model.status(off, 1).enabled, false)
+  assert.equal(Model.status(off, 2).enabled, false)
 })
 
 test("presets keep their order and name the matching entry", () => {

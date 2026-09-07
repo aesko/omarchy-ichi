@@ -201,6 +201,11 @@ Item {
       root.evaluate("if ichi then ichi.nudge(" + dw + ", " + dh + ", " + (fine === "fine") + ") end")
     }
 
+    // Every workspace on unless it opts out: all on | off.
+    function all(state: string): void {
+      root.evaluate("if ichi then ichi.set_all_workspaces(" + (state === "on" || state === "true") + ") end")
+    }
+
     // How chatty to be: never, changes or always.
     function notify(level: string): void {
       if (Model.NOTIFY_LEVELS.indexOf(level) === -1) return

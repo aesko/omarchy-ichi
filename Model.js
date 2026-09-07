@@ -15,7 +15,7 @@ var NOTIFY_LEVELS = ["never", "changes", "always"]
 
 function defaultConfig() {
   return {
-    settings: { step: 5, fine_step: 1, notify: "always" },
+    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false },
     defaults: { width: 70, height: 80 },
     monitors: [],
     presets: [],
@@ -31,6 +31,7 @@ function clamp(value, lo, hi) {
 // fixed for that workspace.
 function normalizeEntry(entry, defaults) {
   if (entry === true) return { mode: "default" }
+  if (entry === false) return false
   if (!entry || typeof entry !== "object") return null
   if (entry.mode === "default") return { mode: "default" }
   if (entry.mode === "aspect") {
@@ -63,6 +64,7 @@ function normalizeConfig(document) {
   if (isFinite(Number(step))) config.settings.step = clamp(Math.floor(Number(step)), 1, 25)
   if (isFinite(Number(settings.fine_step))) config.settings.fine_step = clamp(Math.floor(Number(settings.fine_step)), 1, 25)
   if (NOTIFY_LEVELS.indexOf(settings.notify) !== -1) config.settings.notify = settings.notify
+  config.settings.all_workspaces = settings.all_workspaces === true
 
   var monitors = document.monitors || {}
   for (var mkey in monitors) {
@@ -86,7 +88,7 @@ function normalizeConfig(document) {
   for (var key in workspaces) {
     if (!/^\d+$/.test(key)) continue
     var entry = normalizeEntry(workspaces[key], config.defaults)
-    if (entry) config.workspaces[key] = entry
+    if (entry !== null && entry !== undefined) config.workspaces[key] = entry
   }
   return config
 }
@@ -173,9 +175,18 @@ function presetName(config, entry) {
   return null
 }
 
+// Mirrors ichi.lua's entry_for: false is off, absent follows the defaults
+// when all_workspaces is on.
+function entryFor(config, key) {
+  var entry = config.workspaces[key]
+  if (entry === false) return null
+  if (entry === undefined && config.settings.all_workspaces) return { mode: "default" }
+  return entry || null
+}
+
 function status(config, activeWorkspaceId, monitor) {
   var key = activeWorkspaceId === null || activeWorkspaceId === undefined ? null : String(activeWorkspaceId)
-  var entry = key !== null ? (config.workspaces[key] || null) : null
+  var entry = key !== null ? entryFor(config, key) : null
   return {
     workspace: key === null ? null : Number(key),
     enabled: entry !== null,
@@ -186,6 +197,7 @@ function status(config, activeWorkspaceId, monitor) {
     monitor: monitorBlock(config, monitor),
     preset: presetName(config, entry),
     presets: config.presets.map(function (p) { return p.name }),
-    workspaces: Object.keys(config.workspaces).map(Number).sort(function (a, b) { return a - b }),
+    workspaces: Object.keys(config.workspaces).filter(function (k) { return config.workspaces[k] !== false })
+      .map(Number).sort(function (a, b) { return a - b }),
   }
 }

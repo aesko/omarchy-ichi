@@ -86,6 +86,18 @@ local modern = M.parse_config('{ "settings": { "step": 8, "fine_step": 2, "notif
 check("parse prefers settings.step", modern.settings.step == 8 and modern.defaults.step == 8)
 check("parse reads fine_step", modern.settings.fine_step == 2 and cfg.settings.fine_step == 1)
 check("parse reads notify", modern.settings.notify == "never")
+check("parse defaults all_workspaces to off", modern.settings.all_workspaces == false)
+local everywhere = M.parse_config('{ "settings": { "all_workspaces": true }, "workspaces": { "2": false, "3": true } }')
+check("parse reads all_workspaces and false entries", everywhere.settings.all_workspaces == true
+  and everywhere.workspaces[2] == false and everywhere.workspaces[3].mode == "default")
+check("encode writes all_workspaces and false entries", M.encode_config(everywhere):find('"all_workspaces": true', 1, true) ~= nil
+  and M.encode_config(everywhere):find('"2": false', 1, true) ~= nil)
+M.config = everywhere
+check("entry_for follows the defaults when nothing is written", M.entry_for(9) and M.entry_for(9).mode == "default")
+check("entry_for honours an explicit off", M.entry_for(2) == nil)
+check("entry_for keeps an explicit entry", M.entry_for(3).mode == "default")
+M.config = M.parse_config("")
+check("entry_for is off by default when nothing is written", M.entry_for(9) == nil)
 check("parse rejects an unknown notify level", M.parse_config('{ "settings": { "notify": "loud" } }').settings.notify == "always")
 check("parse size entry", cfg.workspaces[2] and cfg.workspaces[2].width == 70 and cfg.workspaces[2].height == 80)
 check("parse aspect entry", cfg.workspaces[5] and cfg.workspaces[5].mode == "aspect" and cfg.workspaces[5].ratio_w == 4)
@@ -200,7 +212,7 @@ M.config = M.parse_config("")
 local again = M.parse_config(M.encode_config(cfg))
 check("encode/parse round-trips", again.workspaces[2].width == 70 and again.workspaces[5].ratio_h == 3
   and again.settings.step == 10 and again.workspaces[8].mode == "default")
-check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "always" }', 1, true) ~= nil)
+check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "always", "all_workspaces": false }', 1, true) ~= nil)
 
 check("empty text gives defaults", M.parse_config("").defaults.width == 70 and next(M.parse_config("").workspaces) == nil)
 
@@ -297,6 +309,26 @@ M.reset(4)
 M.disable(4)
 check("disable resets the gaps", fake.rules[4].left == 10)
 M.set_defaults(65, 90)
+
+-- all_workspaces: every existing workspace is managed, false opts one out.
+fake.workspaces[6] = { id = 6, tiled_layout = "dwindle", monitor = screen }
+fake.windows[6] = { { floating = false, monitor = screen } }
+fake.rules = {}
+M.set_all_workspaces(true)
+check("all on applies to a workspace with no entry", fake.rules[6] and fake.rules[6].left ~= 10, fake.rules[6] and fake.rules[6].left)
+check("all on writes nothing for it", M.config.workspaces[6] == nil)
+M.toggle(6)
+check("toggle under all on writes false", M.config.workspaces[6] == false and fake.rules[6].left == 10)
+M.toggle(6)
+check("toggle again removes the false", M.config.workspaces[6] == nil and fake.rules[6].left ~= 10)
+M.adjust(-10, 0, 6)
+check("nudging under all on fixes the size", M.config.workspaces[6].mode == "size")
+M.reset(6)
+check("reset under all on removes the entry", M.config.workspaces[6] == nil)
+M.set_all_workspaces(false)
+check("all off resets a workspace it had managed", fake.rules[6].left == 10 and M.entry_for(6) == nil)
+fake.workspaces[6] = nil
+fake.windows[6] = nil
 
 -- Steps, nudges and notification levels, on a workspace of a known size.
 M.set_step(12, 3)
