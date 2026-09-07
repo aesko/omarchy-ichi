@@ -6,6 +6,12 @@ os.remove(tmp)
 hl = nil -- no compositor: ichi.lua must not touch hl.on
 local M = dofile(root .. "/ichi.lua")
 
+-- Every path the module reads or writes goes to a temp file from the start;
+-- anything that commits (cycle, save_preset, adopt, ...) saves.
+M.config_path = tmp .. ".json"
+M.legacy_json_path = tmp .. ".legacy.json"
+M.legacy_lines_path = tmp .. ".legacy"
+
 -- A fake compositor for the paths that apply rules and notify. Installed after
 -- loading so the file's own event wiring stays off.
 local fake = { workspaces = {}, windows = {}, rules = {}, notes = {}, config = {}, active = nil }
@@ -251,9 +257,7 @@ check("encode writes step under settings", M.encode_config(cfg):find('"settings"
 check("empty text gives defaults", M.parse_config("").defaults.width == 70 and next(M.parse_config("").workspaces) == nil)
 
 -- Legacy import, oldest format: no JSON yet, an "<id> <width> <height>" file.
-M.config_path = tmp .. ".json"
-M.legacy_json_path = tmp .. ".legacy.json"
-M.legacy_lines_path = tmp .. ".legacy"
+os.remove(M.config_path)
 local legacy = io.open(M.legacy_lines_path, "w")
 legacy:write("2 70 80\n5 65 90\n")
 legacy:close()
