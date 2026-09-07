@@ -15,7 +15,7 @@ var NOTIFY_LEVELS = ["never", "changes", "always"]
 
 function defaultConfig() {
   return {
-    settings: { step: 5, notify: "always" },
+    settings: { step: 5, fine_step: 1, notify: "always" },
     defaults: { width: 70, height: 80 },
     workspaces: {},
   }
@@ -53,6 +53,7 @@ function normalizeConfig(document) {
   // `step` lived under defaults before 0.2; both places are read.
   var step = isFinite(Number(settings.step)) ? settings.step : defaults.step
   if (isFinite(Number(step))) config.settings.step = clamp(Math.floor(Number(step)), 1, 25)
+  if (isFinite(Number(settings.fine_step))) config.settings.fine_step = clamp(Math.floor(Number(settings.fine_step)), 1, 25)
   if (NOTIFY_LEVELS.indexOf(settings.notify) !== -1) config.settings.notify = settings.notify
 
   var workspaces = document.workspaces || {}

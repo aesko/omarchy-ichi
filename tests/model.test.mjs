@@ -35,7 +35,7 @@ test("parseConfig normalizes and drops bad entries", () => {
     },
   }))
   assert.deepEqual(config.defaults, { width: 60, height: 75 })
-  assert.deepEqual(config.settings, { step: 25, notify: "always" })
+  assert.deepEqual(config.settings, { step: 25, fine_step: 1, notify: "always" })
   assert.deepEqual(config.workspaces["2"], { mode: "size", width: 70, height: 80 })
   assert.deepEqual(config.workspaces["5"], { mode: "aspect", ratio: [4, 3] })
   assert.equal(config.workspaces["7"], undefined)
@@ -43,8 +43,8 @@ test("parseConfig normalizes and drops bad entries", () => {
 })
 
 test("settings block is read, with the pre-0.2 step location as a fallback", () => {
-  const modern = Model.parseConfig(JSON.stringify({ settings: { step: 10, notify: "never" }, defaults: { step: 3 } }))
-  assert.deepEqual(modern.settings, { step: 10, notify: "never" })
+  const modern = Model.parseConfig(JSON.stringify({ settings: { step: 10, fine_step: 2, notify: "never" }, defaults: { step: 3 } }))
+  assert.deepEqual(modern.settings, { step: 10, fine_step: 2, notify: "never" })
   const legacy = Model.parseConfig(JSON.stringify({ defaults: { step: 3 } }))
   assert.equal(legacy.settings.step, 3)
   const bogus = Model.parseConfig(JSON.stringify({ settings: { notify: "loudly" } }))
@@ -87,7 +87,7 @@ test("status reports the active workspace", () => {
   const config = Model.normalizeConfig({ workspaces: { "2": { width: 70, height: 80 }, "5": { mode: "aspect", ratio: [1, 1] } } })
   assert.deepEqual(Model.status(config, 2), {
     workspace: 2, enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
-    settings: { step: 5, notify: "always" }, defaults: { width: 70, height: 80 }, workspaces: [2, 5],
+    settings: { step: 5, fine_step: 1, notify: "always" }, defaults: { width: 70, height: 80 }, workspaces: [2, 5],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
   assert.equal(Model.status(config, 3).enabled, false)

@@ -11,8 +11,9 @@ a terminal, a note, a chat — and that window doesn't need the whole screen.
 
 - **One key, one workspace.** `SUPER+CTRL+ALT+I` insets the lone window on the
   workspace you're on. Every other workspace is left alone.
-- **Sized by feel.** Arrow keys nudge width and height in percentage steps.
-  When it looks right, `adopt` makes that the default everywhere.
+- **Sized by feel.** Arrow keys nudge width and height in percentage steps,
+  and hold to keep going. When it looks right, `adopt` makes that the default
+  everywhere.
 - **Never in the way.** Open a second window and the inset disappears — the
   space is yours again. Close it and the inset comes back.
 - **Stays tiled.** The window is never floated, so hibernate, an unplugged
@@ -60,22 +61,20 @@ end)
 o.bind("SUPER + CTRL + ALT + O", "Ichi: reset size", function()
   if ichi then ichi.reset() end
 end)
-o.bind("SUPER + CTRL + ALT + LEFT", "Ichi: narrower", function()
-  if ichi then ichi.adjust(-ichi.config.defaults.step, 0) end
-end)
-o.bind("SUPER + CTRL + ALT + RIGHT", "Ichi: wider", function()
-  if ichi then ichi.adjust(ichi.config.defaults.step, 0) end
-end)
-o.bind("SUPER + CTRL + ALT + UP", "Ichi: taller", function()
-  if ichi then ichi.adjust(0, ichi.config.defaults.step) end
-end)
-o.bind("SUPER + CTRL + ALT + DOWN", "Ichi: shorter", function()
-  if ichi then ichi.adjust(0, -ichi.config.defaults.step) end
-end)
+for key, dw, dh in ("LEFT,-1,0 RIGHT,1,0 UP,0,1 DOWN,0,-1"):gmatch("(%a+),(-?%d),(-?%d)") do
+  o.bind("SUPER + CTRL + ALT + " .. key, "Ichi: nudge " .. key:lower(), function()
+    if ichi then ichi.nudge(tonumber(dw), tonumber(dh)) end
+  end, { repeating = true })
+  o.bind("SUPER + CTRL + ALT + SHIFT + " .. key, "Ichi: nudge " .. key:lower() .. " (fine)", function()
+    if ichi then ichi.nudge(tonumber(dw), tonumber(dh), true) end
+  end, { repeating = true })
+end
 ```
 
 Every binding acts on the workspace you are currently on. Nudging the size of a
-workspace that is off turns it on.
+workspace that is off turns it on. `repeating` lets you hold the key; the
+plain arrows move by `step` (5 points) and the shifted ones by `fine_step`
+(1 point). Both are settings.
 
 ## Omarchy menu
 
@@ -100,17 +99,18 @@ omarchy-shell io.github.aesko.ichi enabled         # true | false
 omarchy-shell io.github.aesko.ichi toggle
 omarchy-shell io.github.aesko.ichi reset
 omarchy-shell io.github.aesko.ichi adjust 5 0      # width +5 points, height unchanged
+omarchy-shell io.github.aesko.ichi nudge -1 0      # one step narrower; add "fine" for the fine step
 omarchy-shell io.github.aesko.ichi aspect 4 3      # switch this workspace to 4:3
 omarchy-shell io.github.aesko.ichi defaults 65 85  # what a workspace gets when toggled on or reset
-omarchy-shell io.github.aesko.ichi step 10         # arrow-key increment, in percentage points
+omarchy-shell io.github.aesko.ichi step 10 2       # arrow-key increments: step and fine step
 omarchy-shell io.github.aesko.ichi notify changes  # never | changes | always
 omarchy-shell io.github.aesko.ichi adopt           # make this workspace's size the default
 omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-apply
 ```
 
 The same functions are reachable from Lua as `ichi.toggle()`,
-`ichi.adjust(dw, dh)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
-`ichi.set_defaults(w, h, step)`, `ichi.set_notify(level)`, `ichi.adopt_defaults()`,
+`ichi.adjust(dw, dh)`, `ichi.nudge(dx, dy, fine)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
+`ichi.set_defaults(w, h)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.adopt_defaults()`,
 `ichi.enable(id, entry)` and `ichi.disable(id)`, or from a shell with
 `hyprctl eval 'ichi.toggle()'`.
 
@@ -125,7 +125,7 @@ dropped; a malformed file keeps the last good document.
 
 ```json
 {
-  "settings": { "step": 5, "notify": "always" },
+  "settings": { "step": 5, "fine_step": 1, "notify": "always" },
   "defaults": { "width": 70, "height": 80 },
   "workspaces": {
     "2": { "mode": "size", "width": 70, "height": 80 },
@@ -134,7 +134,8 @@ dropped; a malformed file keeps the last good document.
 }
 ```
 
-- `settings.step` is the arrow-key increment in percentage points.
+- `settings.step` and `settings.fine_step` are the arrow-key increments in
+  percentage points, for the plain and the shifted arrows.
 - `settings.notify` is how much Ichi says: `never` is silent, `changes`
   reports toggles, resets and setting changes, `always` also reports every
   arrow-key nudge.

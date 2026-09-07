@@ -177,10 +177,18 @@ Item {
       root.evaluate("if ichi then ichi.set_defaults(" + w + ", " + h + ", 0) end")
     }
 
-    // Arrow-key increment in percentage points, e.g. step 10.
-    function step(points: string): void {
+    // Arrow-key increments in percentage points, e.g. step 10 or step 10 2.
+    function step(points: string, fine: string): void {
       var s = Number(points) || 0
-      root.evaluate("if ichi then ichi.set_defaults(0, 0, " + s + ") end")
+      var f = Number(fine) || 0
+      root.evaluate("if ichi then ichi.set_step(" + s + ", " + f + ") end")
+    }
+
+    // Directions as -1, 0 or 1, scaled by the step; e.g. nudge -1 0 fine.
+    function nudge(width: string, height: string, fine: string): void {
+      var dw = Number(width) || 0
+      var dh = Number(height) || 0
+      root.evaluate("if ichi then ichi.nudge(" + dw + ", " + dh + ", " + (fine === "fine") + ") end")
     }
 
     // How chatty to be: never, changes or always.

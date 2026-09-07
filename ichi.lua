@@ -36,7 +36,7 @@ M.notify_levels = { never = 0, changes = 1, always = 2 }
 
 local function default_config()
   return {
-    settings = { step = 5, notify = "always" },
+    settings = { step = 5, fine_step = 1, notify = "always" },
     defaults = { width = 70, height = 80, step = 5 },
     workspaces = {},
   }
@@ -147,6 +147,7 @@ function M.parse_config(text)
   -- `step` moved from defaults to settings in 0.2; the old place is still read.
   cfg.settings.step = clamp(math.floor(number_field(settings, "step") or number_field(defaults, "step") or 5), 1, 25)
   cfg.defaults.step = cfg.settings.step
+  cfg.settings.fine_step = clamp(math.floor(number_field(settings, "fine_step") or 1), 1, 25)
   local notify = string_field(settings, "notify")
   if M.notify_levels[notify] then
     cfg.settings.notify = notify
@@ -187,8 +188,9 @@ function M.encode_config(cfg)
   end
 
   return string.format(
-    '{\n  "settings": { "step": %d, "notify": "%s" },\n  "defaults": { "width": %d, "height": %d },\n  "workspaces": {\n%s\n  }\n}\n',
+    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s" },\n  "defaults": { "width": %d, "height": %d },\n  "workspaces": {\n%s\n  }\n}\n',
     cfg.settings.step,
+    cfg.settings.fine_step,
     cfg.settings.notify,
     cfg.defaults.width,
     cfg.defaults.height,
@@ -411,6 +413,13 @@ function M.adjust(delta_width, delta_height, id)
   commit(id, entry, describe(id, entry), "always")
 end
 
+-- What a binding calls: directions as -1, 0 or 1, scaled by the configured
+-- step, or by the fine step when `fine` is set.
+function M.nudge(dir_width, dir_height, fine, id)
+  local step = fine and M.config.settings.fine_step or M.config.settings.step
+  M.adjust((dir_width or 0) * step, (dir_height or 0) * step, id)
+end
+
 function M.set_aspect(ratio_w, ratio_h, id)
   id = id or current_id()
   if id == nil then
@@ -450,6 +459,16 @@ function M.set_defaults(width, height, step)
   d.step = s.step -- kept in sync so bindings written against 0.1 still work
   M.save()
   notify(string.format("Ichi: defaults %d%% x %d%%, step %d", d.width, d.height, s.step))
+end
+
+-- Arrow-key increments in percentage points. Zero or nil keeps a value.
+function M.set_step(step, fine)
+  local s = M.config.settings
+  s.step = clamp(math.floor(positive(step, s.step)), 1, 25)
+  s.fine_step = clamp(math.floor(positive(fine, s.fine_step)), 1, 25)
+  M.config.defaults.step = s.step
+  M.save()
+  notify(string.format("Ichi: step %d, fine step %d", s.step, s.fine_step))
 end
 
 -- "never", "changes" or "always"; see M.notify_levels.

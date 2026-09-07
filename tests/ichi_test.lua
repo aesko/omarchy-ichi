@@ -6,6 +6,23 @@ os.remove(tmp)
 hl = nil -- no compositor: ichi.lua must not touch hl.on
 local M = dofile(root .. "/ichi.lua")
 
+-- A fake compositor for the paths that apply rules and notify. Installed after
+-- loading so the file's own event wiring stays off.
+local fake = { workspaces = {}, windows = {}, rules = {}, notes = {}, config = {}, active = nil }
+hl = {
+  get_workspace = function(id) return fake.workspaces[id] end,
+  get_workspaces = function()
+    local list = {}
+    for _, ws in pairs(fake.workspaces) do list[#list + 1] = ws end
+    return list
+  end,
+  get_workspace_windows = function(id) return fake.windows[id] or {} end,
+  get_active_workspace = function() return fake.active end,
+  get_config = function(key) return fake.config[key] end,
+  workspace_rule = function(spec) fake.rules[tonumber(spec.workspace)] = spec.gaps_out end,
+  exec_cmd = function(cmd) fake.notes[#fake.notes + 1] = cmd end,
+}
+
 local failures = 0
 local function check(name, ok, detail)
   if ok then
@@ -56,8 +73,9 @@ local cfg = M.parse_config(text)
 check("parse defaults", cfg.defaults.width == 60 and cfg.defaults.height == 75)
 check("parse reads the pre-0.2 step location", cfg.settings.step == 10 and cfg.defaults.step == 10)
 check("parse without settings is not chatty by accident", cfg.settings.notify == "always")
-local modern = M.parse_config('{ "settings": { "step": 8, "notify": "never" }, "defaults": { "step": 3 } }')
+local modern = M.parse_config('{ "settings": { "step": 8, "fine_step": 2, "notify": "never" }, "defaults": { "step": 3 } }')
 check("parse prefers settings.step", modern.settings.step == 8 and modern.defaults.step == 8)
+check("parse reads fine_step", modern.settings.fine_step == 2 and cfg.settings.fine_step == 1)
 check("parse reads notify", modern.settings.notify == "never")
 check("parse rejects an unknown notify level", M.parse_config('{ "settings": { "notify": "loud" } }').settings.notify == "always")
 check("parse size entry", cfg.workspaces[2] and cfg.workspaces[2].width == 70 and cfg.workspaces[2].height == 80)
@@ -68,7 +86,7 @@ check("non-numeric workspace key is ignored", cfg.workspaces.x == nil)
 local again = M.parse_config(M.encode_config(cfg))
 check("encode/parse round-trips", again.workspaces[2].width == 70 and again.workspaces[5].ratio_h == 3
   and again.settings.step == 10)
-check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "notify": "always" }', 1, true) ~= nil)
+check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "always" }', 1, true) ~= nil)
 
 check("empty text gives defaults", M.parse_config("").defaults.width == 70 and next(M.parse_config("").workspaces) == nil)
 
@@ -111,12 +129,6 @@ check("set_defaults stores all three", M.config.defaults.width == 65 and M.confi
 M.set_defaults(0, 400, 0)
 check("set_defaults keeps zeros and clamps", M.config.defaults.width == 65 and M.config.defaults.height == 100
   and M.config.settings.step == 10)
-M.set_notify("never")
-check("set_notify stores a known level", M.config.settings.notify == "never")
-M.set_notify("loud")
-check("set_notify ignores an unknown level", M.config.settings.notify == "never")
-check("set_notify persists", M.parse_config(io.open(M.config_path):read("*a")).settings.notify == "never")
-M.set_notify("always")
 check("set_defaults leaves existing workspaces alone", M.config.workspaces[2].width == 70)
 check("set_defaults persists", M.parse_config(io.open(M.config_path):read("*a")).defaults.width == 65)
 M.adopt_defaults(5)
@@ -126,6 +138,38 @@ M.adopt_defaults(5)
 check("adopt_defaults ignores an aspect entry", M.config.defaults.height == 90)
 M.adopt_defaults(9)
 check("adopt_defaults ignores an unknown workspace", M.config.defaults.height == 90)
+
+-- Steps, nudges and notification levels, on a workspace of a known size.
+M.set_step(12, 3)
+check("set_step stores both and mirrors the old alias", M.config.settings.step == 12 and M.config.settings.fine_step == 3
+  and M.config.defaults.step == 12)
+M.set_step(0, 0)
+check("set_step keeps zeros", M.config.settings.step == 12 and M.config.settings.fine_step == 3)
+M.config.workspaces[2] = { mode = "size", width = 70, height = 80 }
+M.nudge(-1, 0, false, 2)
+check("nudge scales by the step", M.config.workspaces[2].width == 58)
+M.nudge(0, 1, true, 2)
+check("nudge fine scales by the fine step", M.config.workspaces[2].height == 83)
+M.set_notify("never")
+check("set_notify stores a known level", M.config.settings.notify == "never")
+fake.notes = {}
+M.nudge(1, 0, false, 2)
+check("notify never is silent", #fake.notes == 0)
+M.set_notify("changes")
+fake.notes = {}
+M.nudge(-1, 0, false, 2)
+check("notify changes skips nudges", #fake.notes == 0)
+M.toggle(2)
+check("notify changes reports a toggle", #fake.notes == 1)
+M.set_notify("always")
+fake.notes = {}
+M.nudge(1, 0, false, 2)
+check("notify always reports a nudge", #fake.notes == 1)
+M.set_notify("loud")
+check("set_notify ignores an unknown level", M.config.settings.notify == "always")
+M.set_notify("never")
+check("set_notify persists", M.parse_config(io.open(M.config_path):read("*a")).settings.notify == "never")
+M.set_notify("always")
 os.remove(M.config_path)
 os.remove(M.legacy_lines_path)
 
