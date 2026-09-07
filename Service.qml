@@ -177,6 +177,13 @@ Item {
       root.evaluate("if ichi then ichi.set_defaults(" + w + ", " + h + ", 0) end")
     }
 
+    // Pixel caps on the box, e.g. max 1800 0; zero is none.
+    function max(width: string, height: string): void {
+      var w = Number(width) || 0
+      var h = Number(height) || 0
+      root.evaluate("if ichi then ichi.set_max(" + w + ", " + h + ") end")
+    }
+
     // Arrow-key increments in percentage points, e.g. step 10 or step 10 2.
     function step(points: string, fine: string): void {
       var s = Number(points) || 0

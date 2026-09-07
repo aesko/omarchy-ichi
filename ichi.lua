@@ -37,7 +37,7 @@ M.notify_levels = { never = 0, changes = 1, always = 2 }
 local function default_config()
   return {
     settings = { step = 5, fine_step = 1, notify = "always" },
-    defaults = { width = 70, height = 80, step = 5 },
+    defaults = { width = 70, height = 80, step = 5, max_width = 0, max_height = 0 },
     workspaces = {},
   }
 end
@@ -85,33 +85,58 @@ function M.normalize_entry(entry, defaults)
   }
 end
 
--- The concrete size or aspect an entry stands for: a default entry becomes
--- whatever the defaults say right now.
+-- The concrete size or aspect an entry stands for, plus the pixel caps that
+-- apply to it: a default entry becomes whatever the defaults say right now.
 function M.resolve(entry)
   if entry == nil then
     return nil
   end
+  local defaults = M.config.defaults
+  local out
   if entry.mode == "default" then
-    return M.normalize_entry({ mode = "size" }, M.config.defaults)
+    out = M.normalize_entry({ mode = "size" }, defaults)
+  else
+    out = {}
+    for k, v in pairs(entry) do
+      out[k] = v
+    end
   end
-  return entry
+  out.max_width = defaults.max_width or 0
+  out.max_height = defaults.max_height or 0
+  return out
 end
 
 -- Outer gaps that leave a centred box of the requested shape in a usable area.
 -- Never smaller than the base gaps, so an inset of 100% is exactly normal.
+-- A positive max_width or max_height on the entry caps the box in pixels; an
+-- aspect box shrinks on both sides to keep its ratio.
 function M.gaps_for(usable_w, usable_h, entry, base)
   local box_w, box_h
+  local max_w, max_h = entry.max_width or 0, entry.max_height or 0
   if entry.mode == "aspect" then
-    if usable_w * entry.ratio_h > usable_h * entry.ratio_w then
-      box_h = usable_h
-      box_w = usable_h * entry.ratio_w / entry.ratio_h
+    local fit_w, fit_h = usable_w, usable_h
+    if max_w > 0 then
+      fit_w = math.min(fit_w, max_w)
+    end
+    if max_h > 0 then
+      fit_h = math.min(fit_h, max_h)
+    end
+    if fit_w * entry.ratio_h > fit_h * entry.ratio_w then
+      box_h = fit_h
+      box_w = fit_h * entry.ratio_w / entry.ratio_h
     else
-      box_w = usable_w
-      box_h = usable_w * entry.ratio_h / entry.ratio_w
+      box_w = fit_w
+      box_h = fit_w * entry.ratio_h / entry.ratio_w
     end
   else
     box_w = usable_w * entry.width / 100
     box_h = usable_h * entry.height / 100
+    if max_w > 0 then
+      box_w = math.min(box_w, max_w)
+    end
+    if max_h > 0 then
+      box_h = math.min(box_h, max_h)
+    end
   end
 
   local gap_h = math.floor((usable_w - box_w) / 2)
@@ -165,6 +190,8 @@ function M.parse_config(text)
   local settings = find_object(text, "settings") or ""
   cfg.defaults.width = clamp(math.floor(number_field(defaults, "width") or 70), M.limits.min, M.limits.max)
   cfg.defaults.height = clamp(math.floor(number_field(defaults, "height") or 80), M.limits.min, M.limits.max)
+  cfg.defaults.max_width = math.max(0, math.floor(number_field(defaults, "max_width") or 0))
+  cfg.defaults.max_height = math.max(0, math.floor(number_field(defaults, "max_height") or 0))
   -- `step` moved from defaults to settings in 0.2; the old place is still read.
   cfg.settings.step = clamp(math.floor(number_field(settings, "step") or number_field(defaults, "step") or 5), 1, 25)
   cfg.defaults.step = cfg.settings.step
@@ -194,6 +221,18 @@ function M.parse_config(text)
   return cfg
 end
 
+-- The fields of a defaults-like table, caps only when set.
+function M.encode_size(d)
+  local parts = { string.format('"width": %d, "height": %d', d.width, d.height) }
+  if (d.max_width or 0) > 0 then
+    parts[#parts + 1] = string.format('"max_width": %d', d.max_width)
+  end
+  if (d.max_height or 0) > 0 then
+    parts[#parts + 1] = string.format('"max_height": %d', d.max_height)
+  end
+  return table.concat(parts, ", ")
+end
+
 function M.encode_config(cfg)
   local ids = {}
   for id in pairs(cfg.workspaces) do
@@ -214,12 +253,11 @@ function M.encode_config(cfg)
   end
 
   return string.format(
-    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s" },\n  "defaults": { "width": %d, "height": %d },\n  "workspaces": {\n%s\n  }\n}\n',
+    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s" },\n  "defaults": { %s },\n  "workspaces": {\n%s\n  }\n}\n',
     cfg.settings.step,
     cfg.settings.fine_step,
     cfg.settings.notify,
-    cfg.defaults.width,
-    cfg.defaults.height,
+    M.encode_size(cfg.defaults),
     table.concat(lines, ",\n")
   )
 end
@@ -491,6 +529,19 @@ function M.set_defaults(width, height, step)
   M.save()
   M.refresh() -- workspaces that follow the defaults pick the change up
   notify(string.format("Ichi: defaults %d%% x %d%%", d.width, d.height))
+end
+
+-- Pixel caps on the box, whatever the percentage works out to. Zero is none.
+function M.set_max(width, height)
+  local d = M.config.defaults
+  d.max_width = math.max(0, math.floor(tonumber(width) or 0))
+  d.max_height = math.max(0, math.floor(tonumber(height) or 0))
+  M.save()
+  M.refresh()
+  local function show(v)
+    return v > 0 and (v .. "px") or "none"
+  end
+  notify(string.format("Ichi: max width %s, max height %s", show(d.max_width), show(d.max_height)))
 end
 
 -- Arrow-key increments in percentage points. Zero or nil keeps a value.

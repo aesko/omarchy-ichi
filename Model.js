@@ -54,6 +54,8 @@ function normalizeConfig(document) {
   var settings = document.settings || {}
   if (isFinite(Number(defaults.width))) config.defaults.width = clamp(Math.floor(Number(defaults.width)), LIMITS.min, LIMITS.max)
   if (isFinite(Number(defaults.height))) config.defaults.height = clamp(Math.floor(Number(defaults.height)), LIMITS.min, LIMITS.max)
+  if (Number(defaults.max_width) > 0) config.defaults.max_width = Math.floor(Number(defaults.max_width))
+  if (Number(defaults.max_height) > 0) config.defaults.max_height = Math.floor(Number(defaults.max_height))
   // `step` lived under defaults before 0.2; both places are read.
   var step = isFinite(Number(settings.step)) ? settings.step : defaults.step
   if (isFinite(Number(step))) config.settings.step = clamp(Math.floor(Number(step)), 1, 25)

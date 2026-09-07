@@ -53,6 +53,14 @@ check("aspect 1:1 centres a 1414 box", square.left == 573, tostring(square.left)
 local tall = M.gaps_for(1000, 2000, { mode = "aspect", ratio_w = 4, ratio_h = 3 }, base)
 check("aspect 4:3 on a portrait area is width-limited", tall.left == 10 and tall.top == 625, tall.top)
 
+local capped = M.gaps_for(usable_w, usable_h, { mode = "size", width = 70, height = 80, max_width = 1600 }, base)
+check("max_width caps a size box", capped.left == 480 and capped.top == 141, capped.left)
+local capped_aspect = M.gaps_for(usable_w, usable_h, { mode = "aspect", ratio_w = 4, ratio_h = 3, max_width = 1600 }, base)
+check("max_width shrinks an aspect box on both sides", capped_aspect.left == 480 and capped_aspect.top == 107,
+  capped_aspect.left .. "/" .. capped_aspect.top)
+local uncapped = M.gaps_for(usable_w, usable_h, { mode = "size", width = 70, height = 80, max_width = 4000, max_height = 0 }, base)
+check("a cap above the box does nothing", uncapped.left == 384 and uncapped.top == 141)
+
 check("normalize clamps and floors", M.normalize_entry({ width = 12.9, height = 400 }).width == 30
   and M.normalize_entry({ width = 12.9, height = 400 }).height == 100)
 check("normalize rejects a bad aspect", M.normalize_entry({ mode = "aspect", ratio_w = 0, ratio_h = 3 }) == nil)
@@ -89,6 +97,15 @@ check("normalize accepts true", M.normalize_entry(true).mode == "default")
 check("resolve turns default into the defaults' size", M.resolve({ mode = "default" }).width == 70
   and M.resolve({ mode = "default" }).mode == "size")
 check("resolve leaves a fixed entry alone", M.resolve(cfg.workspaces[5]).mode == "aspect")
+local with_caps = M.parse_config('{ "defaults": { "width": 60, "height": 60, "max_width": 1500, "max_height": -3 } }')
+check("parse reads caps and floors negatives at none", with_caps.defaults.max_width == 1500 and with_caps.defaults.max_height == 0)
+check("encode writes only the caps that are set", M.encode_config(with_caps):find('"max_width": 1500', 1, true) ~= nil
+  and M.encode_config(with_caps):find("max_height", 1, true) == nil)
+check("encode omits caps by default", M.encode_config(cfg):find("max_", 1, true) == nil)
+M.config = with_caps
+check("resolve carries the caps onto a default entry", M.resolve({ mode = "default" }).max_width == 1500)
+check("resolve carries the caps onto a fixed entry", M.resolve({ mode = "aspect", ratio_w = 1, ratio_h = 1 }).max_width == 1500)
+M.config = M.parse_config("")
 
 local again = M.parse_config(M.encode_config(cfg))
 check("encode/parse round-trips", again.workspaces[2].width == 70 and again.workspaces[5].ratio_h == 3
@@ -168,6 +185,11 @@ M.adjust(-5, -5, 4)
 M.adopt_defaults(4)
 check("adopt copies the size into the defaults", M.config.defaults.width == 45 and M.config.defaults.height == 95)
 check("adopt leaves the workspace following the defaults", M.config.workspaces[4].mode == "default")
+M.set_max(1000, 0)
+check("set_max caps the applied box", fake.rules[4].left == 780, fake.rules[4].left)
+check("set_max persists", M.parse_config(io.open(M.config_path):read("*a")).defaults.max_width == 1000)
+M.set_max(0, 0)
+check("set_max zero removes the cap", fake.rules[4].left == 704, fake.rules[4].left)
 M.disable(4)
 check("disable resets the gaps", fake.rules[4].left == 10)
 M.set_defaults(65, 90)

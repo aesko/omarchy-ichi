@@ -102,6 +102,7 @@ omarchy-shell io.github.aesko.ichi adjust 5 0      # width +5 points, height unc
 omarchy-shell io.github.aesko.ichi nudge -1 0      # one step narrower; add "fine" for the fine step
 omarchy-shell io.github.aesko.ichi aspect 4 3      # switch this workspace to 4:3
 omarchy-shell io.github.aesko.ichi defaults 65 85  # the size for workspaces that follow the defaults
+omarchy-shell io.github.aesko.ichi max 1800 0      # never wider than 1800px; 0 is no cap
 omarchy-shell io.github.aesko.ichi step 10 2       # arrow-key increments: step and fine step
 omarchy-shell io.github.aesko.ichi notify changes  # never | changes | always
 omarchy-shell io.github.aesko.ichi adopt           # make this workspace's size the default, and follow it
@@ -110,7 +111,7 @@ omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-a
 
 The same functions are reachable from Lua as `ichi.toggle()`,
 `ichi.adjust(dw, dh)`, `ichi.nudge(dx, dy, fine)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
-`ichi.set_defaults(w, h)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.adopt_defaults()`,
+`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.adopt_defaults()`,
 `ichi.enable(id, entry)` and `ichi.disable(id)`, or from a shell with
 `hyprctl eval 'ichi.toggle()'`.
 
@@ -127,7 +128,7 @@ dropped; a malformed file keeps the last good document.
 ```json
 {
   "settings": { "step": 5, "fine_step": 1, "notify": "always" },
-  "defaults": { "width": 70, "height": 80 },
+  "defaults": { "width": 70, "height": 80, "max_width": 1800 },
   "workspaces": {
     "1": true,
     "2": { "mode": "size", "width": 70, "height": 80 },
@@ -145,6 +146,11 @@ dropped; a malformed file keeps the last good document.
   workspace on writes `true`; the first arrow-key nudge replaces that with a
   fixed `size` entry, and `reset` puts `true` back. Change the defaults and
   every `true` workspace follows within a second.
+- `defaults.max_width` and `defaults.max_height` cap the window in pixels,
+  whatever the percentage works out to. A share of the screen that looks right
+  on a laptop can be a 2200px terminal on a 32-inch display; the cap holds it
+  where it is readable. Omit or set to `0` for no cap. The caps apply to every
+  workspace, in the units Hyprland reports the monitor size in.
 - `size` mode is a percentage of the *usable* area — the monitor minus the bar
   — so the proportion holds on any display and the window sits centred.
   Values are clamped to 30–100; at 100 the inset is exactly your normal gaps.
