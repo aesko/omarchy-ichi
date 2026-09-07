@@ -103,13 +103,14 @@ omarchy-shell io.github.aesko.ichi adjust 5 0      # width +5 points, height unc
 omarchy-shell io.github.aesko.ichi aspect 4 3      # switch this workspace to 4:3
 omarchy-shell io.github.aesko.ichi defaults 65 85  # what a workspace gets when toggled on or reset
 omarchy-shell io.github.aesko.ichi step 10         # arrow-key increment, in percentage points
+omarchy-shell io.github.aesko.ichi notify changes  # never | changes | always
 omarchy-shell io.github.aesko.ichi adopt           # make this workspace's size the default
 omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-apply
 ```
 
 The same functions are reachable from Lua as `ichi.toggle()`,
 `ichi.adjust(dw, dh)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
-`ichi.set_defaults(w, h, step)`, `ichi.adopt_defaults()`,
+`ichi.set_defaults(w, h, step)`, `ichi.set_notify(level)`, `ichi.adopt_defaults()`,
 `ichi.enable(id, entry)` and `ichi.disable(id)`, or from a shell with
 `hyprctl eval 'ichi.toggle()'`.
 
@@ -124,7 +125,8 @@ dropped; a malformed file keeps the last good document.
 
 ```json
 {
-  "defaults": { "width": 70, "height": 80, "step": 5 },
+  "settings": { "step": 5, "notify": "always" },
+  "defaults": { "width": 70, "height": 80 },
   "workspaces": {
     "2": { "mode": "size", "width": 70, "height": 80 },
     "5": { "mode": "aspect", "ratio": [4, 3] }
@@ -132,8 +134,11 @@ dropped; a malformed file keeps the last good document.
 }
 ```
 
-- `defaults` is what a workspace gets when toggled on or reset; `step` is the
-  arrow-key increment in percentage points.
+- `settings.step` is the arrow-key increment in percentage points.
+- `settings.notify` is how much Ichi says: `never` is silent, `changes`
+  reports toggles, resets and setting changes, `always` also reports every
+  arrow-key nudge.
+- `defaults` is what a workspace gets when toggled on or reset.
 - `size` mode is a percentage of the *usable* area — the monitor minus the bar
   — so the proportion holds on any display and the window sits centred.
   Values are clamped to 30–100; at 100 the inset is exactly your normal gaps.

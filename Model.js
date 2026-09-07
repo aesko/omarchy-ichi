@@ -11,8 +11,14 @@ var LOADER_LINE = LOADER_MARK + "\n" +
 
 var LIMITS = { min: 30, max: 100 }
 
+var NOTIFY_LEVELS = ["never", "changes", "always"]
+
 function defaultConfig() {
-  return { defaults: { width: 70, height: 80, step: 5 }, workspaces: {} }
+  return {
+    settings: { step: 5, notify: "always" },
+    defaults: { width: 70, height: 80 },
+    workspaces: {},
+  }
 }
 
 function clamp(value, lo, hi) {
@@ -41,9 +47,13 @@ function normalizeConfig(document) {
   if (!document || typeof document !== "object") return config
 
   var defaults = document.defaults || {}
+  var settings = document.settings || {}
   if (isFinite(Number(defaults.width))) config.defaults.width = clamp(Math.floor(Number(defaults.width)), LIMITS.min, LIMITS.max)
   if (isFinite(Number(defaults.height))) config.defaults.height = clamp(Math.floor(Number(defaults.height)), LIMITS.min, LIMITS.max)
-  if (isFinite(Number(defaults.step))) config.defaults.step = clamp(Math.floor(Number(defaults.step)), 1, 25)
+  // `step` lived under defaults before 0.2; both places are read.
+  var step = isFinite(Number(settings.step)) ? settings.step : defaults.step
+  if (isFinite(Number(step))) config.settings.step = clamp(Math.floor(Number(step)), 1, 25)
+  if (NOTIFY_LEVELS.indexOf(settings.notify) !== -1) config.settings.notify = settings.notify
 
   var workspaces = document.workspaces || {}
   for (var key in workspaces) {
@@ -91,6 +101,7 @@ function status(config, activeWorkspaceId) {
     enabled: entry !== null,
     entry: entry,
     summary: describe(entry),
+    settings: config.settings,
     defaults: config.defaults,
     workspaces: Object.keys(config.workspaces).map(Number).sort(function (a, b) { return a - b }),
   }

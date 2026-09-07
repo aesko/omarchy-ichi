@@ -183,6 +183,12 @@ Item {
       root.evaluate("if ichi then ichi.set_defaults(0, 0, " + s + ") end")
     }
 
+    // How chatty to be: never, changes or always.
+    function notify(level: string): void {
+      if (Model.NOTIFY_LEVELS.indexOf(level) === -1) return
+      root.evaluate("if ichi then ichi.set_notify(\"" + level + "\") end")
+    }
+
     // Adopt the focused workspace's current size as the default.
     function adopt(): void {
       root.evaluate("if ichi then ichi.adopt_defaults() end")

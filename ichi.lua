@@ -30,7 +30,19 @@ M.limits = { min = 30, max = 100 }
 -- owns how its workspace tiles, and Ichi yields to it.
 M.builtin_layouts = { dwindle = true, master = true, scrolling = true, monocle = true }
 
-M.config = { defaults = { width = 70, height = 80, step = 5 }, workspaces = {} }
+-- Notification levels: "never" is silent, "changes" reports toggles, resets
+-- and setting changes, "always" also reports every arrow-key nudge.
+M.notify_levels = { never = 0, changes = 1, always = 2 }
+
+local function default_config()
+  return {
+    settings = { step = 5, notify = "always" },
+    defaults = { width = 70, height = 80, step = 5 },
+    workspaces = {},
+  }
+end
+
+M.config = default_config()
 
 -- Workspaces enabled at some point this session, so disabling one still gets
 -- its gaps reset instead of keeping the last inset that was applied.
@@ -118,17 +130,26 @@ local function number_field(body, key)
   return tonumber(body:match('"' .. key .. '"%s*:%s*(-?%d+%.?%d*)'))
 end
 
+local function string_field(body, key)
+  return body:match('"' .. key .. '"%s*:%s*"([^"]*)"')
+end
+
 function M.parse_config(text)
-  local cfg = { defaults = { width = 70, height = 80, step = 5 }, workspaces = {} }
+  local cfg = default_config()
   if type(text) ~= "string" then
     return cfg
   end
 
-  local defaults = find_object(text, "defaults")
-  if defaults then
-    cfg.defaults.width = clamp(math.floor(number_field(defaults, "width") or 70), M.limits.min, M.limits.max)
-    cfg.defaults.height = clamp(math.floor(number_field(defaults, "height") or 80), M.limits.min, M.limits.max)
-    cfg.defaults.step = clamp(math.floor(number_field(defaults, "step") or 5), 1, 25)
+  local defaults = find_object(text, "defaults") or ""
+  local settings = find_object(text, "settings") or ""
+  cfg.defaults.width = clamp(math.floor(number_field(defaults, "width") or 70), M.limits.min, M.limits.max)
+  cfg.defaults.height = clamp(math.floor(number_field(defaults, "height") or 80), M.limits.min, M.limits.max)
+  -- `step` moved from defaults to settings in 0.2; the old place is still read.
+  cfg.settings.step = clamp(math.floor(number_field(settings, "step") or number_field(defaults, "step") or 5), 1, 25)
+  cfg.defaults.step = cfg.settings.step
+  local notify = string_field(settings, "notify")
+  if M.notify_levels[notify] then
+    cfg.settings.notify = notify
   end
 
   local workspaces = find_object(text, "workspaces")
@@ -166,10 +187,11 @@ function M.encode_config(cfg)
   end
 
   return string.format(
-    '{\n  "defaults": { "width": %d, "height": %d, "step": %d },\n  "workspaces": {\n%s\n  }\n}\n',
+    '{\n  "settings": { "step": %d, "notify": "%s" },\n  "defaults": { "width": %d, "height": %d },\n  "workspaces": {\n%s\n  }\n}\n',
+    cfg.settings.step,
+    cfg.settings.notify,
     cfg.defaults.width,
     cfg.defaults.height,
-    cfg.defaults.step,
     table.concat(lines, ",\n")
   )
 end
@@ -231,8 +253,13 @@ local function shell_quote(value)
   return "'" .. (tostring(value):gsub("'", "'\\''")) .. "'"
 end
 
-local function notify(message)
+-- `level` is the least chatty setting that still shows this message.
+local function notify(message, level)
   if not (hl and hl.exec_cmd) then
+    return
+  end
+  local wanted = M.notify_levels[level or "changes"] or 1
+  if (M.notify_levels[M.config.settings.notify] or 2) < wanted then
     return
   end
   hl.exec_cmd("omarchy-notification-send -u low " .. shell_quote(message))
@@ -332,11 +359,11 @@ local function current_id()
   return ws and ws.id or nil
 end
 
-local function commit(id, entry, message)
+local function commit(id, entry, message, level)
   M.config.workspaces[id] = entry
   M.save()
   M.refresh()
-  notify(message)
+  notify(message, level)
 end
 
 function M.enable(id, entry)
@@ -381,7 +408,7 @@ function M.adjust(delta_width, delta_height, id)
   end
   entry.width = clamp(entry.width + (delta_width or 0), M.limits.min, M.limits.max)
   entry.height = clamp(entry.height + (delta_height or 0), M.limits.min, M.limits.max)
-  commit(id, entry, describe(id, entry))
+  commit(id, entry, describe(id, entry), "always")
 end
 
 function M.set_aspect(ratio_w, ratio_h, id)
@@ -416,12 +443,23 @@ end
 -- What a workspace gets when toggled on or reset. Workspaces already on keep
 -- their own sizes. Zero or nil leaves a value as it is.
 function M.set_defaults(width, height, step)
-  local d = M.config.defaults
+  local d, s = M.config.defaults, M.config.settings
   d.width = clamp(math.floor(positive(width, d.width)), M.limits.min, M.limits.max)
   d.height = clamp(math.floor(positive(height, d.height)), M.limits.min, M.limits.max)
-  d.step = clamp(math.floor(positive(step, d.step)), 1, 25)
+  s.step = clamp(math.floor(positive(step, s.step)), 1, 25)
+  d.step = s.step -- kept in sync so bindings written against 0.1 still work
   M.save()
-  notify(string.format("Ichi: defaults %d%% x %d%%, step %d", d.width, d.height, d.step))
+  notify(string.format("Ichi: defaults %d%% x %d%%, step %d", d.width, d.height, s.step))
+end
+
+-- "never", "changes" or "always"; see M.notify_levels.
+function M.set_notify(level)
+  if not M.notify_levels[level] then
+    return
+  end
+  M.config.settings.notify = level
+  M.save()
+  notify("Ichi: notifications " .. level)
 end
 
 -- Tune a workspace with the arrows, then make that the default for the rest.

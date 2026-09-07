@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "Model.js"), "utf8")
   .replace(/^\.pragma library\s*$/m, "")
 const Model = new Function(source + `
-  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, LOADER_LINE, LOADER_MARK }
+  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS }
 `)()
 
 let passed = 0
@@ -34,11 +34,21 @@ test("parseConfig normalizes and drops bad entries", () => {
       "x": { mode: "size", width: 50, height: 50 },
     },
   }))
-  assert.deepEqual(config.defaults, { width: 60, height: 75, step: 25 })
+  assert.deepEqual(config.defaults, { width: 60, height: 75 })
+  assert.deepEqual(config.settings, { step: 25, notify: "always" })
   assert.deepEqual(config.workspaces["2"], { mode: "size", width: 70, height: 80 })
   assert.deepEqual(config.workspaces["5"], { mode: "aspect", ratio: [4, 3] })
   assert.equal(config.workspaces["7"], undefined)
   assert.equal(config.workspaces["x"], undefined)
+})
+
+test("settings block is read, with the pre-0.2 step location as a fallback", () => {
+  const modern = Model.parseConfig(JSON.stringify({ settings: { step: 10, notify: "never" }, defaults: { step: 3 } }))
+  assert.deepEqual(modern.settings, { step: 10, notify: "never" })
+  const legacy = Model.parseConfig(JSON.stringify({ defaults: { step: 3 } }))
+  assert.equal(legacy.settings.step, 3)
+  const bogus = Model.parseConfig(JSON.stringify({ settings: { notify: "loudly" } }))
+  assert.equal(bogus.settings.notify, "always")
 })
 
 test("parseConfig returns null for malformed JSON so the caller keeps the last good document", () => {
@@ -77,7 +87,7 @@ test("status reports the active workspace", () => {
   const config = Model.normalizeConfig({ workspaces: { "2": { width: 70, height: 80 }, "5": { mode: "aspect", ratio: [1, 1] } } })
   assert.deepEqual(Model.status(config, 2), {
     workspace: 2, enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
-    defaults: { width: 70, height: 80, step: 5 }, workspaces: [2, 5],
+    settings: { step: 5, notify: "always" }, defaults: { width: 70, height: 80 }, workspaces: [2, 5],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
   assert.equal(Model.status(config, 3).enabled, false)
