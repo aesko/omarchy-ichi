@@ -136,6 +136,9 @@ Item {
   // -------------------------------------------------------------- ipc --
   //
   // omarchy-shell io.github.aesko.ichi <method> [args]
+  //
+  // Every declared argument is required by the IPC layer, so a method with an
+  // optional argument is two methods here.
 
   IpcHandler {
     target: root.pluginId
@@ -188,25 +191,29 @@ Item {
     }
 
     // Where the box sits, 0-100 across and down; e.g. align 50 40 for a
-    // little above centre. An empty argument keeps that axis.
+    // little above centre.
     function align(x: string, y: string): void {
-      var ax = x === "" || x === undefined ? "nil" : (Number(x) || 0)
-      var ay = y === "" || y === undefined ? "nil" : (Number(y) || 0)
-      root.evaluate("if ichi then ichi.set_align(" + ax + ", " + ay + ") end")
+      root.evaluate("if ichi then ichi.set_align(" + (Number(x) || 0) + ", " + (Number(y) || 0) + ") end")
     }
 
-    // Arrow-key increments in percentage points, e.g. step 10 or step 10 2.
-    function step(points: string, fine: string): void {
-      var s = Number(points) || 0
-      var f = Number(fine) || 0
-      root.evaluate("if ichi then ichi.set_step(" + s + ", " + f + ") end")
+    // Arrow-key increment in percentage points, e.g. step 10.
+    function step(points: string): void {
+      root.evaluate("if ichi then ichi.set_step(" + (Number(points) || 0) + ", 0) end")
     }
 
-    // Directions as -1, 0 or 1, scaled by the step; e.g. nudge -1 0 fine.
-    function nudge(width: string, height: string, fine: string): void {
-      var dw = Number(width) || 0
-      var dh = Number(height) || 0
-      root.evaluate("if ichi then ichi.nudge(" + dw + ", " + dh + ", " + (fine === "fine") + ") end")
+    // The shifted arrows' increment, e.g. fine_step 2.
+    function fine_step(points: string): void {
+      root.evaluate("if ichi then ichi.set_step(0, " + (Number(points) || 0) + ") end")
+    }
+
+    // Directions as -1, 0 or 1, scaled by the step; e.g. nudge -1 0.
+    function nudge(width: string, height: string): void {
+      root.evaluate("if ichi then ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", false) end")
+    }
+
+    // The same, scaled by the fine step.
+    function nudge_fine(width: string, height: string): void {
+      root.evaluate("if ichi then ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", true) end")
     }
 
     // The smallest share of the screen a size may be, e.g. min 10.
@@ -235,9 +242,12 @@ Item {
       root.evaluate("if ichi then ichi.preset(" + JSON.stringify(String(name)) + ") end")
     }
 
-    // Next preset, or the previous one with "back".
-    function cycle(direction: string): void {
-      root.evaluate("if ichi then ichi.cycle(" + (direction === "back" ? -1 : 1) + ") end")
+    function cycle(): void {
+      root.evaluate("if ichi then ichi.cycle(1) end")
+    }
+
+    function cycle_back(): void {
+      root.evaluate("if ichi then ichi.cycle(-1) end")
     }
 
     // Keep the focused workspace's current size as a named preset.
@@ -249,11 +259,14 @@ Item {
       root.evaluate("if ichi then ichi.remove_preset(" + JSON.stringify(String(name)) + ") end")
     }
 
-    // Adopt the focused workspace's current size as the default, or with
-    // "monitor", as the default for its monitor only.
-    function adopt(scope: string): void {
-      var lua = scope === "monitor" ? 'ichi.adopt_defaults(nil, "monitor")' : "ichi.adopt_defaults()"
-      root.evaluate("if ichi then " + lua + " end")
+    // Adopt the focused workspace's current size as the default.
+    function adopt(): void {
+      root.evaluate("if ichi then ichi.adopt_defaults() end")
+    }
+
+    // The same, but as the default for the focused workspace's monitor only.
+    function adopt_monitor(): void {
+      root.evaluate('if ichi then ichi.adopt_defaults(nil, "monitor") end')
     }
 
     function refresh(): void {

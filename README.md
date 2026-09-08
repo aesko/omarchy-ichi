@@ -109,22 +109,24 @@ omarchy-shell io.github.aesko.ichi enabled         # true | false
 omarchy-shell io.github.aesko.ichi toggle
 omarchy-shell io.github.aesko.ichi reset
 omarchy-shell io.github.aesko.ichi adjust 5 0      # width +5 points, height unchanged
-omarchy-shell io.github.aesko.ichi nudge -1 0      # one step narrower; add "fine" for the fine step
+omarchy-shell io.github.aesko.ichi nudge -1 0      # one step narrower
+omarchy-shell io.github.aesko.ichi nudge_fine 0 1  # one fine step taller
 omarchy-shell io.github.aesko.ichi aspect 4 3      # switch this workspace to 4:3
 omarchy-shell io.github.aesko.ichi preset reading  # give this workspace a preset
-omarchy-shell io.github.aesko.ichi cycle           # next preset; "cycle back" for the previous
+omarchy-shell io.github.aesko.ichi cycle           # next preset; cycle_back for the previous
 omarchy-shell io.github.aesko.ichi save_preset wide   # keep this workspace's size as a preset
 omarchy-shell io.github.aesko.ichi remove_preset wide
 omarchy-shell io.github.aesko.ichi defaults 65 85  # the size for workspaces that follow the defaults
 omarchy-shell io.github.aesko.ichi max 1800 0      # never wider than 1800px; 0 is no cap
 omarchy-shell io.github.aesko.ichi align 50 40     # where the box sits: 0-100 across, 0-100 down
-omarchy-shell io.github.aesko.ichi step 10 2       # arrow-key increments: step and fine step
+omarchy-shell io.github.aesko.ichi step 10         # arrow-key increment, in percentage points
+omarchy-shell io.github.aesko.ichi fine_step 2     # the shifted arrows' increment
 omarchy-shell io.github.aesko.ichi notify changes  # never | changes | always
 omarchy-shell io.github.aesko.ichi all on          # every workspace, unless it opts out
 omarchy-shell io.github.aesko.ichi windows 2       # keep the inset for up to two tiled windows
 omarchy-shell io.github.aesko.ichi min 10          # let sizes go down to 10%
 omarchy-shell io.github.aesko.ichi adopt           # make this workspace's size the default, and follow it
-omarchy-shell io.github.aesko.ichi adopt monitor   # the same, but only for this workspace's monitor
+omarchy-shell io.github.aesko.ichi adopt_monitor   # the same, but only for this workspace's monitor
 omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-apply
 ```
 
@@ -197,7 +199,7 @@ dropped; a malformed file keeps the last good document.
   `desc:` followed by any part of the description Hyprland reports, which is
   the form that survives a dock being replugged. `hyprctl monitors` shows
   both. The first matching block wins. Fixed `size` and `aspect` entries keep
-  their own size but take the monitor's caps and alignment. `adopt monitor` writes a block
+  their own size but take the monitor's caps and alignment. `adopt_monitor` writes a block
   for the current display from the workspace you have tuned.
 - `presets` are named entries in any of the three forms. `cycle` steps a
   workspace through them in file order, starting from the first when the
