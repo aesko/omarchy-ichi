@@ -47,6 +47,18 @@ that loads `ichi.lua`, and tells you it did. Nothing is enabled on any
 workspace until you toggle one, so installing changes nothing about how your
 desktop tiles.
 
+### Updating
+
+```bash
+omarchy plugin update io.github.aesko.ichi
+omarchy restart shell
+hyprctl reload
+```
+
+The update swaps the files, but the shell keeps running the old service and
+Hyprland the old `ichi.lua` until each is reloaded. Your settings file is
+read as it is; see [CHANGELOG.md](CHANGELOG.md) for what each version adds.
+
 ## Keybindings
 
 Plugins cannot install bindings, so add these to `~/.config/hypr/bindings.lua`.
