@@ -93,6 +93,15 @@ o.bind("SUPER + CTRL + ALT + P", "Ichi: next preset", function()
 end)
 ```
 
+And one for `adopt`, which pairs with the arrows: tune a workspace until it
+looks right, then press once to make that the default everywhere.
+
+```lua
+o.bind("SUPER + CTRL + ALT + A", "Ichi: adopt this size", function()
+  if ichi then ichi.adopt_defaults() end
+end)
+```
+
 Every binding acts on the workspace you are currently on. Nudging the size of a
 workspace that is off turns it on. `repeating` lets you hold the key; the
 plain arrows move by `step` (5 points) and the shifted ones by `fine_step`
@@ -112,6 +121,49 @@ Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` to get an entry under
   "action": "omarchy-shell io.github.aesko.ichi toggle"
 },
 ```
+
+For the rest, a submenu of its own on the root menu. The three rows that act
+on a workspace only appear while that workspace is on:
+
+```jsonc
+"ichi": {
+  "icon": "",
+  "label": "Ichi",
+  "description": "Size the lone window on this workspace"
+},
+"ichi.cycle": {
+  "icon": "",
+  "label": "Next preset",
+  "description": "Step through your saved sizes",
+  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi cycle"
+},
+"ichi.adopt": {
+  "icon": "",
+  "label": "Adopt this size",
+  "description": "Make this workspace's size the default everywhere",
+  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi adopt"
+},
+"ichi.adopt-monitor": {
+  "icon": "",
+  "label": "Adopt for this monitor",
+  "description": "Make this workspace's size the default on this display only",
+  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi adopt_monitor"
+},
+"ichi.reset": {
+  "icon": "",
+  "label": "Reset size",
+  "description": "Follow the defaults again",
+  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi reset"
+},
+```
+
+The icons are Nerd Font glyphs; change them to taste. These entries use the
+plugin id rather than the short `ichi` name, because a menu file outlives the
+session that wrote it and the id cannot collide.
 
 ## Command line
 
