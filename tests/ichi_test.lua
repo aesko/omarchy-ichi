@@ -298,10 +298,23 @@ check("set_defaults persists", M.parse_config(io.open(M.config_path):read("*a"))
 M.adopt_defaults(5)
 check("adopt_defaults copies a size entry", M.config.defaults.width == 65 and M.config.defaults.height == 90)
 M.config.workspaces[5] = { mode = "aspect", ratio_w = 4, ratio_h = 3 }
+fake.notes = {}
 M.adopt_defaults(5)
 check("adopt_defaults ignores an aspect entry", M.config.defaults.height == 90)
+check("adopt_defaults says why on an aspect entry", #fake.notes == 1
+  and fake.notes[1]:find("aspect ratio", 1, true) ~= nil, fake.notes[1])
+fake.notes = {}
 M.adopt_defaults(9)
 check("adopt_defaults ignores an unknown workspace", M.config.defaults.height == 90)
+check("adopt_defaults says why on a workspace that is off", #fake.notes == 1
+  and fake.notes[1]:find("is off", 1, true) ~= nil, fake.notes[1])
+M.config.workspaces[9] = { mode = "default" }
+fake.notes = {}
+M.adopt_defaults(9)
+check("adopt_defaults ignores a workspace that already follows the defaults", M.config.defaults.height == 90)
+check("adopt_defaults says why on a default entry", #fake.notes == 1
+  and fake.notes[1]:find("already follows the defaults", 1, true) ~= nil, fake.notes[1])
+M.config.workspaces[9] = nil
 
 -- Default entries: enabling follows the defaults and tracks changes to them.
 fake.config["general.gaps_out"] = base

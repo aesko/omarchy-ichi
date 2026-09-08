@@ -917,8 +917,20 @@ end
 -- follow.
 function M.adopt_defaults(id, scope)
   id = id or current_id()
-  local entry = id and M.config.workspaces[id]
-  if not entry or entry.mode ~= "size" then
+  if id == nil then
+    return
+  end
+  -- Adopt copies a concrete size out of a workspace, so there has to be one.
+  -- Reachable from a key and a menu row now, where silence reads as broken.
+  local entry = M.entry_for(id)
+  if entry == nil then
+    notify(string.format("Ichi: workspace %d is off, so there is no size to adopt", id))
+    return
+  elseif entry.mode == "default" then
+    notify(string.format("Ichi: workspace %d already follows the defaults; nudge it first", id))
+    return
+  elseif entry.mode ~= "size" then
+    notify(string.format("Ichi: workspace %d is an aspect ratio, and adopt takes a size", id))
     return
   end
   if scope == "monitor" then
