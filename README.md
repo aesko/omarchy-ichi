@@ -301,6 +301,9 @@ of them, Ichi widens that workspace's outer gaps so the windows occupy the
 chosen share of the screen, centred unless you align them elsewhere. One tiled window more than that
 restores the normal gaps immediately; closing it restores the inset.
 
+- A tabbed group counts as one window, however many it holds, because it
+  occupies one tile. A workspace showing a single group is still a workspace
+  showing one window.
 - Floating windows are neither counted nor touched, so Omarchy's floating
   dialogs, pickers and TUIs are unaffected.
 - Special workspaces are ignored.

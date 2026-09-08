@@ -399,6 +399,57 @@ M.set_max_windows(1)
 fake.windows[4] = { { floating = false, monitor = screen } }
 M.disable(4)
 
+-- Groups: a tabbed group shares one tile, so it counts as one window.
+-- Shaped like Hyprland's own report: every member carries the same group
+-- table, and that table's `current` names the visible tab.
+local next_group_id = 0
+local function grouped(n, mon)
+  next_group_id = next_group_id + 1
+  local group = { size = n, members = {} }
+  for i = 1, n do
+    -- Addresses are unique across groups, as Hyprland's are.
+    local w = { floating = false, monitor = mon, address = string.format("0x%d%03d", next_group_id, i) }
+    w.group = group
+    group.members[i] = w
+  end
+  group.current = group.members[n]
+  return group.members
+end
+
+M.enable(4)
+local pair = grouped(2, screen)
+fake.windows[4] = { pair[1], pair[2] }
+M.refresh()
+check("a group of two counts as one window and keeps the inset", fake.rules[4].left ~= 10, fake.rules[4].left)
+fake.windows[4] = { pair[1], pair[2], { floating = false, monitor = screen, address = "0xfff" } }
+M.refresh()
+check("a group plus a loose window is two, so the inset gives way", fake.rules[4].left == 10)
+M.set_max_windows(2)
+M.refresh()
+check("max_windows 2 admits a group beside a loose window", fake.rules[4].left ~= 10)
+M.set_max_windows(1)
+local trio = grouped(3, screen)
+fake.windows[4] = { trio[1], trio[2], trio[3] }
+M.refresh()
+check("a group of three is still one window", fake.rules[4].left ~= 10)
+-- Two separate groups are two windows, so one over the limit.
+local other = grouped(2, screen)
+fake.windows[4] = { pair[1], pair[2], other[1], other[2] }
+M.refresh()
+check("two groups are two windows", fake.rules[4].left == 10)
+-- A group with no current window should still count once, not once per member.
+local headless = grouped(2, screen)
+headless[1].group.current = nil
+fake.windows[4] = { headless[1], headless[2] }
+M.refresh()
+check("a group with no current window still counts once", fake.rules[4].left ~= 10, fake.rules[4].left)
+-- A floating member is not counted, as before.
+fake.windows[4] = { pair[1], pair[2], { floating = true, monitor = screen, address = "0xflo" } }
+M.refresh()
+check("a floating window beside a group is still ignored", fake.rules[4].left ~= 10)
+fake.windows[4] = { { floating = false, monitor = screen } }
+M.disable(4)
+
 -- all_workspaces: every existing workspace is managed, false opts one out.
 fake.workspaces[6] = { id = 6, tiled_layout = "dwindle", monitor = screen }
 fake.windows[6] = { { floating = false, monitor = screen } }

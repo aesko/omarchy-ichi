@@ -4,7 +4,8 @@
 -- settings.max_windows of them), widen that workspace's outer gaps so the
 -- window occupies a percentage of the usable area (size mode) or the largest
 -- box of a given aspect ratio (aspect mode). One tiled window more than that
--- restores normal gaps. Floating windows are neither
+-- restores normal gaps. A tabbed group counts as one, since it occupies one
+-- tile however many windows it holds. Floating windows are neither
 -- counted nor touched. Nothing here floats or moves a window: a tiled window
 -- reflows on its own after a monitor teardown, which is the point.
 --
@@ -542,6 +543,27 @@ local function describe(id, entry)
   return string.format("Ichi: workspace %d at %d%% x %d%%%s", id, entry.width, entry.height, suffix)
 end
 
+-- A tabbed group occupies one tile however many windows it holds, so Ichi
+-- counts it once. Every member reports the same `current` window, which makes
+-- that window's address a stable name for the group. Returns nil for a window
+-- that is in no group.
+local function group_key(w)
+  local group = w.group
+  if group == nil then
+    return nil
+  end
+  if group.current then
+    return group.current.address
+  end
+  -- A group with no current window is not something Hyprland normally
+  -- reports; fall back to its first member so the group still counts once.
+  local members = group.members
+  if type(members) == "table" and members[1] then
+    return members[1].address
+  end
+  return w.address
+end
+
 function M.apply(id)
   local ws = hl.get_workspace(id)
   if ws == nil or ws.special then
@@ -570,10 +592,19 @@ function M.apply(id)
   end
 
   local tiled, count = nil, 0
+  local seen_groups = {}
   for _, w in ipairs(hl.get_workspace_windows(id) or {}) do
     if not w.floating then
-      count = count + 1
-      tiled = w
+      local key = group_key(w)
+      if key == nil then
+        count = count + 1
+        tiled = w
+      elseif not seen_groups[key] then
+        -- First member of this group: the group is one window from here on.
+        seen_groups[key] = true
+        count = count + 1
+        tiled = w
+      end
     end
   end
   if count == 0 or count > M.config.settings.max_windows or tiled.monitor == nil then
