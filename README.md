@@ -1,10 +1,20 @@
 <p align="center">
-  <img src="logo.svg" alt="Ichi" width="160">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logo-dark.svg">
+    <img src="logo.svg" alt="Ichi" width="160">
+  </picture>
 </p>
 
 <h1 align="center">Ichi</h1>
 
 <p align="center"><em>One window, room to breathe.</em></p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="demo-dark.svg">
+    <img src="demo.svg" alt="A lone window insets to a share of the screen, is nudged narrower, gives the space back when a second window opens, and returns to its inset when that window closes." width="760">
+  </picture>
+</p>
 
 Ichi is an Omarchy plugin for the workspaces where you keep a single window —
 a terminal, a note, a chat — and that window doesn't need the whole screen.
@@ -348,7 +358,9 @@ tests/run.sh
 
 `ichi.lua` is the behaviour and runs inside Hyprland. `Model.js` is the pure
 shell-side logic. `Service.qml` is glue, and `IchiIpc.qml` is the IPC surface
-it instantiates once per target name. Both pure parts have tests that run
+it instantiates once per target name. The README animation is generated:
+edit `gen_demo.py` and re-run it rather than editing `demo.svg` and
+`demo-dark.svg`, which it overwrites from one template. Both pure parts have tests that run
 without a compositor. `hyprctl reload` reloads `ichi.lua`. A running service
 keeps Quickshell's cached component even across `omarchy plugin disable` /
 `enable`, so after editing `Service.qml` or `Model.js` use `omarchy restart shell`.

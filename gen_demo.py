@@ -1,0 +1,71 @@
+# Generates demo.svg and demo-dark.svg from one template, so the two palettes
+# cannot drift apart. Re-run after editing: python3 gen_demo.py
+#
+# Everything animates through SVG geometry properties (x, y, width, height)
+# rather than opacity or transform. Geometry keeps the stroke and corner radius
+# honest at any size, needs no font, and is the one path this repo can verify
+# offline: headless Chromium renders geometry animation but silently drops
+# opacity animation, so an opacity-driven demo could not be checked before a
+# push. A renderer that ignores the CSS entirely still shows the static
+# attributes below, which are the inset the plugin is named for.
+
+TEMPLATE = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 380" width="880" height="380" role="img" aria-labelledby="ichi-demo-title ichi-demo-desc">
+  <title id="ichi-demo-title">Ichi: one window, room to breathe</title>
+  <desc id="ichi-demo-desc">A screen holding a single window. The window insets to a share of the screen, is nudged narrower, gives the space back when a second window opens, and returns to its inset when that window closes.</desc>
+
+  <style>
+    .screen {{ fill: {paper}; stroke: {ink}; stroke-width: 1.5; }}
+    .bar    {{ fill: {ink}; opacity: .12; }}
+    .win    {{ fill: {ink}; }}
+
+    .win-a {{ animation: win-a 10s cubic-bezier(.4, 0, .2, 1) infinite; }}
+    .win-b {{ animation: win-b 10s cubic-bezier(.4, 0, .2, 1) infinite; }}
+
+    /* The lone window: sprawls, insets, is nudged narrower twice, gives the
+       space back, takes it again, then sprawls to close the loop. */
+    @keyframes win-a {{
+      0%,   8% {{ x: 48px;  y: 66px; width: 784px; height: 266px; }}
+      16%, 30% {{ x: 160px; y: 86px; width: 560px; height: 226px; }}
+      34%, 38% {{ x: 190px; y: 86px; width: 500px; height: 226px; }}
+      42%, 52% {{ x: 220px; y: 86px; width: 440px; height: 226px; }}
+      60%, 74% {{ x: 48px;  y: 66px; width: 388px; height: 266px; }}
+      82%, 92% {{ x: 220px; y: 86px; width: 440px; height: 226px; }}
+      100%     {{ x: 48px;  y: 66px; width: 784px; height: 266px; }}
+    }}
+
+    /* The second window, growing in from the right edge and back out. Its
+       right edge stays put at 832, so only the opening reads as movement. */
+    @keyframes win-b {{
+      0%,   52% {{ x: 832px; width: 0px; }}
+      60%,  74% {{ x: 444px; width: 388px; }}
+      82%, 100% {{ x: 832px; width: 0px; }}
+    }}
+
+    /* Readers who ask for less motion get the frame this is really about:
+       one window, inset, with room around it. */
+    @media (prefers-reduced-motion: reduce) {{
+      .win-a, .win-b {{ animation: none; }}
+    }}
+  </style>
+
+  <!-- The screen, with the strip a bar reserves along the top. Ichi measures
+       its percentages against the usable area below that strip. -->
+  <rect class="screen" x="40" y="40" width="800" height="300" rx="8"/>
+  <rect class="bar" x="41" y="41" width="798" height="17" rx="7"/>
+
+  <!-- Static geometry is the inset state for window A and nothing at all for
+       window B, so a still render shows the plugin doing its job. -->
+  <rect class="win win-a" x="160" y="86" width="560" height="226" rx="4"/>
+  <rect class="win win-b" x="832" y="66" width="0" height="266" rx="4"/>
+</svg>
+'''
+
+PALETTES = {
+    "demo.svg": {"paper": "#f4efe6", "ink": "#1c1a17"},
+    "demo-dark.svg": {"paper": "#1c1a17", "ink": "#f4efe6"},
+}
+
+for name, palette in PALETTES.items():
+    with open(name, "w") as f:
+        f.write(TEMPLATE.format(**palette))
+    print("wrote", name)
