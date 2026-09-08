@@ -107,7 +107,7 @@ And one for `adopt`, which pairs with the arrows: tune a workspace until it
 looks right, then press once to make that the default everywhere.
 
 ```lua
-o.bind("SUPER + CTRL + ALT + A", "Ichi: adopt this size", function()
+o.bind("SUPER + CTRL + ALT + A", "Ichi: adopt everywhere", function()
   if ichi then ichi.adopt_defaults() end
 end)
 ```
