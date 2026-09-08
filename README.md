@@ -150,14 +150,14 @@ on a workspace only appear while that workspace is on:
 },
 "ichi.adopt": {
   "icon": "",
-  "label": "Adopt this size",
+  "label": "Adopt everywhere",
   "description": "Make this workspace's size the default everywhere",
   "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi adopt"
 },
 "ichi.adopt-monitor": {
   "icon": "",
-  "label": "Adopt for this monitor",
+  "label": "Adopt on monitor",
   "description": "Make this workspace's size the default on this display only",
   "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi adopt_monitor"
