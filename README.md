@@ -115,31 +115,36 @@ Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` to get an entry under
 
 ## Command line
 
+Ichi answers to two IPC names: `ichi`, which is what you will type, and
+`io.github.aesko.ichi`, the plugin id, which cannot collide with another
+plugin. They are the same surface, so use whichever suits. Config that
+outlives a session, such as the menu entries above, uses the long one.
+
 ```bash
-omarchy-shell io.github.aesko.ichi status          # JSON for the focused workspace, plus defaults
-omarchy-shell io.github.aesko.ichi enabled         # true | false
-omarchy-shell io.github.aesko.ichi toggle
-omarchy-shell io.github.aesko.ichi reset
-omarchy-shell io.github.aesko.ichi adjust 5 0      # width +5 points, height unchanged
-omarchy-shell io.github.aesko.ichi nudge -1 0      # one step narrower
-omarchy-shell io.github.aesko.ichi nudge_fine 0 1  # one fine step taller
-omarchy-shell io.github.aesko.ichi aspect 4 3      # switch this workspace to 4:3
-omarchy-shell io.github.aesko.ichi preset reading  # give this workspace a preset
-omarchy-shell io.github.aesko.ichi cycle           # next preset; cycle_back for the previous
-omarchy-shell io.github.aesko.ichi save_preset wide   # keep this workspace's size as a preset
-omarchy-shell io.github.aesko.ichi remove_preset wide
-omarchy-shell io.github.aesko.ichi defaults 65 85  # the size for workspaces that follow the defaults
-omarchy-shell io.github.aesko.ichi max 1800 0      # never wider than 1800px; 0 is no cap
-omarchy-shell io.github.aesko.ichi align 50 40     # where the box sits: 0-100 across, 0-100 down
-omarchy-shell io.github.aesko.ichi step 10         # arrow-key increment, in percentage points
-omarchy-shell io.github.aesko.ichi fine_step 2     # the shifted arrows' increment
-omarchy-shell io.github.aesko.ichi notify changes  # never | changes | always
-omarchy-shell io.github.aesko.ichi all on          # every workspace, unless it opts out
-omarchy-shell io.github.aesko.ichi windows 2       # keep the inset for up to two tiled windows
-omarchy-shell io.github.aesko.ichi min 10          # let sizes go down to 10%
-omarchy-shell io.github.aesko.ichi adopt           # make this workspace's size the default, and follow it
-omarchy-shell io.github.aesko.ichi adopt_monitor   # the same, but only for this workspace's monitor
-omarchy-shell io.github.aesko.ichi refresh         # re-read the config and re-apply
+omarchy-shell ichi status                         # JSON for the focused workspace, plus defaults
+omarchy-shell ichi enabled                        # true | false
+omarchy-shell ichi toggle
+omarchy-shell ichi reset
+omarchy-shell ichi adjust 5 0                     # width +5 points, height unchanged
+omarchy-shell ichi nudge -1 0                     # one step narrower
+omarchy-shell ichi nudge_fine 0 1                 # one fine step taller
+omarchy-shell ichi aspect 4 3                     # switch this workspace to 4:3
+omarchy-shell ichi preset reading                 # give this workspace a preset
+omarchy-shell ichi cycle                          # next preset; cycle_back for the previous
+omarchy-shell ichi save_preset wide               # keep this workspace's size as a preset
+omarchy-shell ichi remove_preset wide
+omarchy-shell ichi defaults 65 85                 # the size for workspaces that follow the defaults
+omarchy-shell ichi max 1800 0                     # never wider than 1800px; 0 is no cap
+omarchy-shell ichi align 50 40                    # where the box sits: 0-100 across, 0-100 down
+omarchy-shell ichi step 10                        # arrow-key increment, in percentage points
+omarchy-shell ichi fine_step 2                    # the shifted arrows' increment
+omarchy-shell ichi notify changes                 # never | changes | always
+omarchy-shell ichi all on                         # every workspace, unless it opts out
+omarchy-shell ichi windows 2                      # keep the inset for up to two tiled windows
+omarchy-shell ichi min 10                         # let sizes go down to 10%
+omarchy-shell ichi adopt                          # make this workspace's size the default, and follow it
+omarchy-shell ichi adopt_monitor                  # the same, but only for this workspace's monitor
+omarchy-shell ichi refresh                        # re-read the config and re-apply
 ```
 
 The same functions are reachable from Lua as `ichi.toggle()`,
@@ -290,7 +295,8 @@ tests/run.sh
 ```
 
 `ichi.lua` is the behaviour and runs inside Hyprland. `Model.js` is the pure
-shell-side logic. `Service.qml` is glue. Both pure parts have tests that run
+shell-side logic. `Service.qml` is glue, and `IchiIpc.qml` is the IPC surface
+it instantiates once per target name. Both pure parts have tests that run
 without a compositor. `hyprctl reload` reloads `ichi.lua`. A running service
 keeps Quickshell's cached component even across `omarchy plugin disable` /
 `enable`, so after editing `Service.qml` or `Model.js` use `omarchy restart shell`.

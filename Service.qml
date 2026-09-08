@@ -133,150 +133,146 @@ Item {
       "Ichi added one guarded line to ~/.config/hypr/hyprland.lua so Hyprland loads it. Remove it any time; it is harmless without the plugin."]
   }
 
+  // --------------------------------------------------------- commands --
+  //
+  // One implementation per command. Every IPC target forwards here, so the
+  // short name and the reverse-DNS id cannot drift apart.
+
+  function cmdStatus() {
+    return JSON.stringify(root.status)
+  }
+
+  // "true" or "false" for the focused workspace; drives the menu checkmark.
+  function cmdEnabled() {
+    return root.enabled ? "true" : "false"
+  }
+
+  function cmdToggle() {
+    root.evaluate("if ichi then ichi.toggle() end")
+    return root.enabled ? "disabling" : "enabling"
+  }
+
+  function cmdReset() {
+    root.evaluate("if ichi then ichi.reset() end")
+  }
+
+  // Percentage-point deltas for width and height, e.g. adjust 5 0.
+  function cmdAdjust(width, height) {
+    root.evaluate("if ichi then ichi.adjust(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ") end")
+  }
+
+  // Switch the focused workspace to aspect mode, e.g. aspect 4 3.
+  function cmdAspect(width, height) {
+    var rw = Number(width) || 0
+    var rh = Number(height) || 0
+    if (rw <= 0 || rh <= 0) return
+    root.evaluate("if ichi then ichi.set_aspect(" + rw + ", " + rh + ") end")
+  }
+
+  // What a workspace that follows the defaults gets, e.g. defaults 65 85.
+  function cmdDefaults(width, height) {
+    root.evaluate("if ichi then ichi.set_defaults(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", 0) end")
+  }
+
+  // Pixel caps on the box, e.g. max 1800 0; zero is none.
+  function cmdMax(width, height) {
+    root.evaluate("if ichi then ichi.set_max(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ") end")
+  }
+
+  // Where the box sits, 0-100 across and down; e.g. align 50 40 for a
+  // little above centre.
+  function cmdAlign(x, y) {
+    root.evaluate("if ichi then ichi.set_align(" + (Number(x) || 0) + ", " + (Number(y) || 0) + ") end")
+  }
+
+  // Arrow-key increment in percentage points, e.g. step 10.
+  function cmdStep(points) {
+    root.evaluate("if ichi then ichi.set_step(" + (Number(points) || 0) + ", 0) end")
+  }
+
+  // The shifted arrows' increment, e.g. fine_step 2.
+  function cmdFineStep(points) {
+    root.evaluate("if ichi then ichi.set_step(0, " + (Number(points) || 0) + ") end")
+  }
+
+  // Directions as -1, 0 or 1, scaled by the step or the fine step.
+  function cmdNudge(width, height, fine) {
+    root.evaluate("if ichi then ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", " + (fine === true) + ") end")
+  }
+
+  // The smallest share of the screen a size may be, e.g. min 10.
+  function cmdMin(percent) {
+    root.evaluate("if ichi then ichi.set_min_percent(" + (Number(percent) || 20) + ") end")
+  }
+
+  // How many tiled windows may share the box, e.g. windows 2.
+  function cmdWindows(count) {
+    root.evaluate("if ichi then ichi.set_max_windows(" + (Number(count) || 1) + ") end")
+  }
+
+  // Every workspace on unless it opts out: all on | off.
+  function cmdAll(state) {
+    root.evaluate("if ichi then ichi.set_all_workspaces(" + (state === "on" || state === "true") + ") end")
+  }
+
+  // How chatty to be: never, changes or always.
+  function cmdNotify(level) {
+    if (Model.NOTIFY_LEVELS.indexOf(level) === -1) return
+    root.evaluate("if ichi then ichi.set_notify(\"" + level + "\") end")
+  }
+
+  // Give the focused workspace a preset by name.
+  function cmdPreset(name) {
+    root.evaluate("if ichi then ichi.preset(" + JSON.stringify(String(name)) + ") end")
+  }
+
+  // Step through the presets; delta is 1 forwards, -1 back.
+  function cmdCycle(delta) {
+    root.evaluate("if ichi then ichi.cycle(" + delta + ") end")
+  }
+
+  // Keep the focused workspace's current size as a named preset.
+  function cmdSavePreset(name) {
+    root.evaluate("if ichi then ichi.save_preset(" + JSON.stringify(String(name)) + ") end")
+  }
+
+  function cmdRemovePreset(name) {
+    root.evaluate("if ichi then ichi.remove_preset(" + JSON.stringify(String(name)) + ") end")
+  }
+
+  // Adopt the focused workspace's current size as the default, or with
+  // scope "monitor", as the default for its monitor only.
+  function cmdAdopt(scope) {
+    var lua = scope === "monitor" ? 'ichi.adopt_defaults(nil, "monitor")' : "ichi.adopt_defaults()"
+    root.evaluate("if ichi then " + lua + " end")
+  }
+
+  function cmdRefresh() {
+    root.evaluate("if ichi then ichi.load(); ichi.refresh() end")
+  }
+
+  // Re-checks hyprland.lua and installs the loader line if it is missing.
+  function cmdSync() {
+    hyprlandLuaFile.reload()
+  }
+
   // -------------------------------------------------------------- ipc --
   //
+  // omarchy-shell ichi <method> [args]
   // omarchy-shell io.github.aesko.ichi <method> [args]
   //
-  // Every declared argument is required by the IPC layer, so a method with an
-  // optional argument is two methods here.
+  // The same surface under both names: `ichi` to type, the reverse-DNS id
+  // for anything that wants the unambiguous one. Scripts written against
+  // either keep working.
 
-  IpcHandler {
+  IchiIpc {
     target: root.pluginId
+    api: root
+  }
 
-    function status(): string {
-      return JSON.stringify(root.status)
-    }
-
-    // "true" or "false" for the focused workspace; drives the menu checkmark.
-    function enabled(): string {
-      return root.enabled ? "true" : "false"
-    }
-
-    function toggle(): string {
-      root.evaluate("if ichi then ichi.toggle() end")
-      return root.enabled ? "disabling" : "enabling"
-    }
-
-    function reset(): void {
-      root.evaluate("if ichi then ichi.reset() end")
-    }
-
-    // Percentage-point deltas for width and height, e.g. adjust 5 0.
-    function adjust(width: string, height: string): void {
-      var dw = Number(width) || 0
-      var dh = Number(height) || 0
-      root.evaluate("if ichi then ichi.adjust(" + dw + ", " + dh + ") end")
-    }
-
-    // Switch the focused workspace to aspect mode, e.g. aspect 4 3.
-    function aspect(width: string, height: string): void {
-      var rw = Number(width) || 0
-      var rh = Number(height) || 0
-      if (rw <= 0 || rh <= 0) return
-      root.evaluate("if ichi then ichi.set_aspect(" + rw + ", " + rh + ") end")
-    }
-
-    // What a workspace that follows the defaults gets, e.g. defaults 65 85.
-    function defaults(width: string, height: string): void {
-      var w = Number(width) || 0
-      var h = Number(height) || 0
-      root.evaluate("if ichi then ichi.set_defaults(" + w + ", " + h + ", 0) end")
-    }
-
-    // Pixel caps on the box, e.g. max 1800 0; zero is none.
-    function max(width: string, height: string): void {
-      var w = Number(width) || 0
-      var h = Number(height) || 0
-      root.evaluate("if ichi then ichi.set_max(" + w + ", " + h + ") end")
-    }
-
-    // Where the box sits, 0-100 across and down; e.g. align 50 40 for a
-    // little above centre.
-    function align(x: string, y: string): void {
-      root.evaluate("if ichi then ichi.set_align(" + (Number(x) || 0) + ", " + (Number(y) || 0) + ") end")
-    }
-
-    // Arrow-key increment in percentage points, e.g. step 10.
-    function step(points: string): void {
-      root.evaluate("if ichi then ichi.set_step(" + (Number(points) || 0) + ", 0) end")
-    }
-
-    // The shifted arrows' increment, e.g. fine_step 2.
-    function fine_step(points: string): void {
-      root.evaluate("if ichi then ichi.set_step(0, " + (Number(points) || 0) + ") end")
-    }
-
-    // Directions as -1, 0 or 1, scaled by the step; e.g. nudge -1 0.
-    function nudge(width: string, height: string): void {
-      root.evaluate("if ichi then ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", false) end")
-    }
-
-    // The same, scaled by the fine step.
-    function nudge_fine(width: string, height: string): void {
-      root.evaluate("if ichi then ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", true) end")
-    }
-
-    // The smallest share of the screen a size may be, e.g. min 10.
-    function min(percent: string): void {
-      root.evaluate("if ichi then ichi.set_min_percent(" + (Number(percent) || 20) + ") end")
-    }
-
-    // How many tiled windows may share the box, e.g. windows 2.
-    function windows(count: string): void {
-      root.evaluate("if ichi then ichi.set_max_windows(" + (Number(count) || 1) + ") end")
-    }
-
-    // Every workspace on unless it opts out: all on | off.
-    function all(state: string): void {
-      root.evaluate("if ichi then ichi.set_all_workspaces(" + (state === "on" || state === "true") + ") end")
-    }
-
-    // How chatty to be: never, changes or always.
-    function notify(level: string): void {
-      if (Model.NOTIFY_LEVELS.indexOf(level) === -1) return
-      root.evaluate("if ichi then ichi.set_notify(\"" + level + "\") end")
-    }
-
-    // Give the focused workspace a preset by name.
-    function preset(name: string): void {
-      root.evaluate("if ichi then ichi.preset(" + JSON.stringify(String(name)) + ") end")
-    }
-
-    function cycle(): void {
-      root.evaluate("if ichi then ichi.cycle(1) end")
-    }
-
-    function cycle_back(): void {
-      root.evaluate("if ichi then ichi.cycle(-1) end")
-    }
-
-    // Keep the focused workspace's current size as a named preset.
-    function save_preset(name: string): void {
-      root.evaluate("if ichi then ichi.save_preset(" + JSON.stringify(String(name)) + ") end")
-    }
-
-    function remove_preset(name: string): void {
-      root.evaluate("if ichi then ichi.remove_preset(" + JSON.stringify(String(name)) + ") end")
-    }
-
-    // Adopt the focused workspace's current size as the default.
-    function adopt(): void {
-      root.evaluate("if ichi then ichi.adopt_defaults() end")
-    }
-
-    // The same, but as the default for the focused workspace's monitor only.
-    function adopt_monitor(): void {
-      root.evaluate('if ichi then ichi.adopt_defaults(nil, "monitor") end')
-    }
-
-    function refresh(): void {
-      root.evaluate("if ichi then ichi.load(); ichi.refresh() end")
-    }
-
-    // Re-checks hyprland.lua and installs the loader line if it is missing.
-    function sync(): void {
-      hyprlandLuaFile.reload()
-    }
+  IchiIpc {
+    target: "ichi"
+    api: root
   }
 
   Component.onCompleted: {
