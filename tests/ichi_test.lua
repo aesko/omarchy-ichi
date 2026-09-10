@@ -446,6 +446,25 @@ check("disabling a named workspace resets its gaps", fake.rules["name:code"].lef
 fake.workspaces[-1337] = nil
 fake.windows[-1337] = nil
 
+-- Quiet mode: what the panel uses, because it shows its own result in the
+-- same corner the notifications appear in.
+M.set_notify("always")
+M.enable(4)
+fake.notes = {}
+M.silently(function() M.adjust(-5, 0, 4) end)
+check("silently suppresses the notification", #fake.notes == 0)
+check("silently still does the work", M.config.workspaces["4"].mode == "size")
+M.adjust(-5, 0, 4)
+check("and the next call speaks again", #fake.notes == 1)
+check("quiet does not stay on", M.quiet == false)
+local ok = pcall(function() M.silently(function() error("boom") end) end)
+check("silently restores quiet even when the call errors", ok == false and M.quiet == false)
+fake.notes = {}
+M.adjust(-5, 0, 4)
+check("still speaking after an error", #fake.notes == 1)
+M.disable(4)
+M.set_notify("changes")
+
 -- Global pause: every workspace back to normal gaps, entries untouched.
 M.enable(4)
 fake.windows[4] = { { floating = false, monitor = screen } }

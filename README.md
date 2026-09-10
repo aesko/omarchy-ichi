@@ -145,7 +145,12 @@ switch, a row of sizes with the defaults first and your presets after it,
 width and height as both a typed field and a slider, adopt, and the global
 pause. The controls stay live on a workspace where Ichi is off, showing what
 that workspace would get; touching one turns it on, the same way nudging with
-the arrow keys does. Scrolling does nothing by default, because a bar that resizes
+the arrow keys does.
+
+Nothing done from the panel raises a notification, whatever `settings.notify`
+says. The panel shows its own result, and notifications appear in the same
+corner, so a slider drag would bury the panel under its own messages. Adopt
+greys out instead of refusing when the workspace has no fixed size to copy. Scrolling does nothing by default, because a bar that resizes
 windows as the pointer crosses it is a surprise; turn it on in the widget's
 settings if you want it.
 

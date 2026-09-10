@@ -143,6 +143,14 @@ Item {
   // One implementation per command. Every IPC target forwards here, so the
   // short name and the reverse-DNS id cannot drift apart.
 
+  // Every command goes out through here. `quiet` suppresses the notification
+  // for callers that already show their own result, which is the panel.
+  function run(body, quiet) {
+    root.evaluate(quiet
+      ? "if ichi then ichi.silently(function() " + body + " end) end"
+      : "if ichi then " + body + " end")
+  }
+
   function cmdStatus() {
     return JSON.stringify(root.status)
   }
@@ -152,15 +160,15 @@ Item {
     return root.enabled ? "true" : "false"
   }
 
-  function cmdToggle() {
-    root.evaluate("if ichi then ichi.toggle() end")
+  function cmdToggle(quiet) {
+    run("ichi.toggle()", quiet)
     return root.enabled ? "disabling" : "enabling"
   }
 
   // "Follow the defaults", which on a workspace that is off means turning it
   // on that way. enable() with no entry writes exactly that.
-  function cmdUseDefaults() {
-    root.evaluate("if ichi then ichi.enable() end")
+  function cmdUseDefaults(quiet) {
+    run("ichi.enable()", quiet)
   }
 
   function cmdReset() {
@@ -207,13 +215,13 @@ Item {
   }
 
   // An absolute size for the focused workspace, which is what a slider has.
-  function cmdSize(width, height) {
-    root.evaluate("if ichi then ichi.set_size(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ") end")
+  function cmdSize(width, height, quiet) {
+    run("ichi.set_size(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ")", quiet)
   }
 
   // Directions as -1, 0 or 1, scaled by the step or the fine step.
-  function cmdNudge(width, height, fine) {
-    root.evaluate("if ichi then ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", " + (fine === true) + ") end")
+  function cmdNudge(width, height, fine, quiet) {
+    run("ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", " + (fine === true) + ")", quiet)
   }
 
   // The smallest share of the screen a size may be, e.g. min 10.
@@ -231,8 +239,8 @@ Item {
     root.evaluate("if ichi then ichi.set_paused(" + (state === "on" || state === "true") + ") end")
   }
 
-  function cmdPauseToggle() {
-    root.evaluate("if ichi then ichi.toggle_pause() end")
+  function cmdPauseToggle(quiet) {
+    run("ichi.toggle_pause()", quiet)
   }
 
   function cmdPaused() {
@@ -251,13 +259,13 @@ Item {
   }
 
   // Give the focused workspace a preset by name.
-  function cmdPreset(name) {
-    root.evaluate("if ichi then ichi.preset(" + JSON.stringify(String(name)) + ") end")
+  function cmdPreset(name, quiet) {
+    run("ichi.preset(" + JSON.stringify(String(name)) + ")", quiet)
   }
 
   // Step through the presets; delta is 1 forwards, -1 back.
-  function cmdCycle(delta) {
-    root.evaluate("if ichi then ichi.cycle(" + delta + ") end")
+  function cmdCycle(delta, quiet) {
+    run("ichi.cycle(" + delta + ")", quiet)
   }
 
   // Keep the focused workspace's current size as a named preset.
@@ -271,9 +279,8 @@ Item {
 
   // Adopt the focused workspace's current size as the default, or with
   // scope "monitor", as the default for its monitor only.
-  function cmdAdopt(scope) {
-    var lua = scope === "monitor" ? 'ichi.adopt_defaults(nil, "monitor")' : "ichi.adopt_defaults()"
-    root.evaluate("if ichi then " + lua + " end")
+  function cmdAdopt(scope, quiet) {
+    run(scope === "monitor" ? 'ichi.adopt_defaults(nil, "monitor")' : "ichi.adopt_defaults()", quiet)
   }
 
   function cmdRefresh() {

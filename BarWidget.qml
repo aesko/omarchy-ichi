@@ -34,6 +34,9 @@ Panel {
 
   // Aspect entries have no percentage, so the sliders stand down for them.
   readonly property bool sizeMode: !!(resolved && resolved.mode === "size")
+  // Adopt needs a fixed size to copy out; following the defaults or an aspect
+  // ratio gives it nothing to do.
+  readonly property bool canAdopt: !!(entry && entry.mode === "size")
   readonly property int sizeWidth: sizeMode ? resolved.width : 0
   readonly property int sizeHeight: sizeMode ? resolved.height : 0
 
@@ -63,16 +66,18 @@ Panel {
     return glyph + "  " + sizeWidth + "×" + sizeHeight
   }
 
+  // Panel actions pass quiet: the panel shows its own result, and a
+  // notification would land on top of the panel that caused it.
   function call(name) {
-    if (ichiService && typeof ichiService[name] === "function") ichiService[name]()
+    if (ichiService && typeof ichiService[name] === "function") ichiService[name](true)
   }
 
   function onScroll(delta) {
     if (!ichiService) return
     var direction = delta > 0 ? 1 : -1
-    if (scrollAction === "Resize width") ichiService.cmdNudge(direction, 0, false)
-    else if (scrollAction === "Resize height") ichiService.cmdNudge(0, direction, false)
-    else if (scrollAction === "Cycle presets") ichiService.cmdCycle(direction)
+    if (scrollAction === "Resize width") ichiService.cmdNudge(direction, 0, false, true)
+    else if (scrollAction === "Resize height") ichiService.cmdNudge(0, direction, false, true)
+    else if (scrollAction === "Cycle presets") ichiService.cmdCycle(direction, true)
   }
 
   // ------------------------------------------------------------- the bar --
@@ -185,7 +190,7 @@ Panel {
             text: modelData
             selected: modelData === root.presetName
             foreground: root.bar ? root.bar.foreground : Color.foreground
-            onClicked: if (root.ichiService) root.ichiService.cmdPreset(modelData)
+            onClicked: if (root.ichiService) root.ichiService.cmdPreset(modelData, true)
           }
         }
       }
@@ -262,14 +267,20 @@ Panel {
 
         Button {
           text: "Adopt everywhere"
+          // Adopt copies a fixed size out of a workspace, so there has to be
+          // one. Greyed rather than refusing, now that the panel is silent.
+          enabled: root.canAdopt
+          opacity: root.canAdopt ? 1 : 0.4
           foreground: root.bar ? root.bar.foreground : Color.foreground
-          onClicked: if (root.ichiService) root.ichiService.cmdAdopt("")
+          onClicked: if (root.ichiService) root.ichiService.cmdAdopt("", true)
         }
 
         Button {
           text: "Adopt on monitor"
+          enabled: root.canAdopt
+          opacity: root.canAdopt ? 1 : 0.4
           foreground: root.bar ? root.bar.foreground : Color.foreground
-          onClicked: if (root.ichiService) root.ichiService.cmdAdopt("monitor")
+          onClicked: if (root.ichiService) root.ichiService.cmdAdopt("monitor", true)
         }
       }
 
@@ -297,7 +308,7 @@ Panel {
   }
 
   function applySizeOf(w, h) {
-    if (ichiService) ichiService.cmdSize(w, h)
+    if (ichiService) ichiService.cmdSize(w, h, true)
   }
 
   function applySize() {

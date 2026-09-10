@@ -503,7 +503,7 @@ end
 
 -- `level` is the least chatty setting that still shows this message.
 local function notify(message, level)
-  if not (hl and hl.exec_cmd) then
+  if not (hl and hl.exec_cmd) or M.quiet then
     return
   end
   local wanted = M.notify_levels[level or "changes"] or 1
@@ -900,6 +900,21 @@ function M.set_max_windows(n)
   M.refresh()
   notify(string.format("Ichi: inset holds up to %d window%s", M.config.settings.max_windows,
     M.config.settings.max_windows == 1 and "" or "s"))
+end
+
+-- Run something without notifying, whatever the configured level. For a
+-- caller that already shows what it did: the bar widget's panel sits in the
+-- same corner as the notifications, so its own messages cover it up.
+M.quiet = false
+
+function M.silently(fn)
+  local was = M.quiet
+  M.quiet = true
+  local ok, err = pcall(fn)
+  M.quiet = was
+  if not ok then
+    error(err, 0)
+  end
 end
 
 -- Suspend Ichi everywhere without touching a single workspace entry, for
