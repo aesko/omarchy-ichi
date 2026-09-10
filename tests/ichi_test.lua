@@ -402,6 +402,19 @@ M.set_max_windows(1)
 fake.windows[4] = { { floating = false, monitor = screen } }
 M.disable(4)
 
+-- set_size: an absolute size, which is what a slider hands over.
+M.enable(4)
+M.set_size(55, 75, 4)
+check("set_size sets both outright", M.config.workspaces["4"].width == 55 and M.config.workspaces["4"].height == 75)
+M.set_size(1, 500, 4)
+check("set_size clamps to the floor and ceiling", M.config.workspaces["4"].width == M.config.settings.min_percent
+  and M.config.workspaces["4"].height == 100)
+M.reset(4)
+M.set_size(60, 60, 4)
+check("set_size fixes a workspace that followed the defaults", M.config.workspaces["4"].mode == "size"
+  and M.config.workspaces["4"].width == 60)
+M.disable(4)
+
 -- Named workspaces. Hyprland gives these a negative pseudo-id and a
 -- "name:foo" config_name, so the key is the name and the rule uses that
 -- selector. Shaped exactly as the compositor reports one.

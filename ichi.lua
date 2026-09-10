@@ -774,6 +774,23 @@ function M.adjust(delta_width, delta_height, id)
   commit(id, entry, describe(id, entry), "always")
 end
 
+-- Set a workspace's size outright. The arrows work in deltas, but a slider
+-- knows the number it wants, and rounding a delta from a moving value drifts.
+function M.set_size(width, height, id)
+  id = key_of(id)
+  if id == nil then
+    return
+  end
+  local mon = workspace_monitor(id)
+  local entry = M.resolve(M.entry_for(id), mon)
+  if entry == nil or entry.mode ~= "size" then
+    entry = M.resolve({ mode = "default" }, mon)
+  end
+  entry.width = clamp(math.floor(tonumber(width) or entry.width), floor_percent(), M.limits.max)
+  entry.height = clamp(math.floor(tonumber(height) or entry.height), floor_percent(), M.limits.max)
+  commit(id, M.normalize_entry(entry), describe(id, entry), "always")
+end
+
 -- What a binding calls: directions as -1, 0 or 1, scaled by the configured
 -- step, or by the fine step when `fine` is set.
 function M.nudge(dir_width, dir_height, fine, id)

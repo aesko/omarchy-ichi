@@ -7,9 +7,76 @@
   "license": "MIT",
   "description": "One window, room to breathe. When a workspace holds a single window, Ichi keeps it from sprawling: a percentage of the screen or an aspect ratio, per workspace, adjustable live. The window stays tiled, so it survives monitor changes, and a second window gets the whole screen back.",
   "kinds": [
-    "service"
+    "service",
+    "bar-widget"
   ],
   "entryPoints": {
-    "service": "Service.qml"
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Ichi",
+    "description": "Toggle the inset on this workspace, drag its size, jump between presets, adopt a size as the default, and pause everything while you share your screen.",
+    "category": "Window management",
+    "aliases": [
+      "ichi",
+      "inset",
+      "window size",
+      "gaps"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "display": "Icon and size",
+      "showWhenOff": true,
+      "scrollAction": "Off",
+      "clickAction": "Open panel"
+    },
+    "schema": [
+      {
+        "key": "display",
+        "type": "enum",
+        "label": "Show in the bar",
+        "options": [
+          "Icon and size",
+          "Icon and preset",
+          "Icon only",
+          "Hidden"
+        ],
+        "defaultValue": "Icon and size",
+        "description": "Hidden keeps Ichi running with nothing in the bar, for people who want the plugin but not the widget."
+      },
+      {
+        "key": "showWhenOff",
+        "type": "boolean",
+        "label": "Show on workspaces where Ichi is off",
+        "defaultValue": true,
+        "description": "Turn this off and the widget appears only where it is doing something."
+      },
+      {
+        "key": "scrollAction",
+        "type": "enum",
+        "label": "Scroll wheel",
+        "options": [
+          "Off",
+          "Resize width",
+          "Resize height",
+          "Cycle presets"
+        ],
+        "defaultValue": "Off",
+        "description": "Off by default, because a bar that resizes windows when the pointer passes over it is a surprise."
+      },
+      {
+        "key": "clickAction",
+        "type": "enum",
+        "label": "Left click",
+        "options": [
+          "Open panel",
+          "Toggle"
+        ],
+        "defaultValue": "Open panel",
+        "description": "Open panel matches Omarchy's other widgets, where right click is the quick toggle. Swapping these puts the toggle on left click instead."
+      }
+    ]
   }
 }

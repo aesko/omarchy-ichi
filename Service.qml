@@ -200,6 +200,11 @@ Item {
     root.evaluate("if ichi then ichi.set_step(0, " + (Number(points) || 0) + ") end")
   }
 
+  // An absolute size for the focused workspace, which is what a slider has.
+  function cmdSize(width, height) {
+    root.evaluate("if ichi then ichi.set_size(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ") end")
+  }
+
   // Directions as -1, 0 or 1, scaled by the step or the fine step.
   function cmdNudge(width, height, fine) {
     root.evaluate("if ichi then ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", " + (fine === true) + ") end")

@@ -104,14 +104,18 @@ test("status reports the active workspace", () => {
   const config = Model.normalizeConfig({ workspaces: { "2": { width: 70, height: 80 }, "5": { mode: "aspect", ratio: [1, 1] } } })
   assert.deepEqual(Model.status(config, 2), {
     workspace: "2", enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
+    resolved: { mode: "size", width: 70, height: 80 },
     settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false }, paused: false, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: ["2", "5"],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
   assert.equal(Model.status(config, 3).enabled, false)
+  assert.equal(Model.status(config, 3).resolved, null)
   assert.equal(Model.status(config, null).workspace, null)
   const following = Model.normalizeConfig({ defaults: { width: 60, height: 90 }, workspaces: { "3": true } })
   assert.equal(Model.status(following, 3).summary, "60% x 90% (default)")
   assert.equal(Model.status(following, 3).enabled, true)
+  // A default entry resolves to what the defaults currently say.
+  assert.deepEqual(Model.status(following, 3).resolved, { mode: "size", width: 60, height: 90 })
 })
 
 test("all_workspaces turns absent entries on and false entries off", () => {

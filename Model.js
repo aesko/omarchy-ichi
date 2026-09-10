@@ -207,6 +207,9 @@ function status(config, activeWorkspaceId, monitor) {
     enabled: entry !== null,
     entry: entry,
     summary: describe(entry, config, monitor),
+    // The concrete size an entry amounts to here, so a caller does not have to
+    // re-derive what "follows the defaults" means on this monitor.
+    resolved: entry ? resolve(entry, config, monitor) : null,
     settings: config.settings,
     defaults: config.defaults,
     paused: config.settings.paused,

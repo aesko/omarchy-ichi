@@ -32,6 +32,9 @@ a terminal, a note, a chat — and that window doesn't need the whole screen.
   monitor or a resolution change can't leave it stranded off-screen.
 - **Two ways to size.** A share of the screen (70% × 80%) or an aspect ratio
   (4:3, 1:1) — per workspace, with Hyprland's global 1-Window Ratio absorbed.
+- **In the bar, if you want it.** An optional widget: the current size at a
+  glance, a panel with sliders, presets and the pause switch. Choose its
+  section when you install, or leave it out.
 - **Plain state.** One JSON file you can read, edit and keep in your dotfiles.
   Edits apply within a second.
 
@@ -116,6 +119,48 @@ Every binding acts on the workspace you are currently on. Nudging the size of a
 workspace that is off turns it on. `repeating` lets you hold the key; the
 plain arrows move by `step` (5 points) and the shifted ones by `fine_step`
 (1 point). Both are settings.
+
+## Bar widget
+
+Ichi ships an optional bar widget. Installing with `--enable` asks which
+section to put it in:
+
+```
+Place io.github.aesko.ichi in which bar section?
+  left    center    right
+```
+
+Right is the default. To choose without being asked, or to move it later:
+
+```bash
+omarchy plugin enable io.github.aesko.ichi --section center
+```
+
+The widget shows the current size, dimmed on a workspace where Ichi is off.
+**Left click opens the panel, right click toggles this workspace**, matching
+Omarchy's own audio, bluetooth and power widgets. The panel holds the on/off
+switch, width and height sliders, your presets, adopt and reset, and the
+global pause. Scrolling does nothing by default, because a bar that resizes
+windows as the pointer crosses it is a surprise; turn it on in the widget's
+settings if you want it.
+
+`omarchy-shell ichi.panel toggle` opens and closes the panel, so you can bind
+it to a key.
+
+**If you do not want the widget**, set its **Show in the bar** setting to
+*Hidden* and Ichi keeps running with nothing in the bar. Enabling a plugin
+that declares a bar widget always places it, so hiding is how it opts out.
+To reclaim the slot entirely, delete its one line from the `bar.layout`
+section of `~/.config/omarchy/shell.json`.
+
+**Upgrading from 0.3 or earlier** is the one case where the widget does not
+appear on its own. Ichi was service-only then, so your config already lists it
+as enabled and Omarchy sees nothing to place. Disable and enable it once:
+
+```bash
+omarchy plugin disable io.github.aesko.ichi
+omarchy plugin enable io.github.aesko.ichi --section right
+```
 
 ## Omarchy menu
 
@@ -382,7 +427,9 @@ tests/run.sh
 
 `ichi.lua` is the behaviour and runs inside Hyprland. `Model.js` is the pure
 shell-side logic. `Service.qml` is glue, and `IchiIpc.qml` is the IPC surface
-it instantiates once per target name. The README animation is generated:
+it instantiates once per target name. `BarWidget.qml` is the optional bar
+widget, which reads state straight off the service rather than watching the
+file a second time. The README animation is generated:
 edit `gen_demo.py` and re-run it rather than editing `demo.svg` and
 `demo-dark.svg`, which it overwrites from one template. Both pure parts have tests that run
 without a compositor. `hyprctl reload` reloads `ichi.lua`. A running service
