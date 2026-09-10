@@ -37,6 +37,7 @@ Panel {
   // Adopt needs a fixed size to copy out; following the defaults or an aspect
   // ratio gives it nothing to do.
   readonly property bool canAdopt: !!(entry && entry.mode === "size")
+  readonly property bool aspectMode: !!(resolved && resolved.mode === "aspect")
   readonly property int sizeWidth: sizeMode ? resolved.width : 0
   readonly property int sizeHeight: sizeMode ? resolved.height : 0
 
@@ -201,7 +202,10 @@ Panel {
       // gets a line of explanation instead of two dead sliders.
       Text {
         Layout.fillWidth: true
-        visible: !root.sizeMode
+        // Only when the entry really is an aspect ratio. Keying this off the
+        // sliders being hidden also fired when there was no workspace to
+        // report on, claiming an aspect ratio that did not exist.
+        visible: root.aspectMode
         text: "This workspace is set to an aspect ratio."
         color: root.bar ? root.bar.foreground : Color.foreground
         opacity: 0.6
