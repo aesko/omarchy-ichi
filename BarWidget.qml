@@ -176,7 +176,9 @@ Panel {
         spacing: Style.space(6)
 
         Button {
-          text: "Default"
+          // Lower case to sit level with the preset names beside it, which
+          // are user data and are never transformed for display.
+          text: "default"
           selected: !!(root.entry && root.entry.mode === "default")
           foreground: root.bar ? root.bar.foreground : Color.foreground
           onClicked: root.call("cmdUseDefaults")
