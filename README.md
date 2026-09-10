@@ -85,7 +85,7 @@ Omarchy uses those to move windows between groups.
 o.bind("SUPER + CTRL + ALT + I", "Ichi: toggle", function()
   if ichi then ichi.toggle() end
 end)
-o.bind("SUPER + CTRL + ALT + O", "Ichi: reset size", function()
+o.bind("SUPER + CTRL + ALT + O", "Ichi: reset to default", function()
   if ichi then ichi.reset() end
 end)
 for key, dw, dh in ("LEFT,-1,0 RIGHT,1,0 UP,0,1 DOWN,0,-1"):gmatch("(%a+),(-?%d),(-?%d)") do
@@ -219,7 +219,7 @@ on a workspace only appear while that workspace is on:
 },
 "ichi.reset": {
   "icon": "",
-  "label": "Reset size",
+  "label": "Reset to default",
   "description": "Follow the defaults again",
   "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi reset"
