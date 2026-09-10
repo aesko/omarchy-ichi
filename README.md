@@ -169,6 +169,13 @@ on a workspace only appear while that workspace is on:
   "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi reset"
 },
+"ichi.pause": {
+  "icon": "",
+  "label": "Pause everywhere",
+  "description": "Suspend every inset without changing a single workspace",
+  "checked": "[ \"$(omarchy-shell io.github.aesko.ichi paused)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi pause_toggle"
+},
 ```
 
 The icons are Nerd Font glyphs; change them to taste. These entries use the
@@ -202,6 +209,9 @@ omarchy-shell ichi step 10                        # arrow-key increment, in perc
 omarchy-shell ichi fine_step 2                    # the shifted arrows' increment
 omarchy-shell ichi notify changes                 # never | changes | always
 omarchy-shell ichi all on                         # every workspace, unless it opts out
+omarchy-shell ichi pause on                       # suspend every inset; pause off to resume
+omarchy-shell ichi pause_toggle                   # the same, as one command
+omarchy-shell ichi paused                         # true | false
 omarchy-shell ichi windows 2                      # keep the inset for up to two tiled windows
 omarchy-shell ichi min 10                         # let sizes go down to 10%
 omarchy-shell ichi adopt                          # make this workspace's size the default, and follow it
@@ -212,7 +222,7 @@ omarchy-shell ichi refresh                        # re-read the config and re-ap
 The same functions are reachable from Lua as `ichi.toggle()`,
 `ichi.adjust(dw, dh)`, `ichi.nudge(dx, dy, fine)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
 `ichi.preset(name)`, `ichi.cycle(delta)`, `ichi.save_preset(name)`, `ichi.remove_preset(name)`,
-`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_align(x, y)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.set_all_workspaces(on)`, `ichi.set_max_windows(n)`, `ichi.set_min_percent(n)`, `ichi.adopt_defaults(id, scope)`,
+`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_align(x, y)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.set_paused(on)`, `ichi.toggle_pause()`, `ichi.set_all_workspaces(on)`, `ichi.set_max_windows(n)`, `ichi.set_min_percent(n)`, `ichi.adopt_defaults(id, scope)`,
 `ichi.enable(id, entry)` and `ichi.disable(id)`, or from a shell with
 `hyprctl eval 'ichi.toggle()'`.
 
@@ -252,6 +262,10 @@ dropped; a malformed file keeps the last good document.
 - `settings.notify` is how much Ichi says: `never` is silent, `changes`
   reports toggles, resets and setting changes, `always` also reports every
   arrow-key nudge.
+- `settings.paused` suspends Ichi everywhere. Every workspace goes back to
+  normal gaps and keeps its entry, so resuming restores the lot. Meant for
+  screen sharing or a presentation, where you want the space back for a
+  while without unpicking your setup.
 - `settings.all_workspaces` turns every workspace on. A workspace with no
   entry then follows the defaults, and toggling one off writes `false` for
   it. This is the Hyprland built-in's reach with Ichi's sizing.

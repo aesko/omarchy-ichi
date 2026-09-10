@@ -106,6 +106,8 @@ check("parse reads fine_step", modern.settings.fine_step == 2 and cfg.settings.f
 check("parse reads notify", modern.settings.notify == "never")
 check("parse defaults all_workspaces to off", modern.settings.all_workspaces == false)
 check("parse defaults max_windows to one", modern.settings.max_windows == 1)
+check("parse defaults paused to false", modern.settings.paused == false)
+check("parse reads paused", M.parse_config('{ "settings": { "paused": true } }').settings.paused == true)
 local floored = M.parse_config('{ "settings": { "min_percent": 40 }, "defaults": { "width": 30 }, "workspaces": { "1": { "width": 10, "height": 90 } } }')
 check("parse clamps sizes against min_percent", floored.settings.min_percent == 40 and floored.defaults.width == 40
   and floored.workspaces[1].width == 40)
@@ -252,7 +254,7 @@ M.config = M.parse_config("")
 local again = M.parse_config(M.encode_config(cfg))
 check("encode/parse round-trips", again.workspaces[2].width == 70 and again.workspaces[5].ratio_h == 3
   and again.settings.step == 10 and again.workspaces[8].mode == "default")
-check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "always", "all_workspaces": false, "max_windows": 1, "min_percent": 20 }', 1, true) ~= nil)
+check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "always", "all_workspaces": false, "max_windows": 1, "min_percent": 20, "paused": false }', 1, true) ~= nil)
 
 check("empty text gives defaults", M.parse_config("").defaults.width == 70 and next(M.parse_config("").workspaces) == nil)
 
@@ -397,6 +399,24 @@ M.refresh()
 check("an empty workspace is not inset", fake.rules[4].left == 10)
 M.set_max_windows(1)
 fake.windows[4] = { { floating = false, monitor = screen } }
+M.disable(4)
+
+-- Global pause: every workspace back to normal gaps, entries untouched.
+M.enable(4)
+fake.windows[4] = { { floating = false, monitor = screen } }
+M.refresh()
+local inset_gap = fake.rules[4].left
+check("inset applied before pausing", inset_gap ~= 10, inset_gap)
+M.set_paused(true)
+check("pausing restores plain gaps", fake.rules[4].left == 10)
+check("pausing leaves the entry alone", M.config.workspaces[4] ~= nil and M.entry_for(4) ~= nil)
+check("pausing persists", M.parse_config(io.open(M.config_path):read("*a")).settings.paused == true)
+M.toggle_pause()
+check("toggle_pause resumes and the inset returns", M.config.settings.paused == false
+  and fake.rules[4].left == inset_gap)
+M.toggle_pause()
+check("toggle_pause pauses again", M.config.settings.paused == true and fake.rules[4].left == 10)
+M.set_paused(false)
 M.disable(4)
 
 -- Groups: a tabbed group shares one tile, so it counts as one window.

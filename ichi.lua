@@ -40,7 +40,7 @@ M.notify_levels = { never = 0, changes = 1, always = 2 }
 
 local function default_config()
   return {
-    settings = { step = 5, fine_step = 1, notify = "always", all_workspaces = false, max_windows = 1, min_percent = 20 },
+    settings = { step = 5, fine_step = 1, notify = "always", all_workspaces = false, max_windows = 1, min_percent = 20, paused = false },
     defaults = { width = 70, height = 80, step = 5, max_width = 0, max_height = 0, align_x = 50, align_y = 50 },
     -- Ordered, first match wins: { key = "desc:..." or "DP-1", width?, height?, max_width?, max_height?, align_x?, align_y? }
     monitors = {},
@@ -274,6 +274,7 @@ function M.parse_config(text)
     cfg.settings.notify = notify
   end
   cfg.settings.all_workspaces = settings:match('"all_workspaces"%s*:%s*(%a+)') == "true"
+  cfg.settings.paused = settings:match('"paused"%s*:%s*(%a+)') == "true"
   cfg.settings.max_windows = clamp(math.floor(number_field(settings, "max_windows") or 1), 1, 10)
 
   local monitors = find_object(text, "monitors")
@@ -414,13 +415,14 @@ function M.encode_config(cfg)
   end
 
   return string.format(
-    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s", "all_workspaces": %s, "max_windows": %d, "min_percent": %d },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
+    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s", "all_workspaces": %s, "max_windows": %d, "min_percent": %d, "paused": %s },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
     cfg.settings.step,
     cfg.settings.fine_step,
     cfg.settings.notify,
     tostring(cfg.settings.all_workspaces),
     cfg.settings.max_windows,
     cfg.settings.min_percent,
+    tostring(cfg.settings.paused),
     M.encode_size(cfg.defaults),
     encode_monitors(cfg.monitors),
     encode_presets(cfg.presets),
@@ -574,6 +576,13 @@ function M.apply(id)
   local entry = M.entry_for(id)
   local function plain()
     hl.workspace_rule({ workspace = tostring(id), gaps_out = base })
+  end
+
+  -- Paused is a runtime veto, not a config change: every workspace goes back
+  -- to normal gaps and keeps its entry, so resuming restores the lot.
+  if M.config.settings.paused then
+    plain()
+    return
   end
 
   if entry == nil then
@@ -823,6 +832,19 @@ function M.set_max_windows(n)
   M.refresh()
   notify(string.format("Ichi: inset holds up to %d window%s", M.config.settings.max_windows,
     M.config.settings.max_windows == 1 and "" or "s"))
+end
+
+-- Suspend Ichi everywhere without touching a single workspace entry, for
+-- screen sharing or a presentation. Resuming puts every inset back.
+function M.set_paused(on)
+  M.config.settings.paused = on == true or on == "true" or on == "on"
+  M.save()
+  M.refresh()
+  notify(M.config.settings.paused and "Ichi: paused everywhere" or "Ichi: resumed")
+end
+
+function M.toggle_pause()
+  M.set_paused(not M.config.settings.paused)
 end
 
 -- Every workspace on unless it opts out with a false entry.

@@ -17,7 +17,7 @@ var NOTIFY_LEVELS = ["never", "changes", "always"]
 
 function defaultConfig() {
   return {
-    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1, min_percent: 20 },
+    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false },
     defaults: { width: 70, height: 80 },
     monitors: [],
     presets: [],
@@ -72,6 +72,7 @@ function normalizeConfig(document) {
   if (isFinite(Number(settings.fine_step))) config.settings.fine_step = clamp(Math.floor(Number(settings.fine_step)), 1, 25)
   if (NOTIFY_LEVELS.indexOf(settings.notify) !== -1) config.settings.notify = settings.notify
   config.settings.all_workspaces = settings.all_workspaces === true
+  config.settings.paused = settings.paused === true
   if (isFinite(Number(settings.max_windows))) config.settings.max_windows = clamp(Math.floor(Number(settings.max_windows)), 1, 10)
 
   var monitors = document.monitors || {}
@@ -204,6 +205,7 @@ function status(config, activeWorkspaceId, monitor) {
     summary: describe(entry, config, monitor),
     settings: config.settings,
     defaults: config.defaults,
+    paused: config.settings.paused,
     monitor: monitorBlock(config, monitor),
     preset: presetName(config, entry),
     presets: config.presets.map(function (p) { return p.name }),

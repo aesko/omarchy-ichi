@@ -210,6 +210,19 @@ Item {
     root.evaluate("if ichi then ichi.set_max_windows(" + (Number(count) || 1) + ") end")
   }
 
+  // Suspend Ichi everywhere without changing any workspace entry.
+  function cmdPause(state) {
+    root.evaluate("if ichi then ichi.set_paused(" + (state === "on" || state === "true") + ") end")
+  }
+
+  function cmdPauseToggle() {
+    root.evaluate("if ichi then ichi.toggle_pause() end")
+  }
+
+  function cmdPaused() {
+    return root.status.paused ? "true" : "false"
+  }
+
   // Every workspace on unless it opts out: all on | off.
   function cmdAll(state) {
     root.evaluate("if ichi then ichi.set_all_workspaces(" + (state === "on" || state === "true") + ") end")

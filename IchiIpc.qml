@@ -88,6 +88,21 @@ IpcHandler {
     handler.api.cmdWindows(count)
   }
 
+  // Suspend Ichi everywhere: pause on | off. Entries are left alone, so
+  // resuming restores every inset.
+  function pause(state: string): void {
+    handler.api.cmdPause(state)
+  }
+
+  function pause_toggle(): void {
+    handler.api.cmdPauseToggle()
+  }
+
+  // "true" or "false"; drives the menu checkmark.
+  function paused(): string {
+    return handler.api.cmdPaused()
+  }
+
   // Every workspace on unless it opts out: all on | off.
   function all(state: string): void {
     handler.api.cmdAll(state)
