@@ -97,7 +97,9 @@ function normalizeConfig(document) {
 
   var workspaces = document.workspaces || {}
   for (var key in workspaces) {
-    if (!/^\d+$/.test(key)) continue
+    // Keys are workspace names. Hyprland names a numeric workspace by its
+    // number, so "2" still means workspace 2.
+    if (!key) continue
     var entry = normalizeEntry(workspaces[key], config.defaults, min)
     if (entry !== null && entry !== undefined) config.workspaces[key] = entry
   }
@@ -195,11 +197,13 @@ function entryFor(config, key) {
   return entry || null
 }
 
+// `activeWorkspace` is the focused workspace's name, which is its number on a
+// numeric workspace.
 function status(config, activeWorkspaceId, monitor) {
   var key = activeWorkspaceId === null || activeWorkspaceId === undefined ? null : String(activeWorkspaceId)
   var entry = key !== null ? entryFor(config, key) : null
   return {
-    workspace: key === null ? null : Number(key),
+    workspace: key,
     enabled: entry !== null,
     entry: entry,
     summary: describe(entry, config, monitor),
@@ -210,6 +214,12 @@ function status(config, activeWorkspaceId, monitor) {
     preset: presetName(config, entry),
     presets: config.presets.map(function (p) { return p.name }),
     workspaces: Object.keys(config.workspaces).filter(function (k) { return config.workspaces[k] !== false })
-      .map(Number).sort(function (a, b) { return a - b }),
+      .sort(function (a, b) {
+        var na = Number(a), nb = Number(b)
+        if (isFinite(na) && isFinite(nb)) return na - nb
+        if (isFinite(na)) return -1
+        if (isFinite(nb)) return 1
+        return a < b ? -1 : a > b ? 1 : 0
+      }),
   }
 }

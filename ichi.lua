@@ -331,15 +331,17 @@ function M.parse_config(text)
 
   local workspaces = find_object(text, "workspaces")
   if workspaces then
-    for id in workspaces:gmatch('"(%d+)"%s*:%s*true') do
-      cfg.workspaces[tonumber(id)] = { mode = "default" }
+    -- Keys are workspace names. Hyprland names a numeric workspace by its
+    -- number, so "2" keeps meaning workspace 2 and a 0.3 config still loads.
+    for key in workspaces:gmatch('"([^"]+)"%s*:%s*true') do
+      cfg.workspaces[key] = { mode = "default" }
     end
     -- An explicit off, which only means something with all_workspaces on.
-    for id in workspaces:gmatch('"(%d+)"%s*:%s*false') do
-      cfg.workspaces[tonumber(id)] = false
+    for key in workspaces:gmatch('"([^"]+)"%s*:%s*false') do
+      cfg.workspaces[key] = false
     end
-    for id, body in workspaces:gmatch('"(%d+)"%s*:%s*{(.-)}') do
-      cfg.workspaces[tonumber(id)] = parse_entry(body, cfg.defaults, min)
+    for key, body in workspaces:gmatch('"([^"]+)"%s*:%s*{(.-)}') do
+      cfg.workspaces[key] = parse_entry(body, cfg.defaults, min)
     end
   end
 
@@ -407,11 +409,23 @@ function M.encode_config(cfg)
   for id in pairs(cfg.workspaces) do
     ids[#ids + 1] = id
   end
-  table.sort(ids)
+  -- Numeric workspaces in numeric order, then named ones alphabetically, so
+  -- the file reads the way a person would write it.
+  table.sort(ids, function(a, b)
+    local na, nb = tonumber(a), tonumber(b)
+    if na and nb then
+      return na < nb
+    elseif na then
+      return true
+    elseif nb then
+      return false
+    end
+    return a < b
+  end)
 
   local lines = {}
   for _, id in ipairs(ids) do
-    lines[#lines + 1] = string.format('    "%d": %s', id, M.encode_entry(cfg.workspaces[id]))
+    lines[#lines + 1] = string.format('    "%s": %s', id, M.encode_entry(cfg.workspaces[id]))
   end
 
   return string.format(
@@ -475,7 +489,7 @@ function M.load()
   local legacy_lines = read_file(M.legacy_lines_path)
   if legacy_lines then
     for id, width, height in legacy_lines:gmatch("(%d+)%s+(%d+)%s+(%d+)") do
-      M.config.workspaces[tonumber(id)] = M.normalize_entry({ width = tonumber(width), height = tonumber(height) })
+      M.config.workspaces[id] = M.normalize_entry({ width = tonumber(width), height = tonumber(height) })
     end
     M.save()
   end
@@ -521,7 +535,11 @@ end
 -- explicit entry wins, false is off, and with nothing written the workspace
 -- follows the defaults when all_workspaces is on.
 function M.entry_for(id)
-  local entry = M.config.workspaces[id]
+  if id == nil then
+    return nil
+  end
+  -- Callers may hand this a number; keys are strings.
+  local entry = M.config.workspaces[tostring(id)]
   if entry == false then
     return nil
   end
@@ -531,8 +549,24 @@ function M.entry_for(id)
   return entry
 end
 
-local function workspace_monitor(id)
-  local ws = hl.get_workspace(id)
+-- The live workspace a config key names. Keys are names, because a named
+-- workspace's id is a negative pseudo-id that says nothing about which
+-- workspace it is; its name is the stable handle, and a numeric workspace's
+-- name is its number.
+local function workspace_for(key)
+  if not (hl and hl.get_workspaces) then
+    return nil
+  end
+  for _, ws in ipairs(hl.get_workspaces() or {}) do
+    if not ws.special and tostring(ws.name) == key then
+      return ws
+    end
+  end
+  return nil
+end
+
+local function workspace_monitor(key)
+  local ws = workspace_for(key)
   return ws and ws.monitor or nil
 end
 
@@ -540,9 +574,9 @@ local function describe(id, entry)
   local suffix = entry.mode == "default" and " (default)" or ""
   entry = M.resolve(entry, workspace_monitor(id))
   if entry.mode == "aspect" then
-    return string.format("Ichi: workspace %d at %g:%g%s", id, entry.ratio_w, entry.ratio_h, suffix)
+    return string.format("Ichi: workspace %s at %g:%g%s", id, entry.ratio_w, entry.ratio_h, suffix)
   end
-  return string.format("Ichi: workspace %d at %d%% x %d%%%s", id, entry.width, entry.height, suffix)
+  return string.format("Ichi: workspace %s at %d%% x %d%%%s", id, entry.width, entry.height, suffix)
 end
 
 -- A tabbed group occupies one tile however many windows it holds, so Ichi
@@ -567,15 +601,18 @@ local function group_key(w)
 end
 
 function M.apply(id)
-  local ws = hl.get_workspace(id)
-  if ws == nil or ws.special then
+  local ws = workspace_for(id)
+  if ws == nil then
     return
   end
+  -- config_name is the selector the compositor understands: the number for a
+  -- numeric workspace, "name:foo" for a named one.
+  local selector = tostring(ws.config_name or ws.name)
 
   local base = base_gaps()
   local entry = M.entry_for(id)
   local function plain()
-    hl.workspace_rule({ workspace = tostring(id), gaps_out = base })
+    hl.workspace_rule({ workspace = selector, gaps_out = base })
   end
 
   -- Paused is a runtime veto, not a config change: every workspace goes back
@@ -594,7 +631,7 @@ function M.apply(id)
   if not M.builtin_layouts[layout] then
     if not warned.layouts[id] then
       warned.layouts[id] = true
-      notify(string.format("Ichi: yielding to the '%s' layout on workspace %d", layout, id))
+      notify(string.format("Ichi: yielding to the '%s' layout on workspace %s", layout, id))
     end
     plain()
     return
@@ -602,7 +639,7 @@ function M.apply(id)
 
   local tiled, count = nil, 0
   local seen_groups = {}
-  for _, w in ipairs(hl.get_workspace_windows(id) or {}) do
+  for _, w in ipairs(hl.get_workspace_windows(ws.id) or {}) do
     if not w.floating then
       local key = group_key(w)
       if key == nil then
@@ -634,7 +671,7 @@ function M.apply(id)
   local usable_h = mon.height - (reserved.top or 0) - (reserved.bottom or 0)
 
   -- Named keys are mandatory here: a positional array is silently misparsed.
-  hl.workspace_rule({ workspace = tostring(id), gaps_out = M.gaps_for(usable_w, usable_h, M.resolve(entry, mon), base) })
+  hl.workspace_rule({ workspace = selector, gaps_out = M.gaps_for(usable_w, usable_h, M.resolve(entry, mon), base) })
 end
 
 function M.refresh()
@@ -646,7 +683,7 @@ function M.refresh()
   if M.config.settings.all_workspaces and hl.get_workspaces then
     for _, ws in ipairs(hl.get_workspaces() or {}) do
       if not ws.special then
-        touched[ws.id] = true
+        touched[tostring(ws.name)] = true
       end
     end
   end
@@ -655,9 +692,21 @@ function M.refresh()
   end
 end
 
+-- The focused workspace's key, or nil when there is nothing to act on.
 local function current_id()
   local ws = hl.get_active_workspace()
-  return ws and ws.id or nil
+  if ws == nil or ws.special then
+    return nil
+  end
+  return tostring(ws.name)
+end
+
+-- Callers may pass a number, a name, or nothing at all. Keys are strings.
+local function key_of(id)
+  if id == nil then
+    return current_id()
+  end
+  return tostring(id)
 end
 
 local function commit(id, entry, message, level)
@@ -671,7 +720,7 @@ end
 -- whenever they change. With all_workspaces on that is what an absent entry
 -- already means, so the file stays clean.
 function M.enable(id, entry)
-  id = id or current_id()
+  id = key_of(id)
   if id == nil then
     return
   end
@@ -685,7 +734,7 @@ end
 
 -- Off; written as false when all_workspaces would otherwise turn it on.
 function M.disable(id)
-  id = id or current_id()
+  id = key_of(id)
   if id == nil then
     return
   end
@@ -693,11 +742,11 @@ function M.disable(id)
   if M.config.settings.all_workspaces then
     entry = false
   end
-  commit(id, entry, string.format("Ichi: workspace %d off", id))
+  commit(id, entry, string.format("Ichi: workspace %s off", id))
 end
 
 function M.toggle(id)
-  id = id or current_id()
+  id = key_of(id)
   if id == nil then
     return
   end
@@ -711,7 +760,7 @@ end
 -- Nudging an aspect-mode or disabled workspace turns it into size mode from
 -- the defaults, so the arrow keys always do something visible.
 function M.adjust(delta_width, delta_height, id)
-  id = id or current_id()
+  id = key_of(id)
   if id == nil then
     return
   end
@@ -733,7 +782,7 @@ function M.nudge(dir_width, dir_height, fine, id)
 end
 
 function M.set_aspect(ratio_w, ratio_h, id)
-  id = id or current_id()
+  id = key_of(id)
   if id == nil then
     return
   end
@@ -746,7 +795,7 @@ end
 
 -- Back to following the defaults.
 function M.reset(id)
-  id = id or current_id()
+  id = key_of(id)
   if id == nil or M.entry_for(id) == nil then
     return
   end
@@ -893,7 +942,7 @@ end
 
 -- Give the workspace a preset by name.
 function M.preset(name, id)
-  id = id or current_id()
+  id = key_of(id)
   local i = id and preset_index(name)
   if i == nil then
     notify(string.format("Ichi: no preset called '%s'", tostring(name)))
@@ -905,7 +954,7 @@ end
 -- Step through the presets in file order; a workspace on none of them starts
 -- at the first (or, going backwards, the last).
 function M.cycle(delta, id)
-  id = id or current_id()
+  id = key_of(id)
   if id == nil then
     return
   end
@@ -926,7 +975,7 @@ end
 
 -- Keep the workspace's current entry as a preset, replacing one of that name.
 function M.save_preset(name, id)
-  id = id or current_id()
+  id = key_of(id)
   local entry = id and M.entry_for(id)
   name = tostring(name or ""):gsub('[\\"]', "")
   if entry == nil or name == "" then
@@ -969,7 +1018,7 @@ end
 -- block for the workspace's monitor instead, and only displays matching it
 -- follow.
 function M.adopt_defaults(id, scope)
-  id = id or current_id()
+  id = key_of(id)
   if id == nil then
     return
   end

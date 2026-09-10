@@ -251,6 +251,7 @@ dropped; a malformed file keeps the last good document.
   },
   "workspaces": {
     "1": true,
+    "code": { "mode": "aspect", "ratio": [4, 3] },
     "2": { "mode": "size", "width": 70, "height": 80 },
     "5": { "mode": "aspect", "ratio": [4, 3] }
   }
@@ -306,7 +307,13 @@ dropped; a malformed file keeps the last good document.
 - `aspect` mode is the largest box of that ratio, centred, which is what
   Hyprland's built-in setting does.
 
-Workspaces are identified by number. Named workspaces are not supported yet.
+Workspaces are keyed by name. Hyprland names a numeric workspace by its
+number, so `"2"` means workspace 2 and a config written before 0.4 keeps
+working untouched. A named workspace uses its name, `"code"` or `"mail"`,
+which is also the handle Ichi hands the compositor. Its numeric id is a
+negative placeholder that says nothing about which workspace it is, so the
+name is the only stable way to refer to one. Special workspaces are still
+ignored.
 
 ## How it works
 

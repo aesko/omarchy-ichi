@@ -24,7 +24,12 @@ Item {
   property bool loaderInstalled: false
   property string lastError: ""
 
-  readonly property var activeWorkspaceId: Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : null
+  // The focused workspace's name, which is the key the config uses. A numeric
+  // workspace is named by its number, and a named one has no useful id.
+  readonly property var activeWorkspaceId: Hyprland.focusedWorkspace
+    ? String(Hyprland.focusedWorkspace.name !== undefined && Hyprland.focusedWorkspace.name !== null
+      ? Hyprland.focusedWorkspace.name : Hyprland.focusedWorkspace.id)
+    : null
   readonly property var activeMonitor: Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.monitor
     ? { name: Hyprland.focusedWorkspace.monitor.name, description: Hyprland.focusedWorkspace.monitor.description }
     : null

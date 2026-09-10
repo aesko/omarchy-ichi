@@ -43,7 +43,7 @@ test("parseConfig normalizes and drops bad entries", () => {
   assert.equal(config.workspaces["7"], undefined)
   assert.deepEqual(config.workspaces["8"], { mode: "default" })
   assert.deepEqual(config.workspaces["9"], { mode: "default" })
-  assert.equal(config.workspaces["x"], undefined)
+  assert.deepEqual(config.workspaces["x"], { mode: "size", width: 50, height: 50 })
 })
 
 test("settings block is read, with the pre-0.2 step location as a fallback", () => {
@@ -103,8 +103,8 @@ test("hyprctlEvalArgs wraps the payload in a block", () => {
 test("status reports the active workspace", () => {
   const config = Model.normalizeConfig({ workspaces: { "2": { width: 70, height: 80 }, "5": { mode: "aspect", ratio: [1, 1] } } })
   assert.deepEqual(Model.status(config, 2), {
-    workspace: 2, enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
-    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false }, paused: false, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: [2, 5],
+    workspace: "2", enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
+    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false }, paused: false, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: ["2", "5"],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
   assert.equal(Model.status(config, 3).enabled, false)
@@ -122,7 +122,7 @@ test("all_workspaces turns absent entries on and false entries off", () => {
   assert.equal(Model.status(config, 1).summary, "70% x 80% (default)")
   assert.equal(Model.status(config, 2).enabled, false)
   assert.equal(Model.status(config, 3).summary, "50% x 50%")
-  assert.deepEqual(Model.status(config, 1).workspaces, [3])
+  assert.deepEqual(Model.status(config, 1).workspaces, ["3"])
   const off = Model.normalizeConfig({ workspaces: { "2": false } })
   assert.equal(Model.status(off, 1).enabled, false)
   assert.equal(Model.status(off, 2).enabled, false)
@@ -135,6 +135,19 @@ test("paused is read and surfaced in status", () => {
   // Pausing is a runtime veto, so the workspace still reads as enabled.
   assert.equal(Model.status(on, 1).enabled, true)
   assert.equal(Model.parseConfig("{}").settings.paused, false)
+})
+
+test("named workspaces are keys like any other", () => {
+  const config = Model.normalizeConfig({
+    defaults: { width: 60, height: 90 },
+    workspaces: { "2": { width: 70, height: 80 }, "code": true, "mail": { mode: "aspect", ratio: [4, 3] } },
+  })
+  assert.equal(Model.status(config, "code").enabled, true)
+  assert.equal(Model.status(config, "code").summary, "60% x 90% (default)")
+  assert.equal(Model.status(config, "mail").summary, "4:3")
+  assert.equal(Model.status(config, "notes").enabled, false)
+  // Numbers sort first and numerically, names alphabetically after them.
+  assert.deepEqual(Model.status(config, "2").workspaces, ["2", "code", "mail"])
 })
 
 test("presets keep their order and name the matching entry", () => {
