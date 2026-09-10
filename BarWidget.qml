@@ -38,7 +38,7 @@ Panel {
   readonly property int sizeHeight: sizeMode ? resolved.height : 0
 
   readonly property string glyph: ""
-  readonly property string display: setting("display", "Icon and size")
+  readonly property string display: setting("display", "Icon only")
   readonly property bool hidden: display === "Hidden"
   readonly property bool showWhenOff: setting("showWhenOff", true) === true
   readonly property string scrollAction: setting("scrollAction", "Off")
@@ -162,6 +162,35 @@ Panel {
 
       PanelSeparator { Layout.fillWidth: true }
 
+      // Which size this workspace is on. Following the defaults is the first
+      // choice rather than a separate reset button, because it belongs on the
+      // same axis as the presets: they all answer "what size is this".
+      Flow {
+        Layout.fillWidth: true
+        Layout.preferredHeight: implicitHeight
+        spacing: Style.space(6)
+        visible: root.onHere
+
+        Button {
+          text: "Default"
+          selected: !!(root.entry && root.entry.mode === "default")
+          foreground: root.bar ? root.bar.foreground : Color.foreground
+          onClicked: root.call("cmdReset")
+        }
+
+        Repeater {
+          model: root.presetNames
+
+          Button {
+            required property string modelData
+            text: modelData
+            selected: modelData === root.presetName
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onClicked: if (root.ichiService) root.ichiService.cmdPreset(modelData)
+          }
+        }
+      }
+
       // Size. Only meaningful for a percentage entry, so an aspect workspace
       // gets a line of explanation instead of two dead sliders.
       Text {
@@ -221,28 +250,6 @@ Panel {
         }
       }
 
-      // Presets, if any are saved.
-      Flow {
-        Layout.fillWidth: true
-        Layout.preferredHeight: implicitHeight
-        spacing: Style.space(6)
-        visible: root.presetNames.length > 0
-
-        Repeater {
-          model: root.presetNames
-
-          Button {
-            required property string modelData
-            text: modelData
-            selected: modelData === root.presetName
-            foreground: root.bar ? root.bar.foreground : Color.foreground
-            onClicked: if (root.ichiService) root.ichiService.cmdPreset(modelData)
-          }
-        }
-      }
-
-      PanelSeparator { Layout.fillWidth: true }
-
       Flow {
         Layout.fillWidth: true
         Layout.preferredHeight: implicitHeight
@@ -258,12 +265,6 @@ Panel {
           text: "Adopt on monitor"
           foreground: root.bar ? root.bar.foreground : Color.foreground
           onClicked: if (root.ichiService) root.ichiService.cmdAdopt("monitor")
-        }
-
-        Button {
-          text: "Reset"
-          foreground: root.bar ? root.bar.foreground : Color.foreground
-          onClicked: root.call("cmdReset")
         }
       }
 

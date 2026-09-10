@@ -32,9 +32,9 @@ a terminal, a note, a chat — and that window doesn't need the whole screen.
   monitor or a resolution change can't leave it stranded off-screen.
 - **Two ways to size.** A share of the screen (70% × 80%) or an aspect ratio
   (4:3, 1:1) — per workspace, with Hyprland's global 1-Window Ratio absorbed.
-- **In the bar, if you want it.** An optional widget: the current size at a
-  glance, a panel with sliders, presets and the pause switch. Choose its
-  section when you install, or leave it out.
+- **In the bar, if you want it.** An optional widget: one glyph, and a panel
+  with sizes, sliders and the pause switch. Choose its section when you
+  install, or leave it out.
 - **Plain state.** One JSON file you can read, edit and keep in your dotfiles.
   Edits apply within a second.
 
@@ -136,11 +136,13 @@ Right is the default. To choose without being asked, or to move it later:
 omarchy plugin enable io.github.aesko.ichi --section center
 ```
 
-The widget shows the current size, dimmed on a workspace where Ichi is off.
+The widget is one glyph, dimmed on a workspace where Ichi is off. It can show
+the current size or preset name beside it, but that is off by default: it
+costs a lot of bar width for something the panel already says.
 **Left click opens the panel, right click toggles this workspace**, matching
 Omarchy's own audio, bluetooth and power widgets. The panel holds the on/off
-switch, width and height sliders, your presets, adopt and reset, and the
-global pause. Scrolling does nothing by default, because a bar that resizes
+switch, a row of sizes with the defaults first and your presets after it,
+width and height sliders, adopt, and the global pause. Scrolling does nothing by default, because a bar that resizes
 windows as the pointer crosses it is a surprise; turn it on in the widget's
 settings if you want it.
 

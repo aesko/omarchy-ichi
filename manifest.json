@@ -27,7 +27,7 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "display": "Icon and size",
+      "display": "Icon only",
       "showWhenOff": true,
       "scrollAction": "Off",
       "clickAction": "Open panel"
@@ -38,13 +38,13 @@
         "type": "enum",
         "label": "Show in the bar",
         "options": [
+          "Icon only",
           "Icon and size",
           "Icon and preset",
-          "Icon only",
           "Hidden"
         ],
-        "defaultValue": "Icon and size",
-        "description": "Hidden keeps Ichi running with nothing in the bar, for people who want the plugin but not the widget."
+        "defaultValue": "Icon only",
+        "description": "The icon alone by default. The size and preset variants trade bar width for detail the panel already shows. Hidden keeps Ichi running with nothing in the bar."
       },
       {
         "key": "showWhenOff",
