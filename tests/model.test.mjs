@@ -37,7 +37,7 @@ test("parseConfig normalizes and drops bad entries", () => {
     },
   }))
   assert.deepEqual(config.defaults, { width: 60, height: 75 })
-  assert.deepEqual(config.settings, { step: 25, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false })
+  assert.deepEqual(config.settings, { step: 25, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false })
   assert.deepEqual(config.workspaces["2"], { mode: "size", width: 70, height: 80 })
   assert.deepEqual(config.workspaces["5"], { mode: "aspect", ratio: [4, 3] })
   assert.equal(config.workspaces["7"], undefined)
@@ -65,7 +65,7 @@ test("settings block is read, with the pre-0.2 step location as a fallback", () 
   const aligned = Model.parseConfig(JSON.stringify({ monitors: { "eDP-1": { align_y: 0 } } }))
   assert.deepEqual(aligned.monitors, [{ key: "eDP-1", align_y: 0 }])
   const bogus = Model.parseConfig(JSON.stringify({ settings: { notify: "loudly" } }))
-  assert.equal(bogus.settings.notify, "always")
+  assert.equal(bogus.settings.notify, "changes")
 })
 
 test("parseConfig returns null for malformed JSON so the caller keeps the last good document", () => {
@@ -105,11 +105,11 @@ test("status reports the active workspace", () => {
   assert.deepEqual(Model.status(config, 2), {
     workspace: "2", enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
     resolved: { mode: "size", width: 70, height: 80 },
-    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false }, paused: false, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: ["2", "5"],
+    settings: { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false }, paused: false, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: ["2", "5"],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
   assert.equal(Model.status(config, 3).enabled, false)
-  assert.equal(Model.status(config, 3).resolved, null)
+  assert.deepEqual(Model.status(config, 3).resolved, { mode: "size", width: 70, height: 80 })
   assert.equal(Model.status(config, null).workspace, null)
   const following = Model.normalizeConfig({ defaults: { width: 60, height: 90 }, workspaces: { "3": true } })
   assert.equal(Model.status(following, 3).summary, "60% x 90% (default)")

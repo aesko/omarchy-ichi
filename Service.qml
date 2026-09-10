@@ -157,6 +157,12 @@ Item {
     return root.enabled ? "disabling" : "enabling"
   }
 
+  // "Follow the defaults", which on a workspace that is off means turning it
+  // on that way. enable() with no entry writes exactly that.
+  function cmdUseDefaults() {
+    root.evaluate("if ichi then ichi.enable() end")
+  }
+
   function cmdReset() {
     root.evaluate("if ichi then ichi.reset() end")
   }

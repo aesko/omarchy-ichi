@@ -17,7 +17,7 @@ var NOTIFY_LEVELS = ["never", "changes", "always"]
 
 function defaultConfig() {
   return {
-    settings: { step: 5, fine_step: 1, notify: "always", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false },
+    settings: { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false },
     defaults: { width: 70, height: 80 },
     monitors: [],
     presets: [],
@@ -207,9 +207,11 @@ function status(config, activeWorkspaceId, monitor) {
     enabled: entry !== null,
     entry: entry,
     summary: describe(entry, config, monitor),
-    // The concrete size an entry amounts to here, so a caller does not have to
-    // re-derive what "follows the defaults" means on this monitor.
-    resolved: entry ? resolve(entry, config, monitor) : null,
+    // The size this workspace has, or would have if switched on, so a caller
+    // does not re-derive what "follows the defaults" means on this monitor.
+    // Never null while a workspace is focused: the panel shows live controls
+    // on a workspace that is off, and they need something to show.
+    resolved: key === null ? null : resolve(entry || { mode: "default" }, config, monitor),
     settings: config.settings,
     defaults: config.defaults,
     paused: config.settings.paused,

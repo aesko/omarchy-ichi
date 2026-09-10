@@ -169,13 +169,12 @@ Panel {
         Layout.fillWidth: true
         Layout.preferredHeight: implicitHeight
         spacing: Style.space(6)
-        visible: root.onHere
 
         Button {
           text: "Default"
           selected: !!(root.entry && root.entry.mode === "default")
           foreground: root.bar ? root.bar.foreground : Color.foreground
-          onClicked: root.call("cmdReset")
+          onClicked: root.call("cmdUseDefaults")
         }
 
         Repeater {
@@ -195,7 +194,7 @@ Panel {
       // gets a line of explanation instead of two dead sliders.
       Text {
         Layout.fillWidth: true
-        visible: root.onHere && !root.sizeMode
+        visible: !root.sizeMode
         text: "This workspace is set to an aspect ratio."
         color: root.bar ? root.bar.foreground : Color.foreground
         opacity: 0.6
@@ -207,13 +206,16 @@ Panel {
       ColumnLayout {
         Layout.fillWidth: true
         spacing: Style.space(6)
-        visible: root.onHere && root.sizeMode
+        visible: root.sizeMode
 
-        Text {
-          text: "Width " + Math.round(widthSlider.liveValue) + "%"
-          color: root.bar ? root.bar.foreground : Color.foreground
-          font.family: Style.font.family
-          font.pixelSize: Style.font.caption
+        NumberField {
+          label: "Width"
+          value: Math.round(widthSlider.liveValue)
+          from: root.minPercent
+          to: 100
+          stepSize: 1
+          foreground: root.bar ? root.bar.foreground : Color.foreground
+          onModified: function (v) { root.applySizeOf(v, Math.round(heightSlider.liveValue)) }
         }
 
         PanelSlider {
@@ -229,11 +231,14 @@ Panel {
           onReleased: { sizeCommit.stop(); root.applySize() }
         }
 
-        Text {
-          text: "Height " + Math.round(heightSlider.liveValue) + "%"
-          color: root.bar ? root.bar.foreground : Color.foreground
-          font.family: Style.font.family
-          font.pixelSize: Style.font.caption
+        NumberField {
+          label: "Height"
+          value: Math.round(heightSlider.liveValue)
+          from: root.minPercent
+          to: 100
+          stepSize: 1
+          foreground: root.bar ? root.bar.foreground : Color.foreground
+          onModified: function (v) { root.applySizeOf(Math.round(widthSlider.liveValue), v) }
         }
 
         PanelSlider {
@@ -291,8 +296,12 @@ Panel {
     }
   }
 
+  function applySizeOf(w, h) {
+    if (ichiService) ichiService.cmdSize(w, h)
+  }
+
   function applySize() {
-    if (ichiService) ichiService.cmdSize(Math.round(widthSlider.liveValue), Math.round(heightSlider.liveValue))
+    applySizeOf(Math.round(widthSlider.liveValue), Math.round(heightSlider.liveValue))
   }
 
   // A drag would otherwise write the state file on every pixel, and each write

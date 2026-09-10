@@ -142,7 +142,10 @@ costs a lot of bar width for something the panel already says.
 **Left click opens the panel, right click toggles this workspace**, matching
 Omarchy's own audio, bluetooth and power widgets. The panel holds the on/off
 switch, a row of sizes with the defaults first and your presets after it,
-width and height sliders, adopt, and the global pause. Scrolling does nothing by default, because a bar that resizes
+width and height as both a typed field and a slider, adopt, and the global
+pause. The controls stay live on a workspace where Ichi is off, showing what
+that workspace would get; touching one turns it on, the same way nudging with
+the arrow keys does. Scrolling does nothing by default, because a bar that resizes
 windows as the pointer crosses it is a surprise; turn it on in the widget's
 settings if you want it.
 
@@ -307,9 +310,10 @@ dropped; a malformed file keeps the last good document.
 
 - `settings.step` and `settings.fine_step` are the arrow-key increments in
   percentage points, for the plain and the shifted arrows.
-- `settings.notify` is how much Ichi says: `never` is silent, `changes`
-  reports toggles, resets and setting changes, `always` also reports every
-  arrow-key nudge.
+- `settings.notify` is how much Ichi says: `never` is silent, `changes` is the
+  default and reports toggles, resets and setting changes, `always` also
+  reports every arrow-key nudge. Resizing a window is its own feedback, so
+  `always` mostly repeats what you can already see.
 - `settings.paused` suspends Ichi everywhere. Every workspace goes back to
   normal gaps and keeps its entry, so resuming restores the lot. Meant for
   screen sharing or a presentation, where you want the space back for a

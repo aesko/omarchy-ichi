@@ -40,7 +40,7 @@ M.notify_levels = { never = 0, changes = 1, always = 2 }
 
 local function default_config()
   return {
-    settings = { step = 5, fine_step = 1, notify = "always", all_workspaces = false, max_windows = 1, min_percent = 20, paused = false },
+    settings = { step = 5, fine_step = 1, notify = "changes", all_workspaces = false, max_windows = 1, min_percent = 20, paused = false },
     defaults = { width = 70, height = 80, step = 5, max_width = 0, max_height = 0, align_x = 50, align_y = 50 },
     -- Ordered, first match wins: { key = "desc:..." or "DP-1", width?, height?, max_width?, max_height?, align_x?, align_y? }
     monitors = {},
@@ -810,7 +810,9 @@ function M.set_aspect(ratio_w, ratio_h, id)
   commit(id, entry, describe(id, entry))
 end
 
--- Back to following the defaults.
+-- Back to following the defaults. Unlike reset(), this works on a workspace
+-- that is off, turning it on: the panel offers "Default" as one of the sizes
+-- whether or not Ichi is running there.
 function M.reset(id)
   id = key_of(id)
   if id == nil or M.entry_for(id) == nil then
