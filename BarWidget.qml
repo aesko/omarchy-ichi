@@ -268,7 +268,7 @@ Panel {
         spacing: Style.space(6)
 
         Button {
-          text: "Adopt everywhere"
+          text: "Adopt as default"
           // Adopt copies a fixed size out of a workspace, so there has to be
           // one. Greyed rather than refusing, now that the panel is silent.
           enabled: root.canAdopt

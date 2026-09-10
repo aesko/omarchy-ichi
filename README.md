@@ -110,7 +110,7 @@ And one for `adopt`, which pairs with the arrows: tune a workspace until it
 looks right, then press once to make that the default everywhere.
 
 ```lua
-o.bind("SUPER + CTRL + ALT + A", "Ichi: adopt everywhere", function()
+o.bind("SUPER + CTRL + ALT + A", "Ichi: adopt as default", function()
   if ichi then ichi.adopt_defaults() end
 end)
 ```
@@ -205,7 +205,7 @@ on a workspace only appear while that workspace is on:
 },
 "ichi.adopt": {
   "icon": "",
-  "label": "Adopt everywhere",
+  "label": "Adopt as default",
   "description": "Make this workspace's size the default everywhere",
   "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi adopt"
