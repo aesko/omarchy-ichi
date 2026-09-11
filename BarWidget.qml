@@ -238,7 +238,7 @@ Panel {
           step: 1
           integer: true
           value: root.sizeWidth
-          onMoved: sizeCommit.restart()
+          onMoved: root.throttledApply()
           onReleased: { sizeCommit.stop(); root.applySize() }
         }
 
@@ -261,7 +261,7 @@ Panel {
           step: 1
           integer: true
           value: root.sizeHeight
-          onMoved: sizeCommit.restart()
+          onMoved: root.throttledApply()
           onReleased: { sizeCommit.stop(); root.applySize() }
         }
       }
@@ -322,7 +322,15 @@ Panel {
   }
 
   // A drag would otherwise write the state file on every pixel, and each write
-  // round-trips back through the shell. Live feedback, throttled.
+  // round-trips back through the shell. This rate-limits to one write per
+  // interval while the drag continues. Restarting the timer on each move
+  // instead would debounce, not throttle: the moves arrive faster than the
+  // interval, so it would never fire and the window would sit still until
+  // you let go.
+  function throttledApply() {
+    if (!sizeCommit.running) sizeCommit.start()
+  }
+
   Timer {
     id: sizeCommit
     interval: 150
