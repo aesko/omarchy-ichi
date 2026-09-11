@@ -1,5 +1,78 @@
 # Changelog
 
+## 0.4.0 — 2026-09-11
+
+A bar widget, workspaces by name, and a way to stand Ichi down for a while.
+
+### Added
+
+- **An optional bar widget.** One glyph, dimmed where Ichi is off. Left click
+  opens a panel, right click toggles this workspace, matching Omarchy's own
+  audio, bluetooth and power widgets. The panel holds the on/off switch, a row
+  of sizes with the defaults first and your presets after, width and height as
+  both a typed field and a slider, adopt, and the global pause. `+` saves the
+  current size as a preset; right-clicking one removes it. Scrolling does
+  nothing unless you turn it on. Nothing done from the panel raises a
+  notification, since it shows its own result in the corner the notifications
+  would cover. The controls stay live on a workspace where Ichi is off,
+  showing what it would get; touching one turns it on, the same way nudging
+  with the arrow keys always has.
+- **Named workspaces.** Keys are workspace names now, so `"code"` works
+  alongside `"2"`. Hyprland gives a named workspace a negative placeholder id
+  that identifies nothing, so the name was always the only stable handle.
+- **`settings.paused`**, suspending Ichi everywhere without touching a single
+  workspace entry, for screen sharing or a presentation. `pause on|off`,
+  `pause_toggle`, `paused`, and a menu row with a checkmark.
+- `ichi.set_size(w, h)` and the `size` command, an absolute size rather than a
+  delta, which is what a slider needs.
+- `status.resolved`, the size a workspace has or would have if switched on.
+- `omarchy-shell ichi.panel toggle`, so the panel can be opened from a key.
+
+### Changed
+
+- **`settings.notify` defaults to `changes` rather than `always`.** Arrow-key
+  nudges no longer announce themselves. Existing config files keep whatever
+  they already say.
+- Menu and panel labels name their effect: **Adopt as default** and **Reset to
+  default**. "Adopt everywhere" suggested it applied the size to every
+  workspace, when it changes the defaults, which only reach workspaces that
+  follow them.
+
+### Fixed
+
+- A warning 0.3.0 shipped on every shell start: Quickshell exposes every
+  property declared on an `IpcHandler` over IPC and could not serialise ours.
+
+### Breaking
+
+- **`ichi status` reports `workspace` and `workspaces` as strings, not
+  numbers**, because workspace keys are names and a numeric workspace's name is
+  its number. Anything parsing that JSON needs updating; `"2"` where `2` used
+  to be.
+
+### Migration
+
+- **Your config file needs nothing.** A 0.3 file loads with every workspace,
+  monitor block and preset intact, numeric keys included.
+- **The bar widget will not appear on an existing install.** Ichi was
+  service-only before, so your config already lists it as enabled and Omarchy
+  sees nothing to place. Disable and enable it once:
+
+  ```bash
+  omarchy plugin disable io.github.aesko.ichi
+  omarchy plugin enable io.github.aesko.ichi --section right
+  ```
+
+  A fresh install is asked which section to use and needs none of this. If you
+  would rather not have the widget at all, set its **Show in the bar** setting
+  to *Hidden*.
+- After `omarchy plugin update`, run `omarchy restart shell` and
+  `hyprctl reload` so both halves pick up the new code. For about a second
+  after a shell restart the compositor has not told Quickshell which
+  workspace is focused, so `ichi status` reports `"workspace": null` and the
+  widget sits dimmed. It corrects itself; Omarchy's own workspace indicator
+  is blank for the same moment.
+
 ## 0.3.0 — 2026-09-08
 
 Shorter to drive, and a group counts as one window.
