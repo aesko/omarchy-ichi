@@ -269,12 +269,12 @@ Item {
   }
 
   // Keep the focused workspace's current size as a named preset.
-  function cmdSavePreset(name) {
-    root.evaluate("if ichi then ichi.save_preset(" + JSON.stringify(String(name)) + ") end")
+  function cmdSavePreset(name, quiet) {
+    run("ichi.save_preset(" + JSON.stringify(String(name)) + ")", quiet)
   }
 
-  function cmdRemovePreset(name) {
-    root.evaluate("if ichi then ichi.remove_preset(" + JSON.stringify(String(name)) + ") end")
+  function cmdRemovePreset(name, quiet) {
+    run("ichi.remove_preset(" + JSON.stringify(String(name)) + ")", quiet)
   }
 
   // Adopt the focused workspace's current size as the default, or with

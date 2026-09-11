@@ -54,6 +54,12 @@ Panel {
 
   readonly property string labelText: label()
 
+  // Naming a preset needs typing, so the size row swaps for a field rather
+  // than growing a dialog. Saving needs an entry to copy, so it is only
+  // offered where Ichi is actually on.
+  property bool naming: false
+  readonly property bool canSave: onHere && !!entry
+
   implicitWidth: shown ? button.implicitWidth : 0
   implicitHeight: shown ? button.implicitHeight : 0
   visible: shown
@@ -171,10 +177,26 @@ Panel {
       // Which size this workspace is on. Following the defaults is the first
       // choice rather than a separate reset button, because it belongs on the
       // same axis as the presets: they all answer "what size is this".
+      // Naming replaces the row rather than sitting beside it, so the panel
+      // does not jump in height.
+      TextField {
+        id: nameField
+        Layout.fillWidth: true
+        visible: root.naming
+        placeholderText: "name this size, Enter to save"
+        foreground: root.bar ? root.bar.foreground : Color.foreground
+        onAccepted: root.commitName()
+        Keys.onEscapePressed: root.cancelName()
+        // Typing over an existing name updates that preset, which is what
+        // save_preset already does; nothing extra is needed here.
+        onActiveFocusChanged: if (!activeFocus && root.naming) root.cancelName()
+      }
+
       Flow {
         Layout.fillWidth: true
         Layout.preferredHeight: implicitHeight
         spacing: Style.space(6)
+        visible: !root.naming
 
         Button {
           // Lower case to sit level with the preset names beside it, which
@@ -192,9 +214,22 @@ Panel {
             required property string modelData
             text: modelData
             selected: modelData === root.presetName
+            tooltipText: "Right click to remove"
             foreground: root.bar ? root.bar.foreground : Color.foreground
             onClicked: if (root.ichiService) root.ichiService.cmdPreset(modelData, true)
+            onRightClicked: if (root.ichiService) root.ichiService.cmdRemovePreset(modelData, true)
           }
+        }
+
+        Button {
+          text: "+"
+          enabled: root.canSave
+          opacity: root.canSave ? 1 : 0.4
+          tooltipText: root.canSave
+            ? "Save this size as a preset"
+            : "Turn Ichi on here to save a preset"
+          foreground: root.bar ? root.bar.foreground : Color.foreground
+          onClicked: root.startName()
         }
       }
 
@@ -311,6 +346,23 @@ Panel {
         }
       }
     }
+  }
+
+  function startName() {
+    if (!canSave) return
+    nameField.text = ""
+    naming = true
+    nameField.forceActiveFocus()
+  }
+
+  function cancelName() {
+    naming = false
+  }
+
+  function commitName() {
+    var name = nameField.text.trim()
+    naming = false
+    if (name !== "" && ichiService) ichiService.cmdSavePreset(name, true)
   }
 
   function applySizeOf(w, h) {

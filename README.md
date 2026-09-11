@@ -143,7 +143,9 @@ costs a lot of bar width for something the panel already says.
 Omarchy's own audio, bluetooth and power widgets. The panel holds the on/off
 switch, a row of sizes with the defaults first and your presets after it,
 width and height as both a typed field and a slider, adopt, and the global
-pause. The controls stay live on a workspace where Ichi is off, showing what
+pause. The `+` at the end of the size row saves the current size as a preset,
+naming it inline; right-clicking a preset removes it. Typing a name that
+already exists updates that preset. The controls stay live on a workspace where Ichi is off, showing what
 that workspace would get; touching one turns it on, the same way nudging with
 the arrow keys does.
 
