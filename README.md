@@ -252,9 +252,11 @@ omarchy-shell ichi reset
 omarchy-shell ichi adjust 5 0                     # width +5 points, height unchanged
 omarchy-shell ichi nudge -1 0                     # one step narrower
 omarchy-shell ichi nudge_fine 0 1                 # one fine step taller
+omarchy-shell ichi size 65 85                     # an absolute size for this workspace
 omarchy-shell ichi aspect 4 3                     # switch this workspace to 4:3
 omarchy-shell ichi preset reading                 # give this workspace a preset
-omarchy-shell ichi cycle                          # next preset; cycle_back for the previous
+omarchy-shell ichi cycle                          # next preset
+omarchy-shell ichi cycle_back                     # the previous one
 omarchy-shell ichi save_preset wide               # keep this workspace's size as a preset
 omarchy-shell ichi remove_preset wide
 omarchy-shell ichi defaults 65 85                 # the size for workspaces that follow the defaults
@@ -272,12 +274,13 @@ omarchy-shell ichi min 10                         # let sizes go down to 10%
 omarchy-shell ichi adopt                          # make this workspace's size the default, and follow it
 omarchy-shell ichi adopt_monitor                  # the same, but only for this workspace's monitor
 omarchy-shell ichi refresh                        # re-read the config and re-apply
+omarchy-shell ichi sync                           # re-check the loader line in hyprland.lua
 ```
 
 The same functions are reachable from Lua as `ichi.toggle()`,
 `ichi.adjust(dw, dh)`, `ichi.nudge(dx, dy, fine)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
 `ichi.preset(name)`, `ichi.cycle(delta)`, `ichi.save_preset(name)`, `ichi.remove_preset(name)`,
-`ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_align(x, y)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.set_paused(on)`, `ichi.toggle_pause()`, `ichi.set_all_workspaces(on)`, `ichi.set_max_windows(n)`, `ichi.set_min_percent(n)`, `ichi.adopt_defaults(id, scope)`,
+`ichi.set_size(w, h)`, `ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_align(x, y)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.set_paused(on)`, `ichi.toggle_pause()`, `ichi.set_all_workspaces(on)`, `ichi.set_max_windows(n)`, `ichi.set_min_percent(n)`, `ichi.adopt_defaults(id, scope)`,
 `ichi.enable(id, entry)` and `ichi.disable(id)`, or from a shell with
 `hyprctl eval 'ichi.toggle()'`.
 
