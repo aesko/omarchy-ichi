@@ -60,6 +60,11 @@ Panel {
   property bool naming: false
   readonly property bool canSave: onHere && !!entry
 
+  // The ratios offered as chips: the shapes a window is usually wanted in.
+  // Any other ratio is still reachable from the command line, which is where
+  // an unusual one belongs rather than in a row that has to stay scannable.
+  readonly property var aspectRatios: [[16, 9], [16, 10], [3, 2], [4, 3], [1, 1]]
+
   implicitWidth: shown ? button.implicitWidth : 0
   implicitHeight: shown ? button.implicitHeight : 0
   visible: shown
@@ -233,20 +238,26 @@ Panel {
         }
       }
 
-      // Size. Only meaningful for a percentage entry, so an aspect workspace
-      // gets a line of explanation instead of two dead sliders.
-      Text {
+      // The other way to say what shape this workspace is. A selected chip
+      // here is why the sliders below are absent, which is what the line of
+      // explanation that used to sit here had to say in words.
+      Flow {
         Layout.fillWidth: true
-        // Only when the entry really is an aspect ratio. Keying this off the
-        // sliders being hidden also fired when there was no workspace to
-        // report on, claiming an aspect ratio that did not exist.
-        visible: root.aspectMode
-        text: "This workspace is set to an aspect ratio."
-        color: root.bar ? root.bar.foreground : Color.foreground
-        opacity: 0.6
-        font.family: Style.font.family
-        font.pixelSize: Style.font.caption
-        wrapMode: Text.WordWrap
+        Layout.preferredHeight: implicitHeight
+        spacing: Style.space(6)
+        visible: !root.naming
+
+        Repeater {
+          model: root.aspectRatios
+
+          Button {
+            required property var modelData
+            text: modelData[0] + ":" + modelData[1]
+            selected: root.isAspect(modelData[0], modelData[1])
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onClicked: if (root.ichiService) root.ichiService.cmdAspect(modelData[0], modelData[1], true)
+          }
+        }
       }
 
       ColumnLayout {
@@ -346,6 +357,11 @@ Panel {
         }
       }
     }
+  }
+
+  function isAspect(ratioWidth, ratioHeight) {
+    return !!(entry && entry.mode === "aspect"
+      && entry.ratio[0] === ratioWidth && entry.ratio[1] === ratioHeight)
   }
 
   function startName() {

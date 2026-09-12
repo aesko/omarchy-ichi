@@ -185,11 +185,11 @@ Item {
   }
 
   // Switch the focused workspace to aspect mode, e.g. aspect 4 3.
-  function cmdAspect(width, height) {
+  function cmdAspect(width, height, quiet) {
     var rw = Number(width) || 0
     var rh = Number(height) || 0
     if (rw <= 0 || rh <= 0) return
-    root.evaluate("if ichi then ichi.set_aspect(" + rw + ", " + rh + ") end")
+    run("ichi.set_aspect(" + rw + ", " + rh + ")", quiet)
   }
 
   // What a workspace that follows the defaults gets, e.g. defaults 65 85.
