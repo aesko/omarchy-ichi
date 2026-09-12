@@ -16,8 +16,10 @@
   </picture>
 </p>
 
-Ichi is an Omarchy plugin for the workspaces where you keep a single window —
-a terminal, a note, a chat — and that window doesn't need the whole screen.
+Ichi is for the workspaces where you keep a single window — a terminal, a
+note, a chat — and that window doesn't need the whole screen. The behaviour is
+one Lua file any Hyprland session can load; on Omarchy it installs as a plugin
+that adds a bar widget, menu entries and a command line.
 
 - **One key, one workspace.** `SUPER+CTRL+ALT+I` insets the lone window on the
   workspace you're on. Every other workspace is left alone, unless you ask
@@ -42,9 +44,10 @@ a terminal, a note, a chat — and that window doesn't need the whole screen.
 
 | Needs | Why |
 | --- | --- |
-| Omarchy 4.x (Quattro plugin runtime) | the service is Quickshell QML loaded by `omarchy-shell` |
 | Hyprland 0.55 or newer | the Lua config API: `hl.workspace_rule`, `hl.on`, `hl.get_workspace_windows` |
-| `hyprctl` on `PATH` | how the shell hands Lua to the compositor |
+| Omarchy 4.x (Quattro plugin runtime) | optional: the bar widget, the menu entries and `omarchy-shell ichi` are Quickshell QML loaded by `omarchy-shell` |
+| `hyprctl` on `PATH` | only for those commands, which hand Lua to the compositor |
+| `notify-send` | only off Omarchy, and only if you want the notifications |
 
 No compiled component, no daemon, no network access. Built and tested against
 Hyprland 0.56.2 on Omarchy 4.0.2.
@@ -71,6 +74,46 @@ hyprctl reload
 The update swaps the files, but the shell keeps running the old service and
 Hyprland the old `ichi.lua` until each is reloaded. Your settings file is
 read as it is; see [CHANGELOG.md](CHANGELOG.md) for what each version adds.
+
+### Without Omarchy
+
+`ichi.lua` is the whole behaviour and needs nothing but Hyprland. Clone the
+repository and load the file yourself — the line the plugin would have written
+for you:
+
+```bash
+git clone https://github.com/aesko/omarchy-ichi ~/.local/share/ichi
+```
+
+```lua
+-- ~/.config/hypr/hyprland.lua
+do
+  local p = os.getenv("HOME") .. "/.local/share/ichi/ichi.lua"
+  local f = io.open(p, "r"); if f then f:close(); dofile(p) end
+end
+```
+
+`hyprctl reload` picks it up. The keybindings below call `ichi.*` from Lua
+rather than going through the shell, so they work here too — written with
+Hyprland's own `hl.bind` in place of Omarchy's `o.bind` helper:
+
+```lua
+hl.bind("SUPER + CTRL + ALT + I", function()
+  if ichi then ichi.toggle() end
+end, { description = "Ichi: toggle" })
+```
+
+What stays behind on Omarchy: the bar widget, the menu entries and the
+`omarchy-shell ichi` command line, which are the plugin's Quickshell half.
+Notifications go through `notify-send` instead of Omarchy's notifier.
+
+State is still written to `~/.config/omarchy/ichi.json`, which is only a path.
+To put it somewhere of your own, say so after the `dofile` line:
+
+```lua
+ichi.config_path = os.getenv("HOME") .. "/.config/ichi/ichi.json"
+ichi.load()
+```
 
 ## Keybindings
 
@@ -246,8 +289,25 @@ Ichi answers to two IPC names: `ichi`, which is what you will type, and
 plugin. They are the same surface, so use whichever suits. Config that
 outlives a session, such as the menu entries above, uses the long one.
 
+`status` is written to be read:
+
+```
+Workspace   3
+Inset       70% x 80% (default)
+Default     70% x 80%
+Presets     reading, wide
+On          2, 3, code
+Step        5, fine 1
+Notify      changes
+```
+
+Rows appear only when they carry something, so a stock setup stays this
+short. `status_json` is the same state as a JSON document, for anything
+parsing it.
+
 ```bash
-omarchy-shell ichi status                         # JSON for the focused workspace, plus defaults
+omarchy-shell ichi status                         # this workspace and the settings, as text
+omarchy-shell ichi status_json                    # the same, as JSON
 omarchy-shell ichi enabled                        # true | false
 omarchy-shell ichi toggle
 omarchy-shell ichi reset
@@ -422,6 +482,28 @@ already inset and the two compound. Ichi warns once per session when it sees
 that. Turn the built-in off and give the workspace an aspect mode entry
 instead; the result is the same shape, per workspace.
 
+## Prior art
+
+Ichi is not the first attempt at giving a lone window less than the whole
+screen, and the alternatives are worth knowing before you add another plugin:
+
+- **Hyprland's `layout.single_window_aspect_ratio`**, described above, is built
+  in and needs nothing. It picks one shape, always maximises it, and applies to
+  every workspace or none.
+- **[hyprNStack](https://github.com/zakk4223/hyprNStack)** comes closest:
+  `center_single_master` with `single_mfact` puts a lone window at a
+  configurable share of the width. It arrives as a whole replacement layout
+  rather than something you add to the one you use, it sizes width only, the
+  setting is global rather than per workspace, and it is a compiled `hyprpm`
+  plugin, so a Hyprland update can leave it unbuildable until it catches up.
+- **[pyprland](https://github.com/hyprland-community/pyprland)'s `layout_center`**
+  looks similar and means something else: one focused window sits big over the
+  tiled ones, sized in pixel margins, with the stack still behind it.
+
+What is left over is the combination Ichi aims at: per workspace, both
+dimensions, whatever layout that workspace already uses, and no compiled
+component to rebuild.
+
 ## Uninstall
 
 ```bash
@@ -430,7 +512,9 @@ omarchy plugin remove io.github.aesko.ichi
 
 The loader line in `hyprland.lua` checks that `ichi.lua` exists before loading
 it, so it is harmless to leave; delete it if you like. Remove
-`~/.config/omarchy/ichi.json` to forget the per-workspace settings.
+`~/.config/omarchy/ichi.json` to forget the per-workspace settings. Off
+Omarchy, delete the clone and the block you added to `hyprland.lua`; the same
+existence check means the config stays valid either way.
 
 ## Development
 
