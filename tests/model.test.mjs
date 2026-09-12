@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "Model.js"), "utf8")
   .replace(/^\.pragma library\s*$/m, "")
 const Model = new Function(source + `
-  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS }
+  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS }
 `)()
 
 let passed = 0
@@ -227,6 +227,67 @@ test("statusText says so when nothing is focused or enabled", () => {
   assert.match(text, /^Workspace {3}none focused$/m)
   assert.match(text, /^Inset {7}off$/m)
   assert.match(text, /^On {10}no workspace yet$/m)
+})
+
+// Real `hyprctl binds` output, trimmed to one foreign bind and three of ours.
+const BINDS = [
+  "bindled",
+  "\tmodmask: 0",
+  "\tsubmap: ",
+  "\tkey: XF86AudioRaiseVolume",
+  "\tkeycode: 0",
+  "\tcatchall: false",
+  "\tdescription: Volume up",
+  "\tdispatcher: __lua",
+  "\targ: 6",
+  "",
+  "bindd",
+  "\tmodmask: 76",
+  "\tsubmap: ",
+  "\tkey: I",
+  "\tkeycode: 0",
+  "\tcatchall: false",
+  "\tdescription: Ichi: toggle",
+  "\tdispatcher: __lua",
+  "\targ: 64",
+  "",
+  "bindde",
+  "\tmodmask: 77",
+  "\tsubmap: ",
+  "\tkey: SUPER + LEFT",
+  "\tkeycode: 0",
+  "\tcatchall: false",
+  "\tdescription: Ichi: nudge left (fine)",
+  "\tdispatcher: __lua",
+  "\targ: 12",
+  "",
+  "bindd",
+  "\tmodmask: 0",
+  "\tsubmap: ",
+  "\tkey: ",
+  "\tkeycode: 20",
+  "\tcatchall: false",
+  "\tdescription: Ichi: by keycode",
+  "\tdispatcher: __lua",
+  "\targ: 1",
+].join("\n")
+
+test("ichiBinds takes only the binds a description claims for Ichi", () => {
+  assert.deepEqual(Model.ichiBinds(BINDS), [
+    { keys: "SUPER CTRL ALT + I", action: "toggle" },
+    { keys: "SUPER SHIFT CTRL ALT + LEFT", action: "nudge left (fine)" },
+    { keys: "code:20", action: "by keycode" },
+  ])
+})
+
+test("ichiBinds closes the last record without a trailing blank line", () => {
+  const text = "bindd\n\tmodmask: 64\n\tkey: J\n\tkeycode: 0\n\tdescription: Ichi: toggle"
+  assert.deepEqual(Model.ichiBinds(text), [{ keys: "SUPER + J", action: "toggle" }])
+})
+
+test("ichiBinds is empty rather than throwing on nothing", () => {
+  assert.deepEqual(Model.ichiBinds(""), [])
+  assert.deepEqual(Model.ichiBinds(null), [])
 })
 
 console.log(passed + " passed")

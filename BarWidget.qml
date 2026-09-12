@@ -1,7 +1,10 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
+import "Model.js" as Model
 
 // Ichi's bar widget. Left click opens the panel, right click toggles the
 // focused workspace, matching what Omarchy's own audio, bluetooth and power
@@ -59,6 +62,16 @@ Panel {
   // offered where Ichi is actually on.
   property bool naming: false
   readonly property bool canSave: onHere && !!entry
+
+  // The settings page is this card turned over. settingsOpen is the side on
+  // screen; pendingSettingsOpen is the side the running flip will land on,
+  // since the swap happens edge-on at 90 degrees.
+  property bool settingsOpen: false
+  property bool pendingSettingsOpen: false
+
+  // Read from `hyprctl binds` when the card is turned over, because bindings
+  // live in the user's own config and can change between two openings.
+  property var shortcuts: []
 
   // The ratios offered as chips: the shapes a window is usually wanted in.
   // Any other ratio is still reachable from the command line, which is where
@@ -138,222 +151,418 @@ Panel {
     bar: root.bar
     open: root.opened && root.shown
     contentWidth: Style.space(300)
-    // Bakes in the panel padding and border, and clamps to the screen.
-    contentHeight: panel.fittedContentHeight(content.implicitHeight)
+    // Bakes in the panel padding and border, and clamps to the screen. Both
+    // sides are measured, since the card shows one or the other.
+    contentHeight: panel.fittedContentHeight(root.settingsOpen
+      ? settingsPage.implicitHeight
+      : content.implicitHeight)
 
-    ColumnLayout {
-      id: content
-      width: parent.width
-      spacing: Style.space(10)
+    // Rotating the card turns both pages together, so the settings are the
+    // back of this panel rather than a second one.
+    Item {
+      id: card
+      anchors.fill: parent
 
-      // Which workspace this is about, and whether it is inset.
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: Style.space(8)
-
-        Text {
-          Layout.fillWidth: true
-          text: root.workspaceKey === "" ? "Ichi" : "Workspace " + root.workspaceKey
-          color: root.bar ? root.bar.foreground : Color.foreground
-          font.family: Style.font.family
-          font.pixelSize: Style.font.body
-          elide: Text.ElideRight
-        }
-
-        ToggleSwitch {
-          checked: root.onHere
-          foreground: root.bar ? root.bar.foreground : Color.foreground
-          onToggled: root.call("cmdToggle")
-        }
+      transform: Rotation {
+        id: cardRotation
+        origin.x: card.width / 2
+        origin.y: card.height / 2
+        axis.x: 0
+        axis.y: 1
+        axis.z: 0
       }
 
-      Text {
-        Layout.fillWidth: true
-        text: root.ready ? root.ichiStatus.summary : ""
-        color: root.bar ? root.bar.foreground : Color.foreground
-        opacity: 0.6
-        font.family: Style.font.family
-        font.pixelSize: Style.font.caption
-        elide: Text.ElideRight
-      }
+      SequentialAnimation {
+        id: pageFlip
 
-      PanelSeparator { Layout.fillWidth: true }
-
-      // Which size this workspace is on. Following the defaults is the first
-      // choice rather than a separate reset button, because it belongs on the
-      // same axis as the presets: they all answer "what size is this".
-      // Naming replaces the row rather than sitting beside it, so the panel
-      // does not jump in height.
-      TextField {
-        id: nameField
-        Layout.fillWidth: true
-        visible: root.naming
-        placeholderText: "name this size, Enter to save"
-        foreground: root.bar ? root.bar.foreground : Color.foreground
-        onAccepted: root.commitName()
-        Keys.onEscapePressed: root.cancelName()
-        // Typing over an existing name updates that preset, which is what
-        // save_preset already does; nothing extra is needed here.
-        onActiveFocusChanged: if (!activeFocus && root.naming) root.cancelName()
-      }
-
-      Flow {
-        Layout.fillWidth: true
-        Layout.preferredHeight: implicitHeight
-        spacing: Style.space(6)
-        visible: !root.naming
-
-        Button {
-          // Lower case to sit level with the preset names beside it, which
-          // are user data and are never transformed for display.
-          text: "default"
-          selected: !!(root.entry && root.entry.mode === "default")
-          foreground: root.bar ? root.bar.foreground : Color.foreground
-          onClicked: root.call("cmdUseDefaults")
-        }
-
-        Repeater {
-          model: root.presetNames
-
-          Button {
-            required property string modelData
-            text: modelData
-            selected: modelData === root.presetName
-            tooltipText: "Right click to remove"
-            foreground: root.bar ? root.bar.foreground : Color.foreground
-            onClicked: if (root.ichiService) root.ichiService.cmdPreset(modelData, true)
-            onRightClicked: if (root.ichiService) root.ichiService.cmdRemovePreset(modelData, true)
+        NumberAnimation { target: cardRotation; property: "angle"; from: 0; to: 90; duration: 130; easing.type: Easing.InQuad }
+        // Edge-on, where swapping the pages cannot be seen.
+        ScriptAction {
+          script: {
+            root.settingsOpen = root.pendingSettingsOpen
+            cardRotation.angle = -90
+            if (root.settingsOpen) settingsFlick.contentY = 0
           }
         }
-
-        Button {
-          text: "+"
-          enabled: root.canSave
-          opacity: root.canSave ? 1 : 0.4
-          tooltipText: root.canSave
-            ? "Save this size as a preset"
-            : "Turn Ichi on here to save a preset"
-          foreground: root.bar ? root.bar.foreground : Color.foreground
-          onClicked: root.startName()
-        }
-      }
-
-      // The other way to say what shape this workspace is. A selected chip
-      // here is why the sliders below are absent, which is what the line of
-      // explanation that used to sit here had to say in words.
-      Flow {
-        Layout.fillWidth: true
-        Layout.preferredHeight: implicitHeight
-        spacing: Style.space(6)
-        visible: !root.naming
-
-        Repeater {
-          model: root.aspectRatios
-
-          Button {
-            required property var modelData
-            text: modelData[0] + ":" + modelData[1]
-            selected: root.isAspect(modelData[0], modelData[1])
-            foreground: root.bar ? root.bar.foreground : Color.foreground
-            onClicked: if (root.ichiService) root.ichiService.cmdAspect(modelData[0], modelData[1], true)
-          }
-        }
+        NumberAnimation { target: cardRotation; property: "angle"; from: -90; to: 0; duration: 170; easing.type: Easing.OutQuad }
       }
 
       ColumnLayout {
-        Layout.fillWidth: true
-        spacing: Style.space(6)
-        visible: root.sizeMode
+        id: content
+        width: parent.width
+        visible: !root.settingsOpen
+        spacing: Style.space(10)
 
-        NumberField {
-          label: "Width"
-          value: Math.round(widthSlider.liveValue)
-          from: root.minPercent
-          to: 100
-          stepSize: 1
-          foreground: root.bar ? root.bar.foreground : Color.foreground
-          onModified: function (v) { root.applySizeOf(v, Math.round(heightSlider.liveValue)) }
-        }
-
-        PanelSlider {
-          id: widthSlider
+        // Which workspace this is about, and whether it is inset.
+        RowLayout {
           Layout.fillWidth: true
-          bar: root.bar
-          minimum: root.minPercent
-          maximum: 100
-          step: 1
-          integer: true
-          value: root.sizeWidth
-          onMoved: root.throttledApply()
-          onReleased: { sizeCommit.stop(); root.applySize() }
+          spacing: Style.space(8)
+
+          Text {
+            Layout.fillWidth: true
+            text: root.workspaceKey === "" ? "Ichi" : "Workspace " + root.workspaceKey
+            color: root.bar ? root.bar.foreground : Color.foreground
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            elide: Text.ElideRight
+          }
+
+          ToggleSwitch {
+            checked: root.onHere
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onToggled: root.call("cmdToggle")
+          }
+
+          PanelActionButton {
+            iconText: "󰒓"
+            tooltipText: "Settings and shortcuts"
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onClicked: root.showSettings(true)
+          }
         }
-
-        NumberField {
-          label: "Height"
-          value: Math.round(heightSlider.liveValue)
-          from: root.minPercent
-          to: 100
-          stepSize: 1
-          foreground: root.bar ? root.bar.foreground : Color.foreground
-          onModified: function (v) { root.applySizeOf(Math.round(widthSlider.liveValue), v) }
-        }
-
-        PanelSlider {
-          id: heightSlider
-          Layout.fillWidth: true
-          bar: root.bar
-          minimum: root.minPercent
-          maximum: 100
-          step: 1
-          integer: true
-          value: root.sizeHeight
-          onMoved: root.throttledApply()
-          onReleased: { sizeCommit.stop(); root.applySize() }
-        }
-      }
-
-      Flow {
-        Layout.fillWidth: true
-        Layout.preferredHeight: implicitHeight
-        spacing: Style.space(6)
-
-        Button {
-          text: "Adopt as default"
-          // Adopt copies a fixed size out of a workspace, so there has to be
-          // one. Greyed rather than refusing, now that the panel is silent.
-          enabled: root.canAdopt
-          opacity: root.canAdopt ? 1 : 0.4
-          foreground: root.bar ? root.bar.foreground : Color.foreground
-          onClicked: if (root.ichiService) root.ichiService.cmdAdopt("", true)
-        }
-
-        Button {
-          text: "Adopt on monitor"
-          enabled: root.canAdopt
-          opacity: root.canAdopt ? 1 : 0.4
-          foreground: root.bar ? root.bar.foreground : Color.foreground
-          onClicked: if (root.ichiService) root.ichiService.cmdAdopt("monitor", true)
-        }
-      }
-
-      PanelSeparator { Layout.fillWidth: true }
-
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: Style.space(8)
 
         Text {
           Layout.fillWidth: true
-          text: "Pause everywhere"
+          text: root.ready ? root.ichiStatus.summary : ""
           color: root.bar ? root.bar.foreground : Color.foreground
+          opacity: 0.6
           font.family: Style.font.family
-          font.pixelSize: Style.font.body
+          font.pixelSize: Style.font.caption
+          elide: Text.ElideRight
         }
 
-        ToggleSwitch {
-          checked: root.paused
+        PanelSeparator { Layout.fillWidth: true }
+
+        // Which size this workspace is on. Following the defaults is the first
+        // choice rather than a separate reset button, because it belongs on the
+        // same axis as the presets: they all answer "what size is this".
+        // Naming replaces the row rather than sitting beside it, so the panel
+        // does not jump in height.
+        TextField {
+          id: nameField
+          Layout.fillWidth: true
+          visible: root.naming
+          placeholderText: "name this size, Enter to save"
           foreground: root.bar ? root.bar.foreground : Color.foreground
-          onToggled: root.call("cmdPauseToggle")
+          onAccepted: root.commitName()
+          Keys.onEscapePressed: root.cancelName()
+          // Typing over an existing name updates that preset, which is what
+          // save_preset already does; nothing extra is needed here.
+          onActiveFocusChanged: if (!activeFocus && root.naming) root.cancelName()
+        }
+
+        Flow {
+          Layout.fillWidth: true
+          Layout.preferredHeight: implicitHeight
+          spacing: Style.space(6)
+          visible: !root.naming
+
+          Button {
+            // Lower case to sit level with the preset names beside it, which
+            // are user data and are never transformed for display.
+            text: "default"
+            selected: !!(root.entry && root.entry.mode === "default")
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onClicked: root.call("cmdUseDefaults")
+          }
+
+          Repeater {
+            model: root.presetNames
+
+            Button {
+              required property string modelData
+              text: modelData
+              selected: modelData === root.presetName
+              tooltipText: "Right click to remove"
+              foreground: root.bar ? root.bar.foreground : Color.foreground
+              onClicked: if (root.ichiService) root.ichiService.cmdPreset(modelData, true)
+              onRightClicked: if (root.ichiService) root.ichiService.cmdRemovePreset(modelData, true)
+            }
+          }
+
+          Button {
+            text: "+"
+            enabled: root.canSave
+            opacity: root.canSave ? 1 : 0.4
+            tooltipText: root.canSave
+              ? "Save this size as a preset"
+              : "Turn Ichi on here to save a preset"
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onClicked: root.startName()
+          }
+        }
+
+        // The other way to say what shape this workspace is. A selected chip
+        // here is why the sliders below are absent, which is what the line of
+        // explanation that used to sit here had to say in words.
+        Flow {
+          Layout.fillWidth: true
+          Layout.preferredHeight: implicitHeight
+          spacing: Style.space(6)
+          visible: !root.naming
+
+          Repeater {
+            model: root.aspectRatios
+
+            Button {
+              required property var modelData
+              text: modelData[0] + ":" + modelData[1]
+              selected: root.isAspect(modelData[0], modelData[1])
+              foreground: root.bar ? root.bar.foreground : Color.foreground
+              onClicked: if (root.ichiService) root.ichiService.cmdAspect(modelData[0], modelData[1], true)
+            }
+          }
+        }
+
+        ColumnLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(6)
+          visible: root.sizeMode
+
+          NumberField {
+            label: "Width"
+            value: Math.round(widthSlider.liveValue)
+            from: root.minPercent
+            to: 100
+            stepSize: 1
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onModified: function (v) { root.applySizeOf(v, Math.round(heightSlider.liveValue)) }
+          }
+
+          PanelSlider {
+            id: widthSlider
+            Layout.fillWidth: true
+            bar: root.bar
+            minimum: root.minPercent
+            maximum: 100
+            step: 1
+            integer: true
+            value: root.sizeWidth
+            onMoved: root.throttledApply()
+            onReleased: { sizeCommit.stop(); root.applySize() }
+          }
+
+          NumberField {
+            label: "Height"
+            value: Math.round(heightSlider.liveValue)
+            from: root.minPercent
+            to: 100
+            stepSize: 1
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onModified: function (v) { root.applySizeOf(Math.round(widthSlider.liveValue), v) }
+          }
+
+          PanelSlider {
+            id: heightSlider
+            Layout.fillWidth: true
+            bar: root.bar
+            minimum: root.minPercent
+            maximum: 100
+            step: 1
+            integer: true
+            value: root.sizeHeight
+            onMoved: root.throttledApply()
+            onReleased: { sizeCommit.stop(); root.applySize() }
+          }
+        }
+
+        Flow {
+          Layout.fillWidth: true
+          Layout.preferredHeight: implicitHeight
+          spacing: Style.space(6)
+
+          Button {
+            text: "Adopt as default"
+            // Adopt copies a fixed size out of a workspace, so there has to be
+            // one. Greyed rather than refusing, now that the panel is silent.
+            enabled: root.canAdopt
+            opacity: root.canAdopt ? 1 : 0.4
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onClicked: if (root.ichiService) root.ichiService.cmdAdopt("", true)
+          }
+
+          Button {
+            text: "Adopt on monitor"
+            enabled: root.canAdopt
+            opacity: root.canAdopt ? 1 : 0.4
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onClicked: if (root.ichiService) root.ichiService.cmdAdopt("monitor", true)
+          }
+        }
+
+        PanelSeparator { Layout.fillWidth: true }
+
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(8)
+
+          Text {
+            Layout.fillWidth: true
+            text: "Pause everywhere"
+            color: root.bar ? root.bar.foreground : Color.foreground
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+
+          ToggleSwitch {
+            checked: root.paused
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onToggled: root.call("cmdPauseToggle")
+          }
+        }
+      }
+
+      // --------------------------------------------------- the other side --
+
+      Flickable {
+        id: settingsFlick
+        anchors.fill: parent
+        visible: root.settingsOpen
+        contentWidth: width
+        contentHeight: settingsPage.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.VerticalFlick
+        // Only when there is something to scroll to: a short list that flicks
+        // under the finger reads as the panel coming loose.
+        interactive: contentHeight > height
+        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+        ColumnLayout {
+          id: settingsPage
+          width: settingsFlick.width
+          spacing: Style.space(10)
+
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.space(8)
+
+            PanelActionButton {
+              iconText: "󰁍"
+              tooltipText: "Back"
+              foreground: root.bar ? root.bar.foreground : Color.foreground
+              onClicked: root.showSettings(false)
+            }
+
+            Text {
+              Layout.fillWidth: true
+              text: "Ichi"
+              color: root.bar ? root.bar.foreground : Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              elide: Text.ElideRight
+            }
+          }
+
+          // The widget's own settings, the same keys Omarchy's bar settings
+          // writes. "Hidden" is deliberately not offered: choosing it here
+          // would take away the panel that was chosen from, and a widget
+          // already hidden cannot open this page to undo it.
+          Dropdown {
+            Layout.fillWidth: true
+            label: "Show in the bar"
+            options: ["Icon only", "Icon and size", "Icon and preset"]
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onChanged: function (choice) { root.persistSettings({ display: choice }) }
+
+            // A Binding element rather than an inline one, which Dropdown's
+            // imperative write to `value` on selection would destroy.
+            Binding on value { value: root.display }
+          }
+
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.space(8)
+
+            Text {
+              Layout.fillWidth: true
+              text: "Show where Ichi is off"
+              color: root.bar ? root.bar.foreground : Color.foreground
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              wrapMode: Text.WordWrap
+            }
+
+            ToggleSwitch {
+              checked: root.showWhenOff
+              foreground: root.bar ? root.bar.foreground : Color.foreground
+              onToggled: root.persistSettings({ showWhenOff: !root.showWhenOff })
+            }
+          }
+
+          Dropdown {
+            Layout.fillWidth: true
+            label: "Scroll wheel"
+            options: ["Off", "Resize width", "Resize height", "Cycle presets"]
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onChanged: function (choice) { root.persistSettings({ scrollAction: choice }) }
+
+            Binding on value { value: root.scrollAction }
+          }
+
+          Dropdown {
+            Layout.fillWidth: true
+            label: "Left click"
+            options: ["Open panel", "Toggle"]
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onChanged: function (choice) { root.persistSettings({ clickAction: choice }) }
+
+            Binding on value { value: root.clickAction }
+          }
+
+          PanelSeparator { Layout.fillWidth: true }
+
+          PanelSectionHeader {
+            Layout.fillWidth: true
+            text: "Shortcuts"
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+          }
+
+          // Whatever the user bound and described as Ichi's. Plugins cannot
+          // install bindings, so an empty list is the ordinary state for
+          // someone who has not written any yet, not a failure.
+          Text {
+            Layout.fillWidth: true
+            visible: root.shortcuts.length === 0
+            text: "No keybindings describe themselves as Ichi's. The README has a set to paste."
+            color: root.bar ? root.bar.foreground : Color.foreground
+            opacity: 0.6
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
+          }
+
+          Repeater {
+            model: root.shortcuts
+
+            RowLayout {
+              required property var modelData
+              Layout.fillWidth: true
+              spacing: Style.space(8)
+
+              Text {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignTop
+                text: modelData.action
+                color: root.bar ? root.bar.foreground : Color.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                // Wrapped rather than elided: with four modifiers spelled out
+                // the widest rows leave the action no room, and "nudge left"
+                // cut short of "(fine)" is the wrong half to lose.
+                wrapMode: Text.WordWrap
+              }
+
+              Text {
+                Layout.alignment: Qt.AlignTop
+                text: modelData.keys
+                color: root.bar ? root.bar.foreground : Color.foreground
+                opacity: 0.6
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+              }
+            }
+          }
         }
       }
     }
@@ -362,6 +571,54 @@ Panel {
   function isAspect(ratioWidth, ratioHeight) {
     return !!(entry && entry.mode === "aspect"
       && entry.ratio[0] === ratioWidth && entry.ratio[1] === ratioHeight)
+  }
+
+  function showSettings(open) {
+    var next = open === true
+    if (settingsOpen === next || pageFlip.running) return
+    pendingSettingsOpen = next
+    // Naming would otherwise still be waiting on the face that is turning away.
+    if (next) {
+      cancelName()
+      bindsProcess.running = true
+    }
+    pageFlip.restart()
+  }
+
+  // The widget's settings live on its own entry in shell.json. Written back
+  // whole, since that is what updateEntryInline does, and merged from the
+  // entry as it stands so keys left at their manifest default stay absent
+  // rather than being frozen at today's value.
+  function persistSettings(values) {
+    var entry = { id: root.moduleName }
+    for (var existing in root.settings) if (existing !== "id") entry[existing] = root.settings[existing]
+    for (var key in values) entry[key] = values[key]
+
+    // Applied locally first so the control moves under the click; the shell's
+    // write comes back through the bar as the same value.
+    root.settings = entry
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
+  }
+
+  // The plain text, not `hyprctl binds -j`: Hyprland 0.56.0 emits invalid JSON
+  // for binds, which is why Omarchy's own keybindings menu parses this too.
+  Process {
+    id: bindsProcess
+    command: ["hyprctl", "binds"]
+    stdout: StdioCollector {
+      onStreamFinished: root.shortcuts = Model.ichiBinds(text)
+    }
+  }
+
+  onOpenedChanged: {
+    if (opened) return
+    // A card left mid-flip would reopen edge-on, and the settings page is
+    // never where someone expects to find the panel they just opened.
+    pageFlip.stop()
+    cardRotation.angle = 0
+    settingsOpen = false
+    pendingSettingsOpen = false
   }
 
   function startName() {

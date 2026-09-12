@@ -197,6 +197,69 @@ function entryFor(config, key) {
   return entry || null
 }
 
+// Hyprland's modifier bitmask. Rendered in the order Omarchy's own
+// keybindings menu uses, so a shortcut reads the same in both places.
+var MOD_BITS = [[64, "SUPER"], [1, "SHIFT"], [4, "CTRL"], [8, "ALT"],
+  [2, "CAPS"], [16, "MOD2"], [32, "MOD3"], [128, "MOD5"]]
+
+function modifierNames(modmask) {
+  var mask = Number(modmask) || 0
+  var names = []
+  for (var i = 0; i < MOD_BITS.length; i++) {
+    if (mask & MOD_BITS[i][0]) names.push(MOD_BITS[i][1])
+  }
+  return names
+}
+
+// The shortcuts list, from `hyprctl binds`. Only binds whose description the
+// user wrote as "Ichi: ..." are ours: a Lua bind reports its dispatcher as
+// "__lua" with an opaque arg, so nothing else in the record links a key to an
+// Ichi action, and guessing from the arg would misattribute silently.
+//
+// Parsed from the plain text rather than `-j`, which Hyprland 0.56.0 emits as
+// invalid JSON; Omarchy's keybindings menu avoids it for the same reason.
+function ichiBinds(text) {
+  var rows = []
+  var current = null
+
+  // A record is complete at the next `bind` line, a blank line, or the end of
+  // the output, so every one of those flushes rather than just the blank.
+  function flush() {
+    if (!current) return
+    var record = current
+    current = null
+    if (!record.description || record.description.indexOf("Ichi:") !== 0) return
+    // A Lua bind reports its whole display key ("SUPER + code:20"); the
+    // modifiers are carried by modmask already.
+    var key = String(record.key || "")
+    var plus = key.lastIndexOf(" + ")
+    if (plus !== -1) key = key.slice(plus + 3)
+    if (key === "" && record.keycode && record.keycode !== "0") key = "code:" + record.keycode
+    if (key === "") return
+    var mods = modifierNames(record.modmask)
+    rows.push({
+      keys: mods.length > 0 ? mods.join(" ") + " + " + key : key,
+      action: record.description.slice(5).trim(),
+    })
+  }
+
+  var lines = String(text || "").split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i]
+    if (line.indexOf("bind") === 0) {
+      flush()
+      current = {}
+      continue
+    }
+    if (!current) continue
+    var match = /^\t([a-z]+): ?(.*)$/.exec(line)
+    if (match) current[match[1]] = match[2]
+    else flush()
+  }
+  flush()
+  return rows
+}
+
 function padRight(text, width) {
   var out = String(text)
   while (out.length < width) out += " "
