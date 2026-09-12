@@ -125,6 +125,11 @@ off turns it on. The plain arrows move by `step` (5 points) and the shifted
 ones by `fine_step` (1 point). The quickest way to a default you like: turn a
 workspace on, tune it with the arrows, then press adopt.
 
+Keep the `Ichi:` prefix on the descriptions. The panel's shortcut list matches
+on it, and a Lua bind gives Hyprland nothing else to match — it reports an
+opaque `__lua` dispatcher, so your description is the only link between a key
+and what it does.
+
 ## Bar widget
 
 One glyph, dimmed on a workspace where Ichi is off. **Left click opens the
@@ -134,6 +139,16 @@ sizes — the defaults first, then your presets — width and height as a typed
 field and a slider, adopt, and the global pause. `+` saves the current size as
 a preset; right-clicking one removes it. The controls stay live on a workspace
 that is off, showing what it would get; touching one turns it on.
+
+Under the sizes is a row of aspect ratios — 16:9, 16:10, 3:2, 4:3 and 1:1.
+Picking one switches this workspace to that shape, which is why the sliders
+stand down for it; `default` or a preset brings them back. Any other ratio is
+`omarchy-shell ichi aspect 21 9`.
+
+The cog turns the panel over. On the back are the widget's own settings — what
+it shows in the bar, whether it appears where Ichi is off, and what the scroll
+wheel and left click do — and a list of your Ichi keybindings, read from
+`hyprctl binds`.
 
 `omarchy-shell ichi.panel toggle` opens the panel, so you can bind it to a key.
 
