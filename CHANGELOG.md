@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.5.0 — 2026-09-12
+
+Ichi runs on plain Hyprland, `status` is written for a person to read, and the
+README is a front door rather than a manual.
+
+### Added
+
+- **`ichi.lua` runs without Omarchy.** It was already the whole behaviour and
+  needed nothing but Hyprland's Lua config API, except for one call:
+  notifications went to `omarchy-notification-send` unconditionally, which is
+  silence on a plain Hyprland session. It falls back to `notify-send`. The
+  README carries the `dofile` line to add yourself, the `hl.bind` form of the
+  suggested keybindings, and what stays behind on Omarchy — the bar widget,
+  the menu entries and the `omarchy-shell ichi` commands.
+- **`status_json`**, the JSON document `status` used to print.
+- `ichi.config_path` is documented as the way to move the state file off
+  `~/.config/omarchy/`, for a session that has no such directory.
+- A prior art section in the README, crediting Hyprland's own
+  `single_window_aspect_ratio`, hyprNStack and pyprland.
+- `docs/reference.md`: every command, the Lua functions, every config key and
+  the Omarchy menu entries.
+
+### Changed
+
+- **`status` prints plain text rather than JSON.** A short labelled block —
+  the workspace, its inset, the defaults and any setting not at its stock
+  value — with rows left out when they carry nothing. This breaks anything
+  parsing the old output; use `status_json`, which is the same document
+  unchanged. Nothing in Ichi itself read it: the menu rows use `enabled` and
+  `paused`, and the panel reads the service directly.
+- **Ichi is described as a Hyprland plugin with an Omarchy half**, not an
+  Omarchy plugin, in the README's opening and its requirements. The core runs
+  anywhere Hyprland 0.55 does.
+- The README is about 60% less prose. Design rationale is gone rather than
+  moved — it lives in the commits that made each decision — and the reference
+  material moved to `docs/reference.md`.
+
 ## 0.4.0 — 2026-09-11
 
 A bar widget, workspaces by name, and a way to stand Ichi down for a while.
