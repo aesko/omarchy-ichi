@@ -501,6 +501,16 @@ local function shell_quote(value)
   return "'" .. (tostring(value):gsub("'", "'\\''")) .. "'"
 end
 
+-- Omarchy's notifier when it is installed, libnotify when it is not, so this
+-- file runs on a plain Hyprland session. Resolved per call rather than once at
+-- load: nothing here is hot, and a session that gains either one is covered.
+function M.notify_command(message)
+  local quoted = shell_quote(message)
+  return "if command -v omarchy-notification-send >/dev/null 2>&1; then"
+    .. " omarchy-notification-send -u low " .. quoted .. ";"
+    .. " else notify-send -u low -a Ichi " .. quoted .. "; fi"
+end
+
 -- `level` is the least chatty setting that still shows this message.
 local function notify(message, level)
   if not (hl and hl.exec_cmd) or M.quiet then
@@ -510,7 +520,7 @@ local function notify(message, level)
   if (M.notify_levels[M.config.settings.notify] or 2) < wanted then
     return
   end
-  hl.exec_cmd("omarchy-notification-send -u low " .. shell_quote(message))
+  hl.exec_cmd(M.notify_command(message))
 end
 
 local function base_gaps()

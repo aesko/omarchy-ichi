@@ -580,6 +580,11 @@ M.set_notify("always")
 fake.notes = {}
 M.nudge(1, 0, false, 2)
 check("notify always reports a nudge", #fake.notes == 1)
+check("notify falls back to libnotify off Omarchy",
+  fake.notes[1]:find("command -v omarchy-notification-send", 1, true) ~= nil
+    and fake.notes[1]:find("notify-send -u low -a Ichi 'Ichi:", 1, true) ~= nil, fake.notes[1])
+check("notify quotes a message containing a quote",
+  M.notify_command("it's here"):find("'it'\\''s here'", 1, true) ~= nil, M.notify_command("it's here"))
 M.set_notify("loud")
 -- The level just above set it to "always"; an unknown one must not change it.
 check("set_notify ignores an unknown level", M.config.settings.notify == "always")
