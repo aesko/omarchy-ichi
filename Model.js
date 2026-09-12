@@ -197,6 +197,59 @@ function entryFor(config, key) {
   return entry || null
 }
 
+function padRight(text, width) {
+  var out = String(text)
+  while (out.length < width) out += " "
+  return out
+}
+
+function sizeText(width, height) {
+  return width + "% x " + height + "%"
+}
+
+// What a monitor block overrides, as prose. Only the fields it sets, since a
+// block may carry a single one.
+function monitorLine(block) {
+  var parts = []
+  if (block.width !== undefined && block.height !== undefined) parts.push(sizeText(block.width, block.height))
+  else if (block.width !== undefined) parts.push("width " + block.width + "%")
+  else if (block.height !== undefined) parts.push("height " + block.height + "%")
+  if (block.max_width > 0) parts.push("max width " + block.max_width + "px")
+  if (block.max_height > 0) parts.push("max height " + block.max_height + "px")
+  if (block.align_x !== undefined || block.align_y !== undefined) {
+    parts.push("align " + (block.align_x === undefined ? 50 : block.align_x) + "/" + (block.align_y === undefined ? 50 : block.align_y))
+  }
+  return parts.length > 0 ? block.key + ": " + parts.join(", ") : block.key
+}
+
+// status() as plain text, which is what `ichi status` prints. Scripts want
+// statusJson() instead. Rows that carry nothing are left out rather than
+// printed empty, so a stock setup stays short.
+function statusText(s) {
+  var rows = [["Workspace", s.workspace === null ? "none focused" : s.workspace]]
+  rows.push(["Inset", s.paused ? s.summary + " (paused)" : s.summary])
+  if (s.preset) rows.push(["Preset", s.preset])
+  rows.push(["Default", sizeText(s.defaults.width, s.defaults.height)])
+  if (s.defaults.max_width > 0 || s.defaults.max_height > 0) {
+    var caps = []
+    if (s.defaults.max_width > 0) caps.push("width " + s.defaults.max_width + "px")
+    if (s.defaults.max_height > 0) caps.push("height " + s.defaults.max_height + "px")
+    rows.push(["Max", caps.join(", ")])
+  }
+  if (s.defaults.align_x !== undefined || s.defaults.align_y !== undefined) {
+    rows.push(["Align", (s.defaults.align_x === undefined ? 50 : s.defaults.align_x) + " across, "
+      + (s.defaults.align_y === undefined ? 50 : s.defaults.align_y) + " down"])
+  }
+  if (s.monitor) rows.push(["Monitor", monitorLine(s.monitor)])
+  if (s.presets.length > 0) rows.push(["Presets", s.presets.join(", ")])
+  rows.push(["On", s.settings.all_workspaces ? "every workspace, unless it opts out"
+    : (s.workspaces.length > 0 ? s.workspaces.join(", ") : "no workspace yet")])
+  rows.push(["Step", s.settings.step + ", fine " + s.settings.fine_step])
+  if (s.settings.max_windows > 1) rows.push(["Windows", "up to " + s.settings.max_windows])
+  rows.push(["Notify", s.settings.notify])
+  return rows.map(function (row) { return padRight(row[0], 12) + row[1] }).join("\n")
+}
+
 // `activeWorkspace` is the focused workspace's name, which is its number on a
 // numeric workspace.
 function status(config, activeWorkspaceId, monitor) {

@@ -32,6 +32,11 @@ Item {
       return wrapper.api.cmdStatus()
     }
 
+    // The same state as a JSON document, for anything parsing it.
+    function status_json(): string {
+      return wrapper.api.cmdStatusJson()
+    }
+
     // "true" or "false" for the focused workspace; drives the menu checkmark.
     function enabled(): string {
       return wrapper.api.cmdEnabled()

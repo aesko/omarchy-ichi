@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "Model.js"), "utf8")
   .replace(/^\.pragma library\s*$/m, "")
 const Model = new Function(source + `
-  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS }
+  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS }
 `)()
 
 let passed = 0
@@ -183,6 +183,50 @@ test("monitor blocks override the defaults for a default entry", () => {
   assert.equal(Model.status(config, 4, big).summary, "80% x 80%")
   assert.equal(Model.status(config, 3, big).monitor.key, "desc:ULTRAGEAR")
   assert.equal(Model.status(config, 3, null).monitor, null)
+})
+
+test("statusText prints a stock setup in few lines", () => {
+  const config = Model.normalizeConfig({ defaults: { width: 70, height: 80 }, workspaces: { "3": true } })
+  assert.equal(Model.statusText(Model.status(config, "3")), [
+    "Workspace   3",
+    "Inset       70% x 80% (default)",
+    "Default     70% x 80%",
+    "On          3",
+    "Step        5, fine 1",
+    "Notify      changes",
+  ].join("\n"))
+})
+
+test("statusText keeps the optional rows for what is actually set", () => {
+  const config = Model.normalizeConfig({
+    settings: { paused: true, max_windows: 2, all_workspaces: true },
+    defaults: { width: 60, height: 90, max_width: 1800, align_y: 40 },
+    monitors: { "eDP-1": { width: 95, max_width: 1600 } },
+    presets: { reading: { width: 55, height: 85 } },
+    workspaces: { "3": { width: 55, height: 85 } },
+  })
+  const laptop = { name: "eDP-1", description: "BOE 0x0BCA" }
+  assert.equal(Model.statusText(Model.status(config, "3", laptop)), [
+    "Workspace   3",
+    "Inset       55% x 85% (paused)",
+    "Preset      reading",
+    "Default     60% x 90%",
+    "Max         width 1800px",
+    "Align       50 across, 40 down",
+    "Monitor     eDP-1: width 95%, max width 1600px",
+    "Presets     reading",
+    "On          every workspace, unless it opts out",
+    "Step        5, fine 1",
+    "Windows     up to 2",
+    "Notify      changes",
+  ].join("\n"))
+})
+
+test("statusText says so when nothing is focused or enabled", () => {
+  const text = Model.statusText(Model.status(Model.defaultConfig(), null))
+  assert.match(text, /^Workspace {3}none focused$/m)
+  assert.match(text, /^Inset {7}off$/m)
+  assert.match(text, /^On {10}no workspace yet$/m)
 })
 
 console.log(passed + " passed")

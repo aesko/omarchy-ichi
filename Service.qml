@@ -152,6 +152,10 @@ Item {
   }
 
   function cmdStatus() {
+    return Model.statusText(root.status)
+  }
+
+  function cmdStatusJson() {
     return JSON.stringify(root.status)
   }
 
