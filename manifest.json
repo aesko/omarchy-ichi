@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.aesko.ichi",
   "name": "Ichi",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "author": "Henri Eskelinen",
   "license": "MIT",
   "description": "One window, room to breathe. When a workspace holds a single window, Ichi keeps it from sprawling: a percentage of the screen or an aspect ratio, per workspace, adjustable live. The window stays tiled, so it survives monitor changes, and a second window gets the whole screen back.",

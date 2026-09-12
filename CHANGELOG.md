@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.6.0 — 2026-09-12
+
+The panel gains the one shape it could never set, and a back side holding the
+widget's own settings and your keybindings.
+
+### Added
+
+- **Aspect ratios in the panel.** A row of chips under the sizes — 16:9,
+  16:10, 3:2, 4:3 and 1:1. Picking one switches the workspace to that shape,
+  which is why the sliders stand down for it; `default` or a preset brings
+  them back. Any other ratio is still `ichi aspect 21 9`. This was the last
+  thing the panel could read and not write.
+- **A settings page behind the cog.** The card turns over to the widget's own
+  settings: what it shows in the bar, whether it appears where Ichi is off,
+  and what the scroll wheel and left click do. They write the same
+  `shell.json` entry Omarchy's bar settings writes, merged so that a key left
+  at its manifest default stays absent. **Hidden** is deliberately not offered
+  there — choosing it would take away the panel it was chosen from.
+- **Your Ichi keybindings, on the same page**, read from `hyprctl binds`. A
+  bind is Ichi's when its description starts with `Ichi:`, which is how the
+  README's suggested set is written. That prefix is the only link there is: a
+  Lua bind reports an opaque `__lua` dispatcher, so a bind described any other
+  way works perfectly well and simply is not listed.
+
+### Changed
+
+- Picking an aspect ratio from the panel raises no notification, matching
+  every other panel action.
+
 ## 0.5.0 — 2026-09-12
 
 Ichi runs on plain Hyprland, `status` is written for a person to read, and the
