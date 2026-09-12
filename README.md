@@ -18,39 +18,21 @@
 
 Ichi is for the workspaces where you keep a single window — a terminal, a
 note, a chat — and that window doesn't need the whole screen. The behaviour is
-one Lua file any Hyprland session can load; on Omarchy it installs as a plugin
-that adds a bar widget, menu entries and a command line.
+one Lua file any Hyprland session can load; on Omarchy it installs as a plugin,
+with a bar widget, a command line and optional menu entries.
 
 - **One key, one workspace.** `SUPER+CTRL+ALT+I` insets the lone window on the
-  workspace you're on. Every other workspace is left alone, unless you ask
-  for all of them.
-- **Sized by feel.** Arrow keys nudge width and height in percentage steps,
-  and hold to keep going. When it looks right, `adopt` makes that the default
-  for every workspace that has not been tuned by hand.
-- **Never in the way.** Open a second window and the inset disappears — the
-  space is yours again. Close it and the inset comes back. If you would
-  rather a pair shared the box, say so.
-- **Stays tiled.** The window is never floated, so hibernate, an unplugged
-  monitor or a resolution change can't leave it stranded off-screen.
-- **Two ways to size.** A share of the screen (70% × 80%) or an aspect ratio
-  (4:3, 1:1) — per workspace, with Hyprland's global 1-Window Ratio absorbed.
-- **In the bar, if you want it.** An optional widget: one glyph, and a panel
-  with sizes, sliders and the pause switch. Choose its section when you
-  install, or leave it out.
+  workspace you're on. Every other workspace is left alone.
+- **Sized by feel.** Arrow keys nudge width and height, and hold to keep
+  going. When it looks right, `adopt` makes that the default.
+- **Never in the way.** Open a second window and the inset disappears. Close
+  it and the inset comes back.
 - **Plain state.** One JSON file you can read, edit and keep in your dotfiles.
-  Edits apply within a second.
 
-## Requirements
-
-| Needs | Why |
-| --- | --- |
-| Hyprland 0.55 or newer | the Lua config API: `hl.workspace_rule`, `hl.on`, `hl.get_workspace_windows` |
-| Omarchy 4.x (Quattro plugin runtime) | optional: the bar widget, the menu entries and `omarchy-shell ichi` are Quickshell QML loaded by `omarchy-shell` |
-| `hyprctl` on `PATH` | only for those commands, which hand Lua to the compositor |
-| `notify-send` | only off Omarchy, and only if you want the notifications |
-
-No compiled component, no daemon, no network access. Built and tested against
-Hyprland 0.56.2 on Omarchy 4.0.2.
+Needs Hyprland 0.55 or newer. The bar widget, the menu entries and the
+`omarchy-shell ichi` commands need Omarchy 4.x; everything else is the Lua
+file. No compiled component, no daemon, no network access. Built and tested
+against Hyprland 0.56.2 on Omarchy 4.0.2.
 
 ## Install
 
@@ -58,12 +40,12 @@ Hyprland 0.56.2 on Omarchy 4.0.2.
 omarchy plugin add https://github.com/aesko/omarchy-ichi --enable
 ```
 
-On first run the service appends one guarded line to `~/.config/hypr/hyprland.lua`
-that loads `ichi.lua`, and tells you it did. Nothing is enabled on any
-workspace until you toggle one, so installing changes nothing about how your
-desktop tiles.
+You are asked which bar section to put the widget in. On first run Ichi
+appends one guarded line to `~/.config/hypr/hyprland.lua` that loads
+`ichi.lua`, and tells you it did. Nothing is inset until you turn a workspace
+on, so installing changes nothing about how your desktop tiles.
 
-### Updating
+To update:
 
 ```bash
 omarchy plugin update io.github.aesko.ichi
@@ -71,9 +53,9 @@ omarchy restart shell
 hyprctl reload
 ```
 
-The update swaps the files, but the shell keeps running the old service and
-Hyprland the old `ichi.lua` until each is reloaded. Your settings file is
-read as it is; see [CHANGELOG.md](CHANGELOG.md) for what each version adds.
+The shell keeps running the old service, and Hyprland the old `ichi.lua`,
+until each is reloaded. Your settings file is read as it is; see
+[CHANGELOG.md](CHANGELOG.md) for what each version adds.
 
 ### Without Omarchy
 
@@ -93,9 +75,8 @@ do
 end
 ```
 
-`hyprctl reload` picks it up. The keybindings below call `ichi.*` from Lua
-rather than going through the shell, so they work here too — written with
-Hyprland's own `hl.bind` in place of Omarchy's `o.bind` helper:
+`hyprctl reload` picks it up. Write the keybindings below with Hyprland's own
+`hl.bind` in place of Omarchy's `o.bind` helper:
 
 ```lua
 hl.bind("SUPER + CTRL + ALT + I", function()
@@ -103,25 +84,17 @@ hl.bind("SUPER + CTRL + ALT + I", function()
 end, { description = "Ichi: toggle" })
 ```
 
-What stays behind on Omarchy: the bar widget, the menu entries and the
-`omarchy-shell ichi` command line, which are the plugin's Quickshell half.
-Notifications go through `notify-send` instead of Omarchy's notifier.
-
-State is still written to `~/.config/omarchy/ichi.json`, which is only a path.
-To put it somewhere of your own, say so after the `dofile` line:
-
-```lua
-ichi.config_path = os.getenv("HOME") .. "/.config/ichi/ichi.json"
-ichi.load()
-```
+The bar widget, the menu entries and the `omarchy-shell ichi` commands stay
+behind on Omarchy; notifications go through `notify-send`. State is still
+written to `~/.config/omarchy/ichi.json`, which is only a path — to move it,
+set `ichi.config_path` after the `dofile` line and call `ichi.load()`.
 
 ## Keybindings
 
 Plugins cannot install bindings, so add these to `~/.config/hypr/bindings.lua`.
-They are guarded, so the config stays valid if the plugin is removed. The
-suggested set uses one modifier family throughout; `SUPER+CTRL+ALT+Z` is
-avoided because Omarchy binds it to zoom reset, and `SUPER+ALT+arrows` because
-Omarchy uses those to move windows between groups.
+They are guarded, so the config stays valid if the plugin is removed.
+`SUPER+CTRL+ALT+Z` is avoided because Omarchy binds it to zoom reset, and
+`SUPER+ALT+arrows` because Omarchy moves windows between groups with those.
 
 ```lua
 -- Ichi (io.github.aesko.ichi)
@@ -130,6 +103,12 @@ o.bind("SUPER + CTRL + ALT + I", "Ichi: toggle", function()
 end)
 o.bind("SUPER + CTRL + ALT + O", "Ichi: reset to default", function()
   if ichi then ichi.reset() end
+end)
+o.bind("SUPER + CTRL + ALT + P", "Ichi: next preset", function()
+  if ichi then ichi.cycle() end
+end)
+o.bind("SUPER + CTRL + ALT + A", "Ichi: adopt as default", function()
+  if ichi then ichi.adopt_defaults() end
 end)
 for key, dw, dh in ("LEFT,-1,0 RIGHT,1,0 UP,0,1 DOWN,0,-1"):gmatch("(%a+),(-?%d),(-?%d)") do
   o.bind("SUPER + CTRL + ALT + " .. key, "Ichi: nudge " .. key:lower(), function()
@@ -141,155 +120,48 @@ for key, dw, dh in ("LEFT,-1,0 RIGHT,1,0 UP,0,1 DOWN,0,-1"):gmatch("(%a+),(-?%d)
 end
 ```
 
-A binding to step through your presets, if you keep some:
-
-```lua
-o.bind("SUPER + CTRL + ALT + P", "Ichi: next preset", function()
-  if ichi then ichi.cycle() end
-end)
-```
-
-And one for `adopt`, which pairs with the arrows: tune a workspace until it
-looks right, then press once to make that the default everywhere.
-
-```lua
-o.bind("SUPER + CTRL + ALT + A", "Ichi: adopt as default", function()
-  if ichi then ichi.adopt_defaults() end
-end)
-```
-
-Every binding acts on the workspace you are currently on. Nudging the size of a
-workspace that is off turns it on. `repeating` lets you hold the key; the
-plain arrows move by `step` (5 points) and the shifted ones by `fine_step`
-(1 point). Both are settings.
+Every binding acts on the workspace you are on. Nudging a workspace that is
+off turns it on. The plain arrows move by `step` (5 points) and the shifted
+ones by `fine_step` (1 point). The quickest way to a default you like: turn a
+workspace on, tune it with the arrows, then press adopt.
 
 ## Bar widget
 
-Ichi ships an optional bar widget. Installing with `--enable` asks which
-section to put it in:
+One glyph, dimmed on a workspace where Ichi is off. **Left click opens the
+panel, right click toggles this workspace**, matching Omarchy's audio,
+bluetooth and power widgets. The panel holds the on/off switch, a row of
+sizes — the defaults first, then your presets — width and height as a typed
+field and a slider, adopt, and the global pause. `+` saves the current size as
+a preset; right-clicking one removes it. The controls stay live on a workspace
+that is off, showing what it would get; touching one turns it on.
 
-```
-Place io.github.aesko.ichi in which bar section?
-  left    center    right
-```
+`omarchy-shell ichi.panel toggle` opens the panel, so you can bind it to a key.
 
-Right is the default. To choose without being asked, or to move it later:
-
-```bash
-omarchy plugin enable io.github.aesko.ichi --section center
-```
-
-The widget is one glyph, dimmed on a workspace where Ichi is off. It can show
-the current size or preset name beside it, but that is off by default: it
-costs a lot of bar width for something the panel already says.
-**Left click opens the panel, right click toggles this workspace**, matching
-Omarchy's own audio, bluetooth and power widgets. The panel holds the on/off
-switch, a row of sizes with the defaults first and your presets after it,
-width and height as both a typed field and a slider, adopt, and the global
-pause. The `+` at the end of the size row saves the current size as a preset,
-naming it inline; right-clicking a preset removes it. Typing a name that
-already exists updates that preset. The controls stay live on a workspace where Ichi is off, showing what
-that workspace would get; touching one turns it on, the same way nudging with
-the arrow keys does.
-
-Nothing done from the panel raises a notification, whatever `settings.notify`
-says. The panel shows its own result, and notifications appear in the same
-corner, so a slider drag would bury the panel under its own messages. Adopt
-greys out instead of refusing when the workspace has no fixed size to copy. Scrolling does nothing by default, because a bar that resizes
-windows as the pointer crosses it is a surprise; turn it on in the widget's
-settings if you want it.
-
-`omarchy-shell ichi.panel toggle` opens and closes the panel, so you can bind
-it to a key.
-
-**If you do not want the widget**, set its **Show in the bar** setting to
-*Hidden* and Ichi keeps running with nothing in the bar. Enabling a plugin
-that declares a bar widget always places it, so hiding is how it opts out.
-To reclaim the slot entirely, delete its one line from the `bar.layout`
-section of `~/.config/omarchy/shell.json`.
-
-**Upgrading from 0.3 or earlier** is the one case where the widget does not
-appear on its own. Ichi was service-only then, so your config already lists it
-as enabled and Omarchy sees nothing to place. Disable and enable it once:
+To move the widget, `omarchy plugin enable io.github.aesko.ichi --section
+center`. To keep Ichi without it, set **Show in the bar** to *Hidden*.
+Upgrading from 0.3 or earlier is the one case where the widget does not appear
+on its own — your config already lists the plugin as enabled, so Omarchy sees
+nothing to place. Disable and enable it once:
 
 ```bash
 omarchy plugin disable io.github.aesko.ichi
 omarchy plugin enable io.github.aesko.ichi --section right
 ```
 
-## Omarchy menu
-
-Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` to get an entry under
-**Toggle** with a checkmark when the current workspace is on:
-
-```jsonc
-"trigger.toggle.ichi": {
-  "icon": "",
-  "label": "Ichi",
-  "description": "Inset the lone window on this workspace",
-  "checked": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi toggle"
-},
-```
-
-For the rest, a submenu of its own on the root menu. The three rows that act
-on a workspace only appear while that workspace is on:
-
-```jsonc
-"ichi": {
-  "icon": "",
-  "label": "Ichi",
-  "description": "Size the lone window on this workspace"
-},
-"ichi.cycle": {
-  "icon": "",
-  "label": "Next preset",
-  "description": "Step through your saved sizes",
-  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi cycle"
-},
-"ichi.adopt": {
-  "icon": "",
-  "label": "Adopt as default",
-  "description": "Make this workspace's size the default everywhere",
-  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi adopt"
-},
-"ichi.adopt-monitor": {
-  "icon": "",
-  "label": "Adopt on monitor",
-  "description": "Make this workspace's size the default on this display only",
-  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi adopt_monitor"
-},
-"ichi.reset": {
-  "icon": "",
-  "label": "Reset to default",
-  "description": "Follow the defaults again",
-  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi reset"
-},
-"ichi.pause": {
-  "icon": "",
-  "label": "Pause everywhere",
-  "description": "Suspend every inset without changing a single workspace",
-  "checked": "[ \"$(omarchy-shell io.github.aesko.ichi paused)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi pause_toggle"
-},
-```
-
-The icons are Nerd Font glyphs; change them to taste. These entries use the
-plugin id rather than the short `ichi` name, because a menu file outlives the
-session that wrote it and the id cannot collide.
-
 ## Command line
 
-Ichi answers to two IPC names: `ichi`, which is what you will type, and
-`io.github.aesko.ichi`, the plugin id, which cannot collide with another
-plugin. They are the same surface, so use whichever suits. Config that
-outlives a session, such as the menu entries above, uses the long one.
+```bash
+omarchy-shell ichi status         # this workspace and the settings, as text
+omarchy-shell ichi toggle
+omarchy-shell ichi nudge -1 0     # one step narrower
+omarchy-shell ichi size 65 85     # an absolute size for this workspace
+omarchy-shell ichi aspect 4 3     # switch this workspace to 4:3
+omarchy-shell ichi preset reading
+omarchy-shell ichi adopt          # this workspace's size becomes the default
+omarchy-shell ichi pause on       # suspend every inset; pause off to resume
+```
 
-`status` is written to be read:
+`status` is written to be read, and leaves out the rows that carry nothing:
 
 ```
 Workspace   3
@@ -301,208 +173,65 @@ Step        5, fine 1
 Notify      changes
 ```
 
-Rows appear only when they carry something, so a stock setup stays this
-short. `status_json` is the same state as a JSON document, for anything
-parsing it.
-
-```bash
-omarchy-shell ichi status                         # this workspace and the settings, as text
-omarchy-shell ichi status_json                    # the same, as JSON
-omarchy-shell ichi enabled                        # true | false
-omarchy-shell ichi toggle
-omarchy-shell ichi reset
-omarchy-shell ichi adjust 5 0                     # width +5 points, height unchanged
-omarchy-shell ichi nudge -1 0                     # one step narrower
-omarchy-shell ichi nudge_fine 0 1                 # one fine step taller
-omarchy-shell ichi size 65 85                     # an absolute size for this workspace
-omarchy-shell ichi aspect 4 3                     # switch this workspace to 4:3
-omarchy-shell ichi preset reading                 # give this workspace a preset
-omarchy-shell ichi cycle                          # next preset
-omarchy-shell ichi cycle_back                     # the previous one
-omarchy-shell ichi save_preset wide               # keep this workspace's size as a preset
-omarchy-shell ichi remove_preset wide
-omarchy-shell ichi defaults 65 85                 # the size for workspaces that follow the defaults
-omarchy-shell ichi max 1800 0                     # never wider than 1800px; 0 is no cap
-omarchy-shell ichi align 50 40                    # where the box sits: 0-100 across, 0-100 down
-omarchy-shell ichi step 10                        # arrow-key increment, in percentage points
-omarchy-shell ichi fine_step 2                    # the shifted arrows' increment
-omarchy-shell ichi notify changes                 # never | changes | always
-omarchy-shell ichi all on                         # every workspace, unless it opts out
-omarchy-shell ichi pause on                       # suspend every inset; pause off to resume
-omarchy-shell ichi pause_toggle                   # the same, as one command
-omarchy-shell ichi paused                         # true | false
-omarchy-shell ichi windows 2                      # keep the inset for up to two tiled windows
-omarchy-shell ichi min 10                         # let sizes go down to 10%
-omarchy-shell ichi adopt                          # make this workspace's size the default, and follow it
-omarchy-shell ichi adopt_monitor                  # the same, but only for this workspace's monitor
-omarchy-shell ichi refresh                        # re-read the config and re-apply
-omarchy-shell ichi sync                           # re-check the loader line in hyprland.lua
-```
-
-The same functions are reachable from Lua as `ichi.toggle()`,
-`ichi.adjust(dw, dh)`, `ichi.nudge(dx, dy, fine)`, `ichi.reset()`, `ichi.set_aspect(w, h)`,
-`ichi.preset(name)`, `ichi.cycle(delta)`, `ichi.save_preset(name)`, `ichi.remove_preset(name)`,
-`ichi.set_size(w, h)`, `ichi.set_defaults(w, h)`, `ichi.set_max(w, h)`, `ichi.set_align(x, y)`, `ichi.set_step(step, fine)`, `ichi.set_notify(level)`, `ichi.set_paused(on)`, `ichi.toggle_pause()`, `ichi.set_all_workspaces(on)`, `ichi.set_max_windows(n)`, `ichi.set_min_percent(n)`, `ichi.adopt_defaults(id, scope)`,
-`ichi.enable(id, entry)` and `ichi.disable(id)`, or from a shell with
-`hyprctl eval 'ichi.toggle()'`.
-
-The quickest way to a default you like: turn a workspace on, tune it with the
-arrows, then `adopt`. That workspace then follows the defaults again, so it
-moves with any later `defaults` change as well.
+`status_json` is the same state as JSON, for anything parsing it. Every other
+command, the Lua functions behind them, and a set of Omarchy menu entries are
+in [docs/reference.md](docs/reference.md).
 
 ## Configuration
 
-State lives in `~/.config/omarchy/ichi.json`, plain JSON you can read, edit
-and keep in your dotfiles. Edits apply within a second. A malformed entry is
-dropped; a malformed file keeps the last good document.
+State lives in `~/.config/omarchy/ichi.json`. Edits apply within a second.
 
 ```json
 {
-  "settings": { "step": 5, "fine_step": 1, "notify": "always", "all_workspaces": false, "max_windows": 1, "min_percent": 20 },
+  "settings": { "step": 5, "fine_step": 1, "notify": "changes", "max_windows": 1 },
   "defaults": { "width": 70, "height": 80, "max_width": 1800, "align_y": 45 },
-  "monitors": {
-    "desc:ULTRAGEAR": { "width": 55 },
-    "eDP-1": { "width": 95, "height": 95, "max_width": 0 }
-  },
-  "presets": {
-    "reading": { "mode": "size", "width": 55, "height": 85 },
-    "wide": { "mode": "size", "width": 90, "height": 90 },
-    "home": true
-  },
+  "monitors": { "eDP-1": { "width": 95, "height": 95 } },
+  "presets": { "reading": { "mode": "size", "width": 55, "height": 85 } },
   "workspaces": {
     "1": true,
-    "code": { "mode": "aspect", "ratio": [4, 3] },
     "2": { "mode": "size", "width": 70, "height": 80 },
-    "5": { "mode": "aspect", "ratio": [4, 3] }
+    "code": { "mode": "aspect", "ratio": [4, 3] }
   }
 }
 ```
 
-- `settings.step` and `settings.fine_step` are the arrow-key increments in
-  percentage points, for the plain and the shifted arrows.
-- `settings.notify` is how much Ichi says: `never` is silent, `changes` is the
-  default and reports toggles, resets and setting changes, `always` also
-  reports every arrow-key nudge. Resizing a window is its own feedback, so
-  `always` mostly repeats what you can already see.
-- `settings.paused` suspends Ichi everywhere. Every workspace goes back to
-  normal gaps and keeps its entry, so resuming restores the lot. Meant for
-  screen sharing or a presentation, where you want the space back for a
-  while without unpicking your setup.
-- `settings.all_workspaces` turns every workspace on. A workspace with no
-  entry then follows the defaults, and toggling one off writes `false` for
-  it. This is the Hyprland built-in's reach with Ichi's sizing.
-- `settings.max_windows` is how many tiled windows may share the box before
-  the inset gives way. One is the name of the plugin; two lets a terminal and
-  a browser sit side by side in the same box.
-- `settings.min_percent` is the smallest share a size may be, from 5 to 100.
-  The default of 20 is plenty on a laptop; on an ultrawide you may want less.
-- `defaults` is the size of every workspace whose entry is `true`. Toggling a
-  workspace on writes `true`; the first arrow-key nudge replaces that with a
-  fixed `size` entry, and `reset` puts `true` back. Change the defaults and
-  every `true` workspace follows within a second.
-- `defaults.max_width` and `defaults.max_height` cap the window in pixels,
-  whatever the percentage works out to. A share of the screen that looks right
-  on a laptop can be a 2200px terminal on a 32-inch display; the cap holds it
-  where it is readable. Omit or set to `0` for no cap. The caps apply to every
-  workspace, in the units Hyprland reports the monitor size in.
-- `defaults.align_x` and `defaults.align_y` say where the box sits in the
-  space around it: `0` is the left or top edge, `50` the centre, `100` the
-  right or bottom. A little above centre, say `align_y: 45`, often looks
-  more centred than the centre does. Normal gaps are always kept.
-- `monitors` overrides the defaults per display, field by field, for every
-  workspace that follows them. A key is a connector name such as `eDP-1`, or
-  `desc:` followed by any part of the description Hyprland reports, which is
-  the form that survives a dock being replugged. `hyprctl monitors` shows
-  both. The first matching block wins. Fixed `size` and `aspect` entries keep
-  their own size but take the monitor's caps and alignment. `adopt_monitor` writes a block
-  for the current display from the workspace you have tuned.
-- `presets` are named entries in any of the three forms. `cycle` steps a
-  workspace through them in file order, starting from the first when the
-  workspace is on none of them, and `preset <name>` jumps to one. Tune a
-  workspace, then `save_preset <name>` to keep it. There are none until you
-  add some.
-- `size` mode is a percentage of the *usable* area — the monitor minus the bar
-  — so the proportion holds on any display and the window sits centred.
-  Values are clamped to `min_percent`–100; at 100 the inset is exactly your
-  normal gaps.
-- `aspect` mode is the largest box of that ratio, centred, which is what
-  Hyprland's built-in setting does.
-
-Workspaces are keyed by name. Hyprland names a numeric workspace by its
-number, so `"2"` means workspace 2 and a config written before 0.4 keeps
-working untouched. A named workspace uses its name, `"code"` or `"mail"`,
-which is also the handle Ichi hands the compositor. Its numeric id is a
-negative placeholder that says nothing about which workspace it is, so the
-name is the only stable way to refer to one. Special workspaces are still
-ignored.
+A workspace entry is `true` to follow the defaults, a `size` percentage, or an
+`aspect` ratio. Every key is in [docs/reference.md](docs/reference.md).
 
 ## How it works
 
-When an opted-in workspace holds one tiled window, or up to `max_windows`
-of them, Ichi widens that workspace's outer gaps so the windows occupy the
-chosen share of the screen, centred unless you align them elsewhere. One tiled window more than that
-restores the normal gaps immediately; closing it restores the inset.
+When a workspace you have turned on holds one tiled window, Ichi widens that
+workspace's outer gaps so the window takes the share you asked for. A second
+tiled window restores the normal gaps; closing it brings the inset back. The
+window is never floated, so hibernate, an unplugged monitor or a resolution
+change cannot leave it stranded off-screen.
 
-- A tabbed group counts as one window, however many it holds, because it
-  occupies one tile. A workspace showing a single group is still a workspace
-  showing one window.
-- Floating windows are neither counted nor touched, so Omarchy's floating
-  dialogs, pickers and TUIs are unaffected.
-- Special workspaces are ignored.
-- Sizes are recomputed whenever the monitor arrangement changes.
+A tabbed group counts as one window, however many it holds. Floating windows
+are neither counted nor touched, and special workspaces are ignored. Sizes are
+recomputed whenever the monitor arrangement changes.
 
-### Why gaps, not floating
+On a workspace running a layout from a plugin such as
+[workspace-layout](https://github.com/bjarneo/omarchy-workspace-layout), Ichi
+yields and leaves the gaps alone. The two can run side by side, each on its
+own workspaces.
 
-A tiled window is re-laid-out for free after a monitor teardown — hibernate,
-unplug, resolution change — where a floating one comes back at stale
-coordinates, half off-screen. Gaps give the same inset look without ever
-leaving the tiling layout, which is also why a second window can take the
-space back instantly.
-
-### Custom layouts
-
-Plugins such as [workspace-layout](https://github.com/bjarneo/omarchy-workspace-layout)
-register their own Hyprland layouts and assign them per workspace. On a
-workspace running one of those, Ichi **yields**: it leaves the gaps at their
-normal value and tells you once. The two can be active side by side, each on
-its own workspaces. Hyprland merges workspace rules field by field, so neither
-plugin ever wipes the other's settings.
-
-### Hyprland's 1-Window Ratio
-
-Hyprland has a global version of this idea, `layout.single_window_aspect_ratio`,
-which Omarchy exposes as **Toggle → 1-Window Ratio**. It picks a shape and
-always maximises it, so it cannot make a window *smaller* than the screen's
-own ratio, and it applies to every workspace or none. Ichi's aspect mode
-covers what it does; size mode and per-workspace control are the parts it
-cannot.
-
-If both are on, the compositor pads the window inside the area Ichi has
-already inset and the two compound. Ichi warns once per session when it sees
-that. Turn the built-in off and give the workspace an aspect mode entry
-instead; the result is the same shape, per workspace.
+Hyprland's own `layout.single_window_aspect_ratio` — Omarchy's **Toggle →
+1-Window Ratio** — compounds with Ichi when both are on: the compositor pads
+the window inside the area Ichi has already inset. Ichi warns once when it
+sees that. Turn the built-in off and give the workspace an `aspect` entry
+instead, for the same shape per workspace.
 
 ## Prior art
 
-Ichi is not the first attempt at giving a lone window less than the whole
-screen, and the alternatives are worth knowing before you add another plugin:
-
-- **Hyprland's `layout.single_window_aspect_ratio`**, described above, is built
-  in and needs nothing. It picks one shape, always maximises it, and applies to
-  every workspace or none.
-- **[hyprNStack](https://github.com/zakk4223/hyprNStack)** comes closest:
-  `center_single_master` with `single_mfact` puts a lone window at a
-  configurable share of the width. It arrives as a whole replacement layout
-  rather than something you add to the one you use, it sizes width only, the
-  setting is global rather than per workspace, and it is a compiled `hyprpm`
-  plugin, so a Hyprland update can leave it unbuildable until it catches up.
+- **Hyprland's `layout.single_window_aspect_ratio`** is built in and needs
+  nothing, but it picks one shape, always maximises it, and applies to every
+  workspace or none.
+- **[hyprNStack](https://github.com/zakk4223/hyprNStack)** comes closest, with
+  `center_single_master` and `single_mfact` — but it replaces your layout, sizes
+  width only, is global rather than per workspace, and is a compiled `hyprpm`
+  plugin.
 - **[pyprland](https://github.com/hyprland-community/pyprland)'s `layout_center`**
-  looks similar and means something else: one focused window sits big over the
-  tiled ones, sized in pixel margins, with the stack still behind it.
-
-What is left over is the combination Ichi aims at: per workspace, both
-dimensions, whatever layout that workspace already uses, and no compiled
-component to rebuild.
+  floats one window big over the tiled ones, sized in pixel margins.
 
 ## Uninstall
 
@@ -511,10 +240,9 @@ omarchy plugin remove io.github.aesko.ichi
 ```
 
 The loader line in `hyprland.lua` checks that `ichi.lua` exists before loading
-it, so it is harmless to leave; delete it if you like. Remove
-`~/.config/omarchy/ichi.json` to forget the per-workspace settings. Off
-Omarchy, delete the clone and the block you added to `hyprland.lua`; the same
-existence check means the config stays valid either way.
+it, so it is harmless to leave. Remove `~/.config/omarchy/ichi.json` to forget
+the per-workspace settings. Off Omarchy, delete the clone and the block you
+added to `hyprland.lua`.
 
 ## Development
 
@@ -526,15 +254,13 @@ tests/run.sh
 ```
 
 `ichi.lua` is the behaviour and runs inside Hyprland. `Model.js` is the pure
-shell-side logic. `Service.qml` is glue, and `IchiIpc.qml` is the IPC surface
-it instantiates once per target name. `BarWidget.qml` is the optional bar
-widget, which reads state straight off the service rather than watching the
-file a second time. The README animation is generated:
-edit `gen_demo.py` and re-run it rather than editing `demo.svg` and
-`demo-dark.svg`, which it overwrites from one template. Both pure parts have tests that run
-without a compositor. `hyprctl reload` reloads `ichi.lua`. A running service
-keeps Quickshell's cached component even across `omarchy plugin disable` /
-`enable`, so after editing `Service.qml` or `Model.js` use `omarchy restart shell`.
+shell-side logic, `Service.qml` the glue, `IchiIpc.qml` the IPC surface it
+instantiates once per target name, and `BarWidget.qml` the optional widget.
+Both pure parts have tests that run without a compositor. `hyprctl reload`
+reloads `ichi.lua`; a running service keeps Quickshell's cached component, so
+after editing the QML or `Model.js` use `omarchy restart shell`. The demo
+animation is generated — edit `gen_demo.py` rather than the SVGs it
+overwrites.
 
 ## License
 
