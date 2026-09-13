@@ -94,9 +94,9 @@ end, { description = "Ichi: toggle" })
 ```
 
 The bar widget, the menu entries and the `omarchy-shell ichi` commands stay
-behind on Omarchy; notifications go through `notify-send`. State is still
-written to `~/.config/omarchy/ichi.json`, which is only a path — to move it,
-set `ichi.config_path` after the `dofile` line and call `ichi.load()`.
+behind on Omarchy; notifications go through `notify-send`. State lives in
+`~/.config/ichi/ichi.json`; to keep it elsewhere, set `ichi.config_path` after
+the `dofile` line and call `ichi.load()`.
 
 ## Keybindings
 
@@ -191,6 +191,7 @@ omarchy-shell ichi aspect 4 3     # switch this workspace to 4:3
 omarchy-shell ichi preset reading
 omarchy-shell ichi adopt          # this workspace's size becomes the default
 omarchy-shell ichi pause on       # suspend every inset; pause off to resume
+omarchy-shell ichi set settings.step 10   # any setting, by its place in the file
 ```
 
 `status` is written to be read, and leaves out the rows that carry nothing:
@@ -211,7 +212,9 @@ in [docs/reference.md](docs/reference.md).
 
 ## Configuration
 
-State lives in `~/.config/omarchy/ichi.json`. Edits apply within a second.
+State lives in `~/.config/ichi/ichi.json`. Edits apply within a second. A
+file from before 0.7 at `~/.config/omarchy/ichi.json` is used where it is until
+one exists at the new path.
 
 ```json
 {
@@ -272,8 +275,8 @@ omarchy plugin remove io.github.aesko.ichi
 ```
 
 The loader line in `hyprland.lua` checks that `ichi.lua` exists before loading
-it, so it is harmless to leave. Remove `~/.config/omarchy/ichi.json` to forget
-the per-workspace settings. Off Omarchy, delete the clone and the block you
+it, so it is harmless to leave. Remove `~/.config/ichi/` (or, from before 0.7,
+`~/.config/omarchy/ichi.json`) to forget the per-workspace settings. Off Omarchy, delete the clone and the block you
 added to `hyprland.lua`.
 
 ## Development

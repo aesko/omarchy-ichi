@@ -717,6 +717,27 @@ check("a file at config_path wins", M.state_path() == M.config_path and M.config
   and M.config.workspaces["7"] == nil)
 check("the old file is left alone", M.parse_config(io.open(M.previous_config_path):read("*a")).settings.step == 11)
 
+-- The hl.on example in docs/reference.md runs as written.
+local reference = io.open(root .. "/docs/reference.md"):read("*a")
+local snippet = reference:match("```lua\n(%-%- ~/%.config/hypr/hyprland%.lua, after the line that loads Ichi.-)```")
+check("the reference's hl.on example is there to run", snippet ~= nil)
+if snippet then
+  local handlers = {}
+  hl.on = function(event, fn)
+    handlers[event] = fn
+  end
+  fake.workspaces[-1400] = { id = -1400, name = "notes-a", config_name = "name:notes-a", tiled_layout = "dwindle", monitor = screen }
+  fake.workspaces[-1401] = { id = -1401, name = "mail", config_name = "name:mail", tiled_layout = "dwindle", monitor = screen }
+  assert((loadstring or load)(snippet))()
+  handlers["workspace.created"]()
+  check("the example turns a notes workspace on", M.entry_for("notes-a") ~= nil and M.entry_for("mail") == nil)
+  M.disable("notes-a")
+  handlers["workspace.created"]()
+  check("the example leaves a notes workspace turned off alone", M.entry_for("notes-a") == nil)
+  hl.on = nil
+  fake.workspaces[-1400], fake.workspaces[-1401] = nil, nil
+end
+
 os.remove(M.config_path)
 os.remove(M.previous_config_path)
 

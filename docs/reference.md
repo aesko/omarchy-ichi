@@ -16,7 +16,6 @@ omarchy-shell ichi status_json                    # the same, as JSON
 omarchy-shell ichi enabled                        # true | false
 omarchy-shell ichi toggle
 omarchy-shell ichi reset
-omarchy-shell ichi adjust 5 0                     # width +5 points, height unchanged
 omarchy-shell ichi nudge -1 0                     # one step narrower
 omarchy-shell ichi nudge_fine 0 1                 # one fine step taller
 omarchy-shell ichi size 65 85                     # an absolute size for this workspace
@@ -26,24 +25,50 @@ omarchy-shell ichi cycle                          # next preset
 omarchy-shell ichi cycle_back                     # the previous one
 omarchy-shell ichi save_preset wide               # keep this workspace's size as a preset
 omarchy-shell ichi remove_preset wide
-omarchy-shell ichi defaults 65 85                 # the size for workspaces that follow the defaults
-omarchy-shell ichi max 1800 0                     # never wider than 1800px; 0 is no cap
-omarchy-shell ichi align 50 40                    # where the box sits: 0-100 across, 0-100 down
-omarchy-shell ichi step 10                        # arrow-key increment, in percentage points
-omarchy-shell ichi fine_step 2                    # the shifted arrows' increment
-omarchy-shell ichi notify changes                 # never | changes | always
-omarchy-shell ichi all on                         # every workspace, unless it opts out
+omarchy-shell ichi set defaults.width 65          # any setting, by its place in the file
 omarchy-shell ichi pause on                       # suspend every inset; pause off to resume
 omarchy-shell ichi pause_toggle                   # the same, as one command
 omarchy-shell ichi paused                         # true | false
-omarchy-shell ichi windows 2                      # keep the inset for up to two tiled windows
-omarchy-shell ichi min 10                         # let sizes go down to 10%
 omarchy-shell ichi adopt                          # make this workspace's size the default, and follow it
 omarchy-shell ichi adopt_monitor                  # the same, but only for this workspace's monitor
 omarchy-shell ichi refresh                        # re-read the config and re-apply
 omarchy-shell ichi sync                           # re-check the loader line in hyprland.lua
 omarchy-shell ichi.panel toggle                   # open or close the panel
 ```
+
+### set
+
+`set` takes a key from the `settings` or `defaults` block below, written as
+its place in the file. An unknown key is refused with the list of keys; a
+value that does not fit is refused with what the setting takes. Numbers out
+of range are clamped, as they are when the file is read.
+
+| Key | Takes |
+|---|---|
+| `settings.step`, `settings.fine_step` | points, 1 to 25 |
+| `settings.notify` | `never`, `changes` or `always` |
+| `settings.all_workspaces`, `settings.paused` | `on` or `off` |
+| `settings.max_windows` | windows, 1 to 10 |
+| `defaults.width`, `defaults.height` | percent, 10 to 100 |
+| `defaults.max_width`, `defaults.max_height` | pixels, `0` for no cap |
+| `defaults.align_x`, `defaults.align_y` | 0 to 100, `50` the centre |
+
+### Deprecated
+
+These still work in 0.7 and print what replaces them. They go in 1.0.
+
+| Command | Instead |
+|---|---|
+| `adjust 5 0` | `nudge 1 0`, or `size` |
+| `defaults 65 85` | `set defaults.width 65`, `set defaults.height 85` |
+| `max 1800 0` | `set defaults.max_width 1800` |
+| `align 50 40` | `set defaults.align_y 40` |
+| `step 10` | `set settings.step 10` |
+| `fine_step 2` | `set settings.fine_step 2` |
+| `windows 2` | `set settings.max_windows 2` |
+| `all on` | `set settings.all_workspaces on` |
+| `notify never` | `set settings.notify never` |
+| `min 10` | nothing: the smallest size is fixed at 10%, and `min` does nothing |
 
 ## From Lua
 
@@ -52,32 +77,65 @@ in on a session without Omarchy:
 
 ```lua
 ichi.toggle()                  ichi.reset()
-ichi.adjust(dw, dh)            ichi.nudge(dx, dy, fine)
-ichi.set_size(w, h)            ichi.set_aspect(w, h)
+ichi.nudge(dx, dy, fine)       ichi.set_size(w, h)
+ichi.set_aspect(w, h)          ichi.adopt_defaults(id, scope)
 ichi.preset(name)              ichi.cycle(delta)
 ichi.save_preset(name)         ichi.remove_preset(name)
-ichi.set_defaults(w, h)        ichi.adopt_defaults(id, scope)
-ichi.set_max(w, h)             ichi.set_align(x, y)
-ichi.set_step(step, fine)      ichi.set_min_percent(n)
-ichi.set_notify(level)         ichi.set_max_windows(n)
-ichi.set_paused(on)            ichi.toggle_pause()
-ichi.set_all_workspaces(on)
+ichi.set(key, value)           ichi.set_paused(on)
+ichi.toggle_pause()            ichi.entry_for(id)
 ichi.enable(id, entry)         ichi.disable(id)
+ichi.load()                    ichi.refresh()
 ```
+
+`ichi.set` returns true when the setting took the value. `ichi.adjust`, and
+the functions `set` replaces — `set_defaults`, `set_max`, `set_align`,
+`set_step`, `set_notify`, `set_max_windows`, `set_all_workspaces` and
+`set_min_percent` — are deprecated with their commands and go in 1.0.
 
 From a shell: `hyprctl eval 'ichi.toggle()'`.
 
+### Building on it
+
+Ichi has no rules of its own beyond one entry per workspace, but your
+Hyprland config can decide when to write one. This turns Ichi on for a
+workspace whose name starts with `notes` the first time it appears, and
+leaves it alone after that, so turning one off sticks:
+
+```lua
+-- ~/.config/hypr/hyprland.lua, after the line that loads Ichi
+local seen = {}
+hl.on("workspace.created", function()
+  if not ichi then return end
+  for _, ws in ipairs(hl.get_workspaces()) do
+    local name = tostring(ws.name)
+    if not seen[name] and not ws.special and name:match("^notes") then
+      seen[name] = true
+      if ichi.entry_for(name) == nil then ichi.enable(name) end
+    end
+  end
+end)
+```
+
+`ichi.enable` writes the entry to the config file like the toggle does, so
+the workspace stays on after that.
+
 ## Configuration
 
-State lives in `~/.config/omarchy/ichi.json`, plain JSON you can read, edit
-and keep in your dotfiles. Edits apply within a second. A malformed entry is
+State lives in `~/.config/ichi/ichi.json` (under `$XDG_CONFIG_HOME` when it
+is set), plain JSON you can read, edit and keep in your dotfiles. Edits apply
+within a second. A malformed entry is
 dropped. A file that does not parse at all, say one missing a brace, is left
 as it is: Ichi keeps the last good settings, tells you once, and saves nothing
 until the file is fixed.
 
+Before 0.7 the file was `~/.config/omarchy/ichi.json`. One there is still
+read and written where it is, never moved, for as long as nothing exists at
+the new path. To move it, move the file (or your link to it) to the new path,
+then run `hyprctl reload` and `omarchy restart shell`.
+
 ```json
 {
-  "settings": { "step": 5, "fine_step": 1, "notify": "changes", "all_workspaces": false, "max_windows": 1, "min_percent": 20 },
+  "settings": { "step": 5, "fine_step": 1, "notify": "changes", "all_workspaces": false, "max_windows": 1 },
   "defaults": { "width": 70, "height": 80, "max_width": 1800, "align_y": 45 },
   "monitors": {
     "desc:ULTRAGEAR": { "width": 55 },
@@ -111,8 +169,6 @@ until the file is fixed.
   follows the defaults, and toggling one off writes `false` for it.
 - `max_windows` is how many tiled windows may share the box before the inset
   gives way, from 1 to 10.
-- `min_percent` is the smallest share a size may be, from 5 to 100. The
-  default is 20.
 
 ### defaults
 
@@ -150,8 +206,8 @@ A workspace entry is one of three things:
 
 - `true` follows the defaults.
 - `size` is a percentage of the *usable* area — the monitor minus the bar — so
-  the proportion holds on any display. Values are clamped to
-  `min_percent`–100; at 100 the inset is exactly your normal gaps.
+  the proportion holds on any display. Width and height
+  are each clamped to 10–100; at 100 the inset is exactly your normal gaps.
 - `aspect` is the largest box of that ratio, centred.
 
 `false` opts a workspace out, which only matters when `all_workspaces` is on.
@@ -161,6 +217,23 @@ number, so `"2"` means workspace 2 and a config written before 0.4 keeps
 working untouched. A named workspace uses its name, `"code"` or `"mail"`.
 Its numeric id is a negative placeholder that says nothing about which
 workspace it is, so the name is the only stable way to refer to one.
+Renaming a workspace therefore leaves its entry under the old name, where it
+applies again if a workspace of that name comes back.
+
+## Stability
+
+From 1.0, Ichi follows semantic versioning, and a breaking change to any of
+these waits for a major release:
+
+- the commands on this page, their arguments, and what they print, except
+  `status`
+- the Lua functions listed under [From Lua](#from-lua)
+- the keys of the config file and what they mean
+- the document `status_json` prints
+
+`status` is written for a person to read and may change in any release.
+Anything else on the `ichi` table is internal. Before 1.0 a minor release may
+still change the list above, and says so in the changelog.
 
 ## Omarchy menu
 

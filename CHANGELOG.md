@@ -1,5 +1,69 @@
 # Changelog
 
+## 0.7.0 — unreleased
+
+The release before 1.0. Nothing new to do; fewer ways to do it, one place
+for settings, and a state file that cannot be left half-written.
+
+### Added
+
+- **`ichi set <key> <value>`**, one command for every setting, named by its
+  place in the file: `ichi set settings.step 10`, `ichi set defaults.width
+  65`. An unknown key is refused with the list of keys, and a value that does
+  not fit says what the setting takes. From Lua, `ichi.set(key, value)`.
+- **What 1.0 will keep stable**, written down in `docs/reference.md`: the
+  commands, the Lua functions, the config keys and `status_json`, but not
+  `status`.
+- An example in the reference of building on Ichi from your own config with
+  `hl.on`.
+- CI runs the test suites on every push.
+
+### Changed
+
+- **The state file moves to `~/.config/ichi/ichi.json`.** An existing
+  `~/.config/omarchy/ichi.json` is read and written where it is, never moved,
+  for as long as nothing exists at the new path.
+- **The smallest size is fixed at 10%**, for width and height alike, instead
+  of the `min_percent` setting's 20.
+- **Saves replace the file whole**: a sibling is written and renamed over it,
+  so a crash mid-save leaves the previous file. Through a link, the file it
+  points to is replaced and the link kept. Saving no longer starts a shell
+  inside Hyprland each time.
+
+### Deprecated
+
+- The commands `adjust`, `defaults`, `max`, `align`, `step`, `fine_step`,
+  `windows`, `all`, `notify` and `min`, and the Lua `adjust` and `set_*`
+  functions `set` replaces. They keep working through 0.7, print what replaces
+  them, and go in 1.0. `min` already does nothing.
+
+### Removed
+
+- `settings.min_percent`.
+- Importing the plugin's state files from before its rename.
+- Reading `step` from the `defaults` block, where it lived before 0.2, and
+  keeping `defaults.step` as a copy of `settings.step`. A binding that reads
+  `ichi.config.defaults.step` should read `ichi.config.settings.step`.
+
+### Fixed
+
+- `adopt` on a named workspace that is off, already follows the defaults or
+  holds an aspect ratio explained nothing and failed instead.
+- A state file that does not parse is never saved over. Ichi keeps the last
+  good settings, says so once, and saves nothing until the file is fixed; a
+  file cut short had lost every workspace the missing half held on the next
+  change.
+
+### Migration
+
+- Nothing to do for a 0.6 config, which stays where it is.
+- If you had set `min_percent` below 10, a size under 10% is shown at 10% at
+  once and written that way on the next change.
+- Scripts and menu entries calling a deprecated command keep working; switch
+  them to `set` before 1.0.
+- After `omarchy plugin update`, run `omarchy restart shell` and
+  `hyprctl reload`.
+
 ## 0.6.0 — 2026-09-12
 
 The panel gains the one shape it could never set, and a back side holding the
