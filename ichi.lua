@@ -467,16 +467,81 @@ local function write_file(path, text)
   return true
 end
 
+-- Whether text is shaped like a whole JSON object: it opens with a brace, and
+-- its braces and brackets pair up, outside strings, to close exactly at the
+-- end. parse_config forgives a bad entry, which is right for a typo, but a
+-- file cut short reads as a block with nothing in it, and saving that would
+-- delete every workspace the lost half held.
+function M.well_formed(text)
+  local pos = text:match("^%s*(){")
+  if pos == nil then
+    return false
+  end
+  local closer = { ["{"] = "}", ["["] = "]" }
+  local stack = {}
+  while true do
+    pos = text:find('[{}%[%]"]', pos)
+    if pos == nil then
+      return false
+    end
+    local c = text:sub(pos, pos)
+    if c == '"' then
+      -- Skip the string, escapes included, so a brace in a name is not counted.
+      repeat
+        pos = text:find('[\\"]', pos + 1)
+        if pos == nil then
+          return false
+        end
+        local escape = text:sub(pos, pos) == "\\"
+        if escape then
+          pos = pos + 1
+        end
+      until not escape
+    elseif closer[c] then
+      stack[#stack + 1] = closer[c]
+    elseif table.remove(stack) ~= c then
+      return false
+    elseif #stack == 0 then
+      return text:find("^%s*$", pos + 1) ~= nil
+    end
+    pos = pos + 1
+  end
+end
+
+-- Defined with the rest of the Hyprland side below; load() reports through it.
+local notify
+
+-- Set while the state file does not parse. Ichi keeps running on the last
+-- good settings and writes nothing, so whatever is in the file, a hand-edit
+-- in progress or a write cut short, is still there to fix.
+M.unreadable = false
+
 function M.save()
+  if M.unreadable then
+    return
+  end
   write_file(M.config_path, M.encode_config(M.config))
 end
 
 function M.load()
   local text = read_file(M.config_path)
   if text then
+    if not M.well_formed(text) then
+      if not M.unreadable then
+        M.unreadable = true
+        local shown = M.config_path
+        if HOME ~= "" and shown:sub(1, #HOME + 1) == HOME .. "/" then
+          shown = "~" .. shown:sub(#HOME + 1)
+        end
+        notify(string.format("Ichi: %s does not parse, so nothing is saved until it does. Fix it, or delete it to start over.", shown))
+      end
+      return
+    end
+    M.unreadable = false
     M.config = M.parse_config(text)
     return
   end
+  M.unreadable = false
 
   local legacy_json = read_file(M.legacy_json_path)
   if legacy_json then
@@ -512,7 +577,7 @@ function M.notify_command(message)
 end
 
 -- `level` is the least chatty setting that still shows this message.
-local function notify(message, level)
+function notify(message, level)
   if not (hl and hl.exec_cmd) or M.quiet then
     return
   end

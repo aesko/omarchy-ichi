@@ -71,7 +71,9 @@ From a shell: `hyprctl eval 'ichi.toggle()'`.
 
 State lives in `~/.config/omarchy/ichi.json`, plain JSON you can read, edit
 and keep in your dotfiles. Edits apply within a second. A malformed entry is
-dropped; a malformed file keeps the last good document.
+dropped. A file that does not parse at all, say one missing a brace, is left
+as it is: Ichi keeps the last good settings, tells you once, and saves nothing
+until the file is fixed.
 
 ```json
 {

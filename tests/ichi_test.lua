@@ -613,6 +613,55 @@ check("adopt on a named aspect workspace says why",
 M.config.workspaces["mail"] = nil
 fake.workspaces[-1338] = nil
 
+-- A state file that does not parse is never overwritten.
+check("well_formed accepts what encode writes", M.well_formed(M.encode_config(M.config)))
+check("well_formed accepts braces inside a string", M.well_formed('{ "presets": { "a}\\"{": true } }'))
+check("well_formed rejects an empty file", not M.well_formed("") and not M.well_formed("  \n"))
+check("well_formed rejects a file cut short", not M.well_formed('{ "workspaces": { "1": true,'))
+check("well_formed rejects a missing brace", not M.well_formed('{ "workspaces": { "2": { "width": 60 } }'))
+check("well_formed rejects mismatched brackets", not M.well_formed('{ "ratio": [4, 3} }'))
+check("well_formed rejects an unterminated string", not M.well_formed('{ "wor'))
+check("well_formed rejects trailing text", not M.well_formed('{ } }'))
+
+local good = '{ "defaults": { "width": 70, "height": 80 }, "workspaces": { "1": true, "2": { "mode": "size", "width": 60, "height": 80 }, "code": { "mode": "aspect", "ratio": [4, 3] } } }'
+local cut = '{ "defaults": { "width": 70, "height": 80 }, "workspaces": { "1": true, "2": { "mode": "size", "width": 60, "height": 80 }, "code": { "mode": "si'
+local function write(text)
+  local f = io.open(M.config_path, "w")
+  f:write(text)
+  f:close()
+end
+local function read()
+  return io.open(M.config_path):read("*a")
+end
+write(good)
+M.load()
+check("a good file loads", M.config.workspaces["code"] ~= nil and not M.unreadable)
+fake.active = { id = 2, name = "2" }
+fake.notes = {}
+write(cut)
+M.load()
+check("a file cut short keeps the last good settings", M.unreadable and M.config.workspaces["2"].width == 60
+  and M.config.workspaces["code"] ~= nil)
+check("a file cut short is reported once", #fake.notes == 1 and fake.notes[1]:find("does not parse", 1, true) ~= nil, fake.notes[1])
+M.load()
+check("reloading it does not report again", #fake.notes == 1)
+M.nudge(1, 0, false, 2)
+-- `good` has no settings block, so loading it put the step back to 5.
+check("a nudge still applies while the file does not parse", M.config.workspaces["2"].width == 65,
+  tostring(M.config.workspaces["2"].width))
+check("a nudge does not overwrite the file", read() == cut)
+write("")
+M.load()
+check("an emptied file is not overwritten either", M.unreadable and M.config.workspaces["code"] ~= nil)
+M.toggle(2)
+check("a toggle does not overwrite an emptied file", read() == "")
+write(good)
+M.load()
+check("fixing the file reads it again", not M.unreadable and M.config.workspaces["2"].width == 60)
+M.nudge(1, 0, false, 2)
+check("fixing the file lets saves through", M.parse_config(read()).workspaces["2"].width == 65)
+fake.active = nil
+
 os.remove(M.config_path)
 os.remove(M.legacy_lines_path)
 
