@@ -75,6 +75,26 @@ ln -s "$home" "$homelink"
 check "writes through a symlinked \$HOME" \
   "$([ $? -eq 0 ] && grep -q loader "$home/dotfiles/hypr/hyprland.lua" && echo 1 || echo 0)"
 
+# Same setup, but the dotfiles link spells the unresolved $HOME, which is
+# what `ln -s $HOME/dotfiles/...` produces.
+printf -- '-- original\n' > "$home/dotfiles/hypr/hyprland.lua"
+ln -sfn "$homelink/dotfiles/hypr/hyprland.lua" "$home/.config/hypr/hyprland.lua"
+"$script" "$homelink/.config/hypr/hyprland.lua" "$homelink" $'-- original\nloader\n' >/dev/null 2>&1
+check "writes through a link spelled with the unresolved \$HOME" \
+  "$([ $? -eq 0 ] && grep -q loader "$home/dotfiles/hypr/hyprland.lua" && echo 1 || echo 0)"
+
+# A relative link can climb out of $HOME with `..` just as an absolute one
+# can point outside it. Climbing past root-owned directories already fails
+# the ownership check, so the case that matters is a sibling of $HOME under
+# a parent the user owns, which is what $work is.
+escape="$work/escape"
+mkdir -p "$escape"
+printf -- '-- elsewhere\n' > "$escape/hyprland.lua"
+ln -sfn "../../../escape/hyprland.lua" "$home/.config/hypr/hyprland.lua"
+"$script" "$home/.config/hypr/hyprland.lua" "$home" 'new' >/dev/null 2>&1
+check "refuses a relative link that climbs out of \$HOME" \
+  "$([ $? -ne 0 ] && ! grep -q '^new$' "$escape/hyprland.lua" && echo 1 || echo 0)"
+
 if [ "$failures" -gt 0 ]; then
   echo "$failures failure(s)"
   exit 1

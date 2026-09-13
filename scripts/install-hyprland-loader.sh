@@ -72,6 +72,17 @@ while [ "${#queue[@]}" -gt 0 ]; do
   comp=${queue[0]}
   queue=("${queue[@]:1}")
   [ -z "$comp" ] && continue
+  [ "$comp" = "." ] && continue
+
+  # `cur` is always a real directory, never a symlink, so `..` can be taken
+  # lexically. Climbing out of $HOME this way is refused just like an
+  # absolute link that points outside it.
+  if [ "$comp" = ".." ]; then
+    [ "$cur" = "$home" ] && fail "$target climbs out of \$HOME"
+    cur=$(dirname -- "$cur")
+    check_dir "$cur"
+    continue
+  fi
 
   next="$cur/$comp"
   if [ -L "$next" ]; then
@@ -81,12 +92,14 @@ while [ "${#queue[@]}" -gt 0 ]; do
     link_target=$(readlink -- "$next") || fail "cannot read symlink $next"
     case "$link_target" in
       /*)
+        # A dotfiles link made with `ln -s $HOME/...` spells the unresolved
+        # $HOME, so either spelling counts as inside it.
         case "$link_target" in
-          "$home"/*|"$home") ;;
+          "$home"/*|"$home") rest=${link_target#"$home"} ;;
+          "$home_arg"/*|"$home_arg") rest=${link_target#"$home_arg"} ;;
           *) fail "$next resolves outside \$HOME ($link_target)" ;;
         esac
         cur=$home
-        rest=${link_target#"$home"}
         rest=${rest#/}
         ;;
       *)
