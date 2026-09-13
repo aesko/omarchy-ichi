@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "Model.js"), "utf8")
   .replace(/^\.pragma library\s*$/m, "")
 const Model = new Function(source + `
-  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS }
+  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, LIMITS }
 `)()
 
 let passed = 0
@@ -37,7 +37,8 @@ test("parseConfig normalizes and drops bad entries", () => {
     },
   }))
   assert.deepEqual(config.defaults, { width: 60, height: 75 })
-  assert.deepEqual(config.settings, { step: 25, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false })
+  // A step under defaults, where it lived before 0.2, is no longer read.
+  assert.deepEqual(config.settings, { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, paused: false })
   assert.deepEqual(config.workspaces["2"], { mode: "size", width: 70, height: 80 })
   assert.deepEqual(config.workspaces["5"], { mode: "aspect", ratio: [4, 3] })
   assert.equal(config.workspaces["7"], undefined)
@@ -46,17 +47,16 @@ test("parseConfig normalizes and drops bad entries", () => {
   assert.deepEqual(config.workspaces["x"], { mode: "size", width: 50, height: 50 })
 })
 
-test("settings block is read, with the pre-0.2 step location as a fallback", () => {
+test("settings block is read", () => {
   const modern = Model.parseConfig(JSON.stringify({ settings: { step: 10, fine_step: 2, notify: "never", max_windows: 30 }, defaults: { step: 3 } }))
-  assert.deepEqual(modern.settings, { step: 10, fine_step: 2, notify: "never", all_workspaces: false, max_windows: 10, min_percent: 20, paused: false })
-  const floor = Model.parseConfig(JSON.stringify({ settings: { min_percent: 40 }, defaults: { width: 30 }, workspaces: { "1": { width: 10, height: 90 } } }))
-  assert.equal(floor.settings.min_percent, 40)
-  assert.equal(floor.defaults.width, 40)
-  assert.equal(floor.workspaces["1"].width, 40)
-  assert.equal(Model.parseConfig(JSON.stringify({ settings: { min_percent: 1 } })).settings.min_percent, 5)
-  assert.equal(Model.parseConfig(JSON.stringify({ settings: { min_percent: 10 }, workspaces: { "1": { width: 12, height: 12 } } })).workspaces["1"].width, 12)
-  const legacy = Model.parseConfig(JSON.stringify({ defaults: { step: 3 } }))
-  assert.equal(legacy.settings.step, 3)
+  assert.deepEqual(modern.settings, { step: 10, fine_step: 2, notify: "never", all_workspaces: false, max_windows: 10, paused: false })
+  // The floor is fixed; min_percent is ignored rather than read.
+  const floor = Model.parseConfig(JSON.stringify({ settings: { min_percent: 40 }, defaults: { width: 5 }, workspaces: { "1": { width: 3, height: 12 } } }))
+  assert.equal(floor.settings.min_percent, undefined)
+  assert.equal(floor.defaults.width, 10)
+  assert.equal(floor.workspaces["1"].width, 10)
+  assert.equal(floor.workspaces["1"].height, 12)
+  assert.equal(Model.parseConfig(JSON.stringify({ defaults: { step: 3 } })).settings.step, 5)
   const capped = Model.parseConfig(JSON.stringify({ defaults: { max_width: 1600.7, max_height: -1, align_x: 120, align_y: 40 } }))
   assert.equal(capped.defaults.max_width, 1600)
   assert.equal(capped.defaults.max_height, undefined)
@@ -66,6 +66,22 @@ test("settings block is read, with the pre-0.2 step location as a fallback", () 
   assert.deepEqual(aligned.monitors, [{ key: "eDP-1", align_y: 0 }])
   const bogus = Model.parseConfig(JSON.stringify({ settings: { notify: "loudly" } }))
   assert.equal(bogus.settings.notify, "changes")
+})
+
+// ichi.lua is the one that checks and stores settings; the shell only has to
+// agree with it on the keys and the floor.
+const ichiLua = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "ichi.lua"), "utf8")
+
+test("SETTABLE lists exactly the keys ichi.lua's set takes", () => {
+  const keys = [...ichiLua.matchAll(/^\s*\["((?:settings|defaults)\.[a-z_]+)"\] = \{/gm)].map((match) => match[1])
+  assert.equal(keys.length, 12)
+  assert.deepEqual([...keys].sort(), [...Model.SETTABLE].sort())
+})
+
+test("LIMITS matches ichi.lua's", () => {
+  const match = /M\.limits = \{ min = (\d+), max = (\d+) \}/.exec(ichiLua)
+  assert.ok(match, "M.limits not found in ichi.lua")
+  assert.deepEqual(Model.LIMITS, { min: Number(match[1]), max: Number(match[2]) })
 })
 
 test("parseConfig returns null for malformed JSON so the caller keeps the last good document", () => {
@@ -105,7 +121,7 @@ test("status reports the active workspace", () => {
   assert.deepEqual(Model.status(config, 2), {
     workspace: "2", enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
     resolved: { mode: "size", width: 70, height: 80 },
-    settings: { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false }, paused: false, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: ["2", "5"],
+    settings: { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, paused: false }, paused: false, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: ["2", "5"],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
   assert.equal(Model.status(config, 3).enabled, false)

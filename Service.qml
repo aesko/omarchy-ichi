@@ -18,7 +18,13 @@ Item {
   readonly property string home: Quickshell.env("HOME")
   readonly property string configDir: Quickshell.env("XDG_CONFIG_HOME") || (home + "/.config")
   readonly property string hyprlandLuaPath: configDir + "/hypr/hyprland.lua"
-  readonly property string statePath: configDir + "/omarchy/ichi.json"
+  // The state file, in the order ichi.lua picks it: ichi/ichi.json, or while
+  // nothing is there, a file from before 0.7 at omarchy/ichi.json, used where
+  // it is. usePreviousPath flips once, when the first path cannot be read.
+  readonly property string statePath: configDir + "/ichi/ichi.json"
+  readonly property string previousStatePath: configDir + "/omarchy/ichi.json"
+  property bool usePreviousPath: false
+  property bool checkedPreviousPath: false
   readonly property string loaderInstallerPath: decodeURIComponent(String(Qt.resolvedUrl("scripts/install-hyprland-loader.sh")).replace(/^file:\/\//, ""))
   // For notifications: the actual path Ichi read and wrote, home-relative
   // when it is under $HOME (it need not be, with XDG_CONFIG_HOME set).
@@ -83,7 +89,7 @@ Item {
 
   FileView {
     id: stateFile
-    path: root.statePath
+    path: root.usePreviousPath ? root.previousStatePath : root.statePath
     watchChanges: true
     printErrors: false
 
@@ -96,7 +102,22 @@ Item {
       }
     }
 
-    onLoadFailed: root.config = Model.defaultConfig()
+    onLoadFailed: {
+      root.config = Model.defaultConfig()
+      if (!root.checkedPreviousPath) {
+        // Nothing at the new path: try the one from before 0.7. Deferred,
+        // because a reload from inside this handler does not load.
+        root.checkedPreviousPath = true
+        root.usePreviousPath = true
+        Qt.callLater(stateFile.reload)
+      } else if (root.usePreviousPath) {
+        // Neither exists. Go back to the new path, where ichi.lua will create
+        // the file, and make its directory first: a watch on a file whose
+        // directory is missing never sees the file appear.
+        root.usePreviousPath = false
+        stateDirProcess.running = true
+      }
+    }
 
     // text() is stale inside the change signal, so re-read and let onLoaded
     // parse fresh content.
@@ -104,6 +125,12 @@ Item {
       reload()
       root.evaluate("if ichi then ichi.load(); ichi.refresh() end")
     }
+  }
+
+  Process {
+    id: stateDirProcess
+    command: ["mkdir", "-p", "--", root.configDir + "/ichi"]
+    onExited: stateFile.reload()
   }
 
   // ----------------------------------------------------------- loader --
@@ -221,9 +248,27 @@ Item {
     root.evaluate("if ichi then ichi.reset() end")
   }
 
-  // Percentage-point deltas for width and height, e.g. adjust 5 0.
+  // What a deprecated command prints. They keep working through 0.7 and go
+  // in 1.0.
+  function deprecated(command, instead) {
+    return "ichi: `" + command + "` is deprecated and goes in 1.0; use `ichi " + instead + "`"
+  }
+
+  // One setting by its place in the file, e.g. set settings.step 10. An
+  // unknown key is refused here, so the command line hears why; ichi.lua
+  // checks the value and says what the setting takes.
+  function cmdSet(key, value, quiet) {
+    if (Model.SETTABLE.indexOf(key) === -1) {
+      return "ichi: there is no setting called " + key + ". Settings: " + Model.SETTABLE.join(", ")
+    }
+    run("ichi.set(" + JSON.stringify(String(key)) + ", " + JSON.stringify(String(value)) + ")", quiet)
+    return ""
+  }
+
+  // Deprecated: nudge or size.
   function cmdAdjust(width, height) {
     root.evaluate("if ichi then ichi.adjust(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ") end")
+    return deprecated("adjust", "nudge or ichi size")
   }
 
   // Switch the focused workspace to aspect mode, e.g. aspect 4 3.
@@ -234,30 +279,34 @@ Item {
     run("ichi.set_aspect(" + rw + ", " + rh + ")", quiet)
   }
 
-  // What a workspace that follows the defaults gets, e.g. defaults 65 85.
+  // Deprecated: set defaults.width and defaults.height.
   function cmdDefaults(width, height) {
     root.evaluate("if ichi then ichi.set_defaults(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", 0) end")
+    return deprecated("defaults", "set defaults.width and ichi set defaults.height")
   }
 
-  // Pixel caps on the box, e.g. max 1800 0; zero is none.
+  // Deprecated: set defaults.max_width and defaults.max_height.
   function cmdMax(width, height) {
     root.evaluate("if ichi then ichi.set_max(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ") end")
+    return deprecated("max", "set defaults.max_width and ichi set defaults.max_height")
   }
 
-  // Where the box sits, 0-100 across and down; e.g. align 50 40 for a
-  // little above centre.
+  // Deprecated: set defaults.align_x and defaults.align_y.
   function cmdAlign(x, y) {
     root.evaluate("if ichi then ichi.set_align(" + (Number(x) || 0) + ", " + (Number(y) || 0) + ") end")
+    return deprecated("align", "set defaults.align_x and ichi set defaults.align_y")
   }
 
-  // Arrow-key increment in percentage points, e.g. step 10.
-  function cmdStep(points, quiet) {
-    run("ichi.set_step(" + (Number(points) || 0) + ", 0)", quiet)
+  // Deprecated: set settings.step.
+  function cmdStep(points) {
+    root.evaluate("if ichi then ichi.set_step(" + (Number(points) || 0) + ", 0) end")
+    return deprecated("step", "set settings.step")
   }
 
-  // The shifted arrows' increment, e.g. fine_step 2.
-  function cmdFineStep(points, quiet) {
-    run("ichi.set_step(0, " + (Number(points) || 0) + ")", quiet)
+  // Deprecated: set settings.fine_step.
+  function cmdFineStep(points) {
+    root.evaluate("if ichi then ichi.set_step(0, " + (Number(points) || 0) + ") end")
+    return deprecated("fine_step", "set settings.fine_step")
   }
 
   // An absolute size for the focused workspace, which is what a slider has.
@@ -270,14 +319,15 @@ Item {
     run("ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", " + (fine === true) + ")", quiet)
   }
 
-  // The smallest share of the screen a size may be, e.g. min 10.
+  // Deprecated, and does nothing: the smallest size is fixed since 0.7.
   function cmdMin(percent) {
-    root.evaluate("if ichi then ichi.set_min_percent(" + (Number(percent) || 20) + ") end")
+    return "ichi: the smallest size is fixed at " + Model.LIMITS.min + "% since 0.7, so `min` does nothing and goes in 1.0"
   }
 
-  // How many tiled windows may share the box, e.g. windows 2.
+  // Deprecated: set settings.max_windows.
   function cmdWindows(count) {
     root.evaluate("if ichi then ichi.set_max_windows(" + (Number(count) || 1) + ") end")
+    return deprecated("windows", "set settings.max_windows")
   }
 
   // Suspend Ichi everywhere without changing any workspace entry.
@@ -293,15 +343,16 @@ Item {
     return root.status.paused ? "true" : "false"
   }
 
-  // Every workspace on unless it opts out: all on | off.
+  // Deprecated: set settings.all_workspaces.
   function cmdAll(state) {
     root.evaluate("if ichi then ichi.set_all_workspaces(" + (state === "on" || state === "true") + ") end")
+    return deprecated("all", "set settings.all_workspaces")
   }
 
-  // How chatty to be: never, changes or always.
-  function cmdNotify(level, quiet) {
-    if (Model.NOTIFY_LEVELS.indexOf(level) === -1) return
-    run("ichi.set_notify(\"" + level + "\")", quiet)
+  // Deprecated: set settings.notify.
+  function cmdNotify(level) {
+    if (Model.NOTIFY_LEVELS.indexOf(level) !== -1) root.evaluate("if ichi then ichi.set_notify(\"" + level + "\") end")
+    return deprecated("notify", "set settings.notify")
   }
 
   // Give the focused workspace a preset by name.

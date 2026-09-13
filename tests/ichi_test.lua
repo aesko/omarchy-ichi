@@ -9,8 +9,9 @@ local M = dofile(root .. "/ichi.lua")
 -- Every path the module reads or writes goes to a temp file from the start;
 -- anything that commits (cycle, save_preset, adopt, ...) saves.
 M.config_path = tmp .. ".json"
-M.legacy_json_path = tmp .. ".legacy.json"
-M.legacy_lines_path = tmp .. ".legacy"
+-- The pre-0.7 path too: with nothing at config_path, load and save would
+-- otherwise reach the real ~/.config/omarchy/ichi.json of whoever runs this.
+M.previous_config_path = tmp .. ".previous.json"
 
 -- A fake compositor for the paths that apply rules and notify. Installed after
 -- loading so the file's own event wiring stays off.
@@ -78,15 +79,17 @@ check("max_width shrinks an aspect box on both sides", capped_aspect.left == 480
 local uncapped = M.gaps_for(usable_w, usable_h, { mode = "size", width = 70, height = 80, max_width = 4000, max_height = 0 }, base)
 check("a cap above the box does nothing", uncapped.left == 384 and uncapped.top == 141)
 
-check("normalize clamps and floors", M.normalize_entry({ width = 12.9, height = 400 }).width == 20
+check("normalize clamps and floors", M.normalize_entry({ width = 12.9, height = 400 }).width == 12
   and M.normalize_entry({ width = 12.9, height = 400 }).height == 100)
-check("normalize takes a floor", M.normalize_entry({ width = 12.9, height = 400 }, nil, 10).width == 12)
+check("normalize stops at the fixed floor", M.normalize_entry({ width = 4, height = 9.5 }).width == 10
+  and M.normalize_entry({ width = 4, height = 9.5 }).height == 10)
 check("normalize rejects a bad aspect", M.normalize_entry({ mode = "aspect", ratio_w = 0, ratio_h = 3 }) == nil)
 check("normalize fills from defaults", M.normalize_entry({}, { width = 55, height = 66 }).width == 55)
 
 local text = [[
 {
-  "defaults": { "width": 60, "height": 75, "step": 10 },
+  "settings": { "step": 10 },
+  "defaults": { "width": 60, "height": 75 },
   "workspaces": {
     "2": { "mode": "size", "width": 70, "height": 80 },
     "5": { "mode": "aspect", "ratio": [4, 3] },
@@ -98,21 +101,22 @@ local text = [[
 ]]
 local cfg = M.parse_config(text)
 check("parse defaults", cfg.defaults.width == 60 and cfg.defaults.height == 75)
-check("parse reads the pre-0.2 step location", cfg.settings.step == 10 and cfg.defaults.step == 10)
+check("parse reads step from settings", cfg.settings.step == 10 and cfg.defaults.step == nil)
 check("parse defaults to reporting changes, not every nudge", cfg.settings.notify == "changes")
 local modern = M.parse_config('{ "settings": { "step": 8, "fine_step": 2, "notify": "never" }, "defaults": { "step": 3 } }')
-check("parse prefers settings.step", modern.settings.step == 8 and modern.defaults.step == 8)
+check("parse ignores a step under defaults, where it lived before 0.2", modern.settings.step == 8
+  and modern.defaults.step == nil and M.parse_config('{ "defaults": { "step": 3 } }').settings.step == 5)
 check("parse reads fine_step", modern.settings.fine_step == 2 and cfg.settings.fine_step == 1)
 check("parse reads notify", modern.settings.notify == "never")
 check("parse defaults all_workspaces to off", modern.settings.all_workspaces == false)
 check("parse defaults max_windows to one", modern.settings.max_windows == 1)
 check("parse defaults paused to false", modern.settings.paused == false)
 check("parse reads paused", M.parse_config('{ "settings": { "paused": true } }').settings.paused == true)
-local floored = M.parse_config('{ "settings": { "min_percent": 40 }, "defaults": { "width": 30 }, "workspaces": { "1": { "width": 10, "height": 90 } } }')
-check("parse clamps sizes against min_percent", floored.settings.min_percent == 40 and floored.defaults.width == 40
-  and floored.workspaces["1"].width == 40)
-check("parse clamps min_percent itself", M.parse_config('{ "settings": { "min_percent": 1 } }').settings.min_percent == 5)
-check("a lower floor lets small sizes through", M.parse_config('{ "settings": { "min_percent": 10 }, "workspaces": { "1": { "width": 12, "height": 12 } } }').workspaces["1"].width == 12)
+local floored = M.parse_config('{ "settings": { "min_percent": 40 }, "defaults": { "width": 5 }, "workspaces": { "1": { "width": 3, "height": 12 } } }')
+check("parse clamps sizes to the fixed floor", floored.defaults.width == 10 and floored.workspaces["1"].width == 10
+  and floored.workspaces["1"].height == 12)
+check("parse ignores min_percent, which is gone", floored.settings.min_percent == nil
+  and M.encode_config(floored):find("min_percent", 1, true) == nil)
 check("parse clamps max_windows", M.parse_config('{ "settings": { "max_windows": 40 } }').settings.max_windows == 10
   and M.parse_config('{ "settings": { "max_windows": 0 } }').settings.max_windows == 1)
 local everywhere = M.parse_config('{ "settings": { "all_workspaces": true }, "workspaces": { "2": false, "3": true } }')
@@ -255,44 +259,27 @@ M.config = M.parse_config("")
 local again = M.parse_config(M.encode_config(cfg))
 check("encode/parse round-trips", again.workspaces["2"].width == 70 and again.workspaces["5"].ratio_h == 3
   and again.settings.step == 10 and again.workspaces["8"].mode == "default")
-check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "changes", "all_workspaces": false, "max_windows": 1, "min_percent": 20, "paused": false }', 1, true) ~= nil)
+check("encode writes step under settings", M.encode_config(cfg):find('"settings": { "step": 10, "fine_step": 1, "notify": "changes", "all_workspaces": false, "max_windows": 1, "paused": false }', 1, true) ~= nil)
 
 check("empty text gives defaults", M.parse_config("").defaults.width == 70 and next(M.parse_config("").workspaces) == nil)
 
--- Legacy import, oldest format: no JSON yet, an "<id> <width> <height>" file.
+-- No file yet: defaults, and nothing written until something changes.
 os.remove(M.config_path)
-local legacy = io.open(M.legacy_lines_path, "w")
-legacy:write("2 70 80\n5 65 90\n")
-legacy:close()
 M.load()
-check("line import reads both lines", M.config.workspaces["2"] and M.config.workspaces["5"]
-  and M.config.workspaces["5"].height == 90)
-local written = io.open(M.config_path, "r")
-check("line import writes the JSON once", written ~= nil)
-if written then
-  written:close()
-end
-M.load()
-check("second load prefers the JSON", M.config.workspaces["2"].width == 70)
+check("with no file, load gives the defaults", M.config.defaults.width == 70 and next(M.config.workspaces) == nil)
+check("load alone writes nothing", io.open(M.config_path, "r") == nil)
 
--- Legacy import, pre-rename JSON: preferred over the line file when both exist.
-os.remove(M.config_path)
-local renamed = io.open(M.legacy_json_path, "w")
-renamed:write('{ "defaults": { "width": 60, "height": 75, "step": 10 }, "workspaces": { "3": { "mode": "aspect", "ratio": [1, 1] } } }')
-renamed:close()
+-- The fixture the defaults tests below build on: workspaces 2 and 5.
+local fixture = io.open(M.config_path, "w")
+fixture:write('{ "workspaces": { "2": { "mode": "size", "width": 70, "height": 80 }, "5": { "mode": "size", "width": 65, "height": 90 } } }')
+fixture:close()
 M.load()
-check("json import wins over the line file", M.config.workspaces["3"] and M.config.workspaces["3"].mode == "aspect"
-  and M.config.workspaces["2"] == nil and M.config.settings.step == 10)
-check("json import writes the new file", io.open(M.config_path, "r") ~= nil)
-os.remove(M.legacy_json_path)
--- Back to the line-file fixture (workspaces 2 and 5) for the defaults tests.
-os.remove(M.config_path)
-M.load()
+check("load reads the file", M.config.workspaces["2"].width == 70 and M.config.workspaces["5"].height == 90)
 
 -- Defaults: adjustable, clamped, zero means keep, and adoptable from a workspace.
 M.set_defaults(65, 85, 10)
 check("set_defaults stores all three", M.config.defaults.width == 65 and M.config.defaults.height == 85
-  and M.config.settings.step == 10 and M.config.defaults.step == 10)
+  and M.config.settings.step == 10)
 M.set_defaults(0, 400, 0)
 check("set_defaults keeps zeros and clamps", M.config.defaults.width == 65 and M.config.defaults.height == 100
   and M.config.settings.step == 10)
@@ -369,19 +356,14 @@ M.disable(4)
 check("disable resets the gaps", fake.rules["4"].left == 10)
 M.set_defaults(65, 90)
 
--- min_percent: the floor nudges and defaults are clamped to.
-M.config.workspaces["4"] = { mode = "size", width = 25, height = 25 }
+-- The floor: fixed, so nudging stops there and a stored size never moves.
+M.config.workspaces["4"] = { mode = "size", width = 15, height = 15 }
 M.adjust(-10, 0, 4)
-check("nudging stops at the default floor", M.config.workspaces["4"].width == 20)
-M.set_min_percent(10)
-M.adjust(-10, 0, 4)
-check("a lower floor lets the nudge through", M.config.workspaces["4"].width == 10)
-check("set_min_percent persists", M.parse_config(io.open(M.config_path):read("*a")).settings.min_percent == 10)
+check("nudging stops at the fixed floor", M.config.workspaces["4"].width == 10)
+fake.notes = {}
 M.set_min_percent(50)
-check("raising the floor leaves an existing size alone", M.config.workspaces["4"].width == 10)
-M.adjust(1, 0, 4)
-check("the next nudge clamps to the new floor", M.config.workspaces["4"].width == 50)
-M.set_min_percent(20)
+check("set_min_percent changes nothing", M.config.workspaces["4"].width == 10 and M.config.settings.min_percent == nil)
+check("set_min_percent says the floor is fixed", #fake.notes == 1 and fake.notes[1]:find("fixed at 10%", 1, true) ~= nil, fake.notes[1])
 M.disable(4)
 
 -- max_windows: the inset gives way one window past the limit.
@@ -407,7 +389,7 @@ M.enable(4)
 M.set_size(55, 75, 4)
 check("set_size sets both outright", M.config.workspaces["4"].width == 55 and M.config.workspaces["4"].height == 75)
 M.set_size(1, 500, 4)
-check("set_size clamps to the floor and ceiling", M.config.workspaces["4"].width == M.config.settings.min_percent
+check("set_size clamps to the floor and ceiling", M.config.workspaces["4"].width == M.limits.min
   and M.config.workspaces["4"].height == 100)
 M.reset(4)
 M.set_size(60, 60, 4)
@@ -556,8 +538,7 @@ fake.windows[6] = nil
 
 -- Steps, nudges and notification levels, on a workspace of a known size.
 M.set_step(12, 3)
-check("set_step stores both and mirrors the old alias", M.config.settings.step == 12 and M.config.settings.fine_step == 3
-  and M.config.defaults.step == 12)
+check("set_step stores both", M.config.settings.step == 12 and M.config.settings.fine_step == 3)
 M.set_step(0, 0)
 check("set_step keeps zeros", M.config.settings.step == 12 and M.config.settings.fine_step == 3)
 M.config.workspaces["2"] = { mode = "size", width = 70, height = 80 }
@@ -662,8 +643,82 @@ M.nudge(1, 0, false, 2)
 check("fixing the file lets saves through", M.parse_config(read()).workspaces["2"].width == 65)
 fake.active = nil
 
+-- set: one setting by its place in the file.
+check("set takes a number as a string", M.set("settings.step", "7") == true and M.config.settings.step == 7)
+check("set persists", M.parse_config(read()).settings.step == 7)
+check("set clamps as reading the file does", M.set("settings.fine_step", 90) and M.config.settings.fine_step == 25)
+check("set takes on and off", M.set("settings.all_workspaces", "on") and M.config.settings.all_workspaces == true
+  and M.set("settings.all_workspaces", "off") and M.config.settings.all_workspaces == false)
+check("set reaches the defaults", M.set("defaults.width", "55") and M.config.defaults.width == 55)
+check("set keeps a size above the floor", M.set("defaults.height", 3) and M.config.defaults.height == 10)
+fake.notes = {}
+check("set refuses a value that does not fit", M.set("settings.notify", "loudly") == false
+  and M.config.settings.notify == "changes")
+check("set says what the setting takes", fake.notes[1] and fake.notes[1]:find("never, changes or always", 1, true) ~= nil,
+  fake.notes[1])
+fake.notes = {}
+check("set refuses an unknown key", M.set("settings.min_percent", 20) == false and M.config.settings.min_percent == nil)
+check("set names the unknown key", fake.notes[1] and fake.notes[1]:find("min_percent", 1, true) ~= nil, fake.notes[1])
+check("set refuses what is not a number", M.set("defaults.max_width", "wide") == false
+  and M.set("defaults.max_width", "1e999") == false and M.config.defaults.max_width == 0)
+
+-- The reload the shell asks for after every save does not parse again.
+local parses = 0
+local real_parse = M.parse_config
+M.parse_config = function(...)
+  parses = parses + 1
+  return real_parse(...)
+end
+M.set("settings.step", 8)
+M.load()
+check("reloading what Ichi just saved skips the parse", parses == 0, tostring(parses))
+write((read():gsub('"step": 8', '"step": 6')))
+M.load()
+check("a file someone else changed is parsed", parses == 1 and M.config.settings.step == 6, tostring(parses))
+M.parse_config = real_parse
+
+-- Saves replace the file whole, through a link, and leave nothing behind.
+local dotfile = tmp .. ".dotfiles.json"
+write(good)
+os.rename(M.config_path, dotfile)
+os.execute("ln -s '" .. dotfile .. "' '" .. M.config_path .. "'")
+M.load()
+M.set("settings.step", 9)
+local link = io.popen("readlink '" .. M.config_path .. "'"):read("*l")
+check("a save through a link keeps the link", link == dotfile, link)
+check("a save through a link writes where it points", M.parse_config(io.open(dotfile):read("*a")).settings.step == 9)
+check("a save leaves no temporary file", io.open(dotfile .. ".tmp", "r") == nil and io.open(M.config_path .. ".tmp", "r") == nil)
 os.remove(M.config_path)
-os.remove(M.legacy_lines_path)
+os.remove(dotfile)
+
+-- The first save makes the file's directory.
+local nested_dir = tmp .. ".dir"
+M.config_path = nested_dir .. "/sub/ichi.json"
+M.load()
+M.set("settings.step", 5)
+check("the first save makes the directory", io.open(M.config_path, "r") ~= nil)
+os.execute("rm -rf '" .. nested_dir .. "'")
+M.config_path = tmp .. ".json"
+
+-- A file from before 0.7 is used where it is, until one exists at config_path.
+os.remove(M.config_path)
+local previous = io.open(M.previous_config_path, "w")
+previous:write('{ "workspaces": { "7": true } }')
+previous:close()
+M.load()
+check("with only the old file, it is the one read", M.state_path() == M.previous_config_path
+  and M.config.workspaces["7"] ~= nil)
+M.set("settings.step", 11)
+check("with only the old file, saves go to it", M.parse_config(io.open(M.previous_config_path):read("*a")).settings.step == 11
+  and io.open(M.config_path, "r") == nil)
+write('{ "workspaces": { "8": true } }')
+M.load()
+check("a file at config_path wins", M.state_path() == M.config_path and M.config.workspaces["8"] ~= nil
+  and M.config.workspaces["7"] == nil)
+check("the old file is left alone", M.parse_config(io.open(M.previous_config_path):read("*a")).settings.step == 11)
+
+os.remove(M.config_path)
+os.remove(M.previous_config_path)
 
 if failures > 0 then
   print(failures .. " failure(s)")

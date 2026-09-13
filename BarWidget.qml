@@ -33,7 +33,7 @@ Panel {
   readonly property var resolved: ready ? ichiStatus.resolved : null
   readonly property string presetName: ready && ichiStatus.preset ? String(ichiStatus.preset) : ""
   readonly property var presetNames: ready && ichiStatus.presets ? ichiStatus.presets : []
-  readonly property int minPercent: ready && ichiStatus.settings ? ichiStatus.settings.min_percent : 20
+  readonly property int minPercent: Model.LIMITS.min
   readonly property string notifyLevel: ready && ichiStatus.settings ? ichiStatus.settings.notify : "changes"
   readonly property int stepPoints: ready && ichiStatus.settings ? ichiStatus.settings.step : 5
   readonly property int fineStepPoints: ready && ichiStatus.settings ? ichiStatus.settings.fine_step : 1
@@ -500,7 +500,7 @@ Panel {
             foreground: root.bar ? root.bar.foreground : Color.foreground
             onChanged: function (choice) {
               for (var level in labels) {
-                if (labels[level] === choice && root.ichiService) root.ichiService.cmdNotify(level, true)
+                if (labels[level] === choice && root.ichiService) root.ichiService.cmdSet("settings.notify", level, true)
               }
             }
 
@@ -515,7 +515,7 @@ Panel {
             to: 25
             stepSize: 1
             foreground: root.bar ? root.bar.foreground : Color.foreground
-            onModified: function (v) { if (root.ichiService) root.ichiService.cmdStep(v, true) }
+            onModified: function (v) { if (root.ichiService) root.ichiService.cmdSet("settings.step", v, true) }
           }
 
           NumberField {
@@ -525,7 +525,7 @@ Panel {
             to: 25
             stepSize: 1
             foreground: root.bar ? root.bar.foreground : Color.foreground
-            onModified: function (v) { if (root.ichiService) root.ichiService.cmdFineStep(v, true) }
+            onModified: function (v) { if (root.ichiService) root.ichiService.cmdSet("settings.fine_step", v, true) }
           }
 
           PanelSeparator { Layout.fillWidth: true }

@@ -50,9 +50,15 @@ Item {
       wrapper.api.cmdReset()
     }
 
-    // Percentage-point deltas for width and height, e.g. adjust 5 0.
-    function adjust(width: string, height: string): void {
-      wrapper.api.cmdAdjust(width, height)
+    // One setting by its place in the file, e.g. set settings.step 10 or
+    // set defaults.width 65. Prints why when there is no such setting.
+    function set(key: string, value: string): string {
+      return wrapper.api.cmdSet(key, value)
+    }
+
+    // Deprecated: nudge or size. Goes in 1.0.
+    function adjust(width: string, height: string): string {
+      return wrapper.api.cmdAdjust(width, height)
     }
 
     // Switch the focused workspace to aspect mode, e.g. aspect 4 3.
@@ -60,29 +66,29 @@ Item {
       wrapper.api.cmdAspect(width, height)
     }
 
-    // What a workspace that follows the defaults gets, e.g. defaults 65 85.
-    function defaults(width: string, height: string): void {
-      wrapper.api.cmdDefaults(width, height)
+    // Deprecated: set defaults.width and defaults.height. Goes in 1.0.
+    function defaults(width: string, height: string): string {
+      return wrapper.api.cmdDefaults(width, height)
     }
 
-    // Pixel caps on the box, e.g. max 1800 0; zero is none.
-    function max(width: string, height: string): void {
-      wrapper.api.cmdMax(width, height)
+    // Deprecated: set defaults.max_width and defaults.max_height. Goes in 1.0.
+    function max(width: string, height: string): string {
+      return wrapper.api.cmdMax(width, height)
     }
 
-    // Where the box sits, 0-100 across and down; e.g. align 50 40.
-    function align(x: string, y: string): void {
-      wrapper.api.cmdAlign(x, y)
+    // Deprecated: set defaults.align_x and defaults.align_y. Goes in 1.0.
+    function align(x: string, y: string): string {
+      return wrapper.api.cmdAlign(x, y)
     }
 
-    // Arrow-key increment in percentage points, e.g. step 10.
-    function step(points: string): void {
-      wrapper.api.cmdStep(points)
+    // Deprecated: set settings.step. Goes in 1.0.
+    function step(points: string): string {
+      return wrapper.api.cmdStep(points)
     }
 
-    // The shifted arrows' increment, e.g. fine_step 2.
-    function fine_step(points: string): void {
-      wrapper.api.cmdFineStep(points)
+    // Deprecated: set settings.fine_step. Goes in 1.0.
+    function fine_step(points: string): string {
+      return wrapper.api.cmdFineStep(points)
     }
 
     // An absolute size for the focused workspace, e.g. size 65 85.
@@ -100,14 +106,14 @@ Item {
       wrapper.api.cmdNudge(width, height, true)
     }
 
-    // The smallest share of the screen a size may be, e.g. min 10.
-    function min(percent: string): void {
-      wrapper.api.cmdMin(percent)
+    // Deprecated, and does nothing: the smallest size is fixed. Goes in 1.0.
+    function min(percent: string): string {
+      return wrapper.api.cmdMin(percent)
     }
 
-    // How many tiled windows may share the box, e.g. windows 2.
-    function windows(count: string): void {
-      wrapper.api.cmdWindows(count)
+    // Deprecated: set settings.max_windows. Goes in 1.0.
+    function windows(count: string): string {
+      return wrapper.api.cmdWindows(count)
     }
 
     // Suspend Ichi everywhere: pause on | off. Entries are left alone, so
@@ -125,14 +131,14 @@ Item {
       return wrapper.api.cmdPaused()
     }
 
-    // Every workspace on unless it opts out: all on | off.
-    function all(state: string): void {
-      wrapper.api.cmdAll(state)
+    // Deprecated: set settings.all_workspaces. Goes in 1.0.
+    function all(state: string): string {
+      return wrapper.api.cmdAll(state)
     }
 
-    // How chatty to be: never, changes or always.
-    function notify(level: string): void {
-      wrapper.api.cmdNotify(level)
+    // Deprecated: set settings.notify. Goes in 1.0.
+    function notify(level: string): string {
+      return wrapper.api.cmdNotify(level)
     }
 
     // Give the focused workspace a preset by name.

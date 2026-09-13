@@ -9,15 +9,20 @@ var LOADER_LINE = LOADER_MARK + "\n" +
   '"/omarchy/plugins/' + PLUGIN_ID + '/ichi.lua"; ' +
   'local f = io.open(p, "r"); if f then f:close(); dofile(p) end end\n'
 
-// The range settings.min_percent may take; sizes are clamped between that
-// setting and 100.
-var LIMITS = { min: 5, max: 100 }
+// Every size is clamped between these; mirrors ichi.lua's M.limits.
+var LIMITS = { min: 10, max: 100 }
 
 var NOTIFY_LEVELS = ["never", "changes", "always"]
 
+// The keys `ichi set` takes, by their place in the file; mirrors ichi.lua's
+// M.settable, which checks the values.
+var SETTABLE = ["settings.step", "settings.fine_step", "settings.notify", "settings.all_workspaces",
+  "settings.max_windows", "settings.paused", "defaults.width", "defaults.height",
+  "defaults.max_width", "defaults.max_height", "defaults.align_x", "defaults.align_y"]
+
 function defaultConfig() {
   return {
-    settings: { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, min_percent: 20, paused: false },
+    settings: { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, paused: false },
     defaults: { width: 70, height: 80 },
     monitors: [],
     presets: [],
@@ -57,18 +62,14 @@ function normalizeConfig(document) {
 
   var defaults = document.defaults || {}
   var settings = document.settings || {}
-  // Read first: every size below is clamped against it.
-  if (isFinite(Number(settings.min_percent))) config.settings.min_percent = clamp(Math.floor(Number(settings.min_percent)), LIMITS.min, LIMITS.max)
-  var min = config.settings.min_percent
+  var min = LIMITS.min
   if (isFinite(Number(defaults.width))) config.defaults.width = clamp(Math.floor(Number(defaults.width)), min, LIMITS.max)
   if (isFinite(Number(defaults.height))) config.defaults.height = clamp(Math.floor(Number(defaults.height)), min, LIMITS.max)
   if (Number(defaults.max_width) > 0) config.defaults.max_width = Math.floor(Number(defaults.max_width))
   if (Number(defaults.max_height) > 0) config.defaults.max_height = Math.floor(Number(defaults.max_height))
   if (isFinite(Number(defaults.align_x))) config.defaults.align_x = clamp(Math.floor(Number(defaults.align_x)), 0, 100)
   if (isFinite(Number(defaults.align_y))) config.defaults.align_y = clamp(Math.floor(Number(defaults.align_y)), 0, 100)
-  // `step` lived under defaults before 0.2; both places are read.
-  var step = isFinite(Number(settings.step)) ? settings.step : defaults.step
-  if (isFinite(Number(step))) config.settings.step = clamp(Math.floor(Number(step)), 1, 25)
+  if (isFinite(Number(settings.step))) config.settings.step = clamp(Math.floor(Number(settings.step)), 1, 25)
   if (isFinite(Number(settings.fine_step))) config.settings.fine_step = clamp(Math.floor(Number(settings.fine_step)), 1, 25)
   if (NOTIFY_LEVELS.indexOf(settings.notify) !== -1) config.settings.notify = settings.notify
   config.settings.all_workspaces = settings.all_workspaces === true

@@ -19,17 +19,19 @@ local M = ichi
 
 local HOME = os.getenv("HOME") or ""
 local CONFIG_DIR = os.getenv("XDG_CONFIG_HOME") or (HOME .. "/.config")
-local STATE_DIR = os.getenv("XDG_STATE_HOME") or (HOME .. "/.local/state")
 
-M.config_path = CONFIG_DIR .. "/omarchy/ichi.json"
--- Earlier state files, imported once if the JSON does not exist yet: the
--- plugin's pre-rename JSON, then the original "<id> <width> <height>" lines.
-M.legacy_json_path = CONFIG_DIR .. "/omarchy/workspace-inset.json"
-M.legacy_lines_path = STATE_DIR .. "/omarchy/workspace-inset"
+-- The state file. To keep it somewhere else, set this after the dofile line
+-- and call ichi.load().
+M.config_path = CONFIG_DIR .. "/ichi/ichi.json"
+-- Where it lived before 0.7, under Omarchy's directory. While nothing exists
+-- at config_path, a file here is read and written where it is, never moved,
+-- so a link into a dotfiles repo keeps working.
+M.previous_config_path = CONFIG_DIR .. "/omarchy/ichi.json"
 
--- The range settings.min_percent may take; sizes are clamped between that
--- setting and 100.
-M.limits = { min = 5, max = 100 }
+-- Every size is clamped between these, in percent of the usable area. The
+-- floor was a setting, min_percent, until 0.7; lowering it later breaks
+-- nothing, raising it would clamp sizes people have stored.
+M.limits = { min = 10, max = 100 }
 -- Hyprland's own layouts. Anything else is a plugin-registered layout that
 -- owns how its workspace tiles, and Ichi yields to it.
 M.builtin_layouts = { dwindle = true, master = true, scrolling = true, monocle = true }
@@ -40,8 +42,8 @@ M.notify_levels = { never = 0, changes = 1, always = 2 }
 
 local function default_config()
   return {
-    settings = { step = 5, fine_step = 1, notify = "changes", all_workspaces = false, max_windows = 1, min_percent = 20, paused = false },
-    defaults = { width = 70, height = 80, step = 5, max_width = 0, max_height = 0, align_x = 50, align_y = 50 },
+    settings = { step = 5, fine_step = 1, notify = "changes", all_workspaces = false, max_windows = 1, paused = false },
+    defaults = { width = 70, height = 80, max_width = 0, max_height = 0, align_x = 50, align_y = 50 },
     -- Ordered, first match wins: { key = "desc:..." or "DP-1", width?, height?, max_width?, max_height?, align_x?, align_y? }
     monitors = {},
     -- Ordered, for cycling: { name = "reading", entry = <normalized entry> }
@@ -65,14 +67,8 @@ end
 
 -- Entry shapes: { mode = "default" } follows the defaults (JSON `true`),
 -- "size" is a share of the usable area, "aspect" a ratio.
--- The smallest share a size may be, per the config being built or the live one.
-local function floor_percent(cfg)
-  return (cfg or M.config).settings.min_percent
-end
-
-function M.normalize_entry(entry, defaults, min)
+function M.normalize_entry(entry, defaults)
   defaults = defaults or M.config.defaults
-  min = min or floor_percent()
   if entry == true then
     return { mode = "default" }
   end
@@ -94,8 +90,8 @@ function M.normalize_entry(entry, defaults, min)
 
   return {
     mode = "size",
-    width = clamp(math.floor(tonumber(entry.width) or defaults.width), min, M.limits.max),
-    height = clamp(math.floor(tonumber(entry.height) or defaults.height), min, M.limits.max),
+    width = clamp(math.floor(tonumber(entry.width) or defaults.width), M.limits.min, M.limits.max),
+    height = clamp(math.floor(tonumber(entry.height) or defaults.height), M.limits.min, M.limits.max),
   }
 end
 
@@ -237,7 +233,7 @@ local function string_field(body, key)
 end
 
 -- One "{ ... }" entry body, or nil when it does not describe anything usable.
-local function parse_entry(body, defaults, min)
+local function parse_entry(body, defaults)
   local rw, rh = body:match('"ratio"%s*:%s*%[%s*(%d+%.?%d*)%s*,%s*(%d+%.?%d*)%s*%]')
   return M.normalize_entry({
     mode = body:match('"mode"%s*:%s*"(%a+)"'),
@@ -245,7 +241,7 @@ local function parse_entry(body, defaults, min)
     height = number_field(body, "height"),
     ratio_w = rw,
     ratio_h = rh,
-  }, defaults, min)
+  }, defaults)
 end
 
 function M.parse_config(text)
@@ -256,18 +252,14 @@ function M.parse_config(text)
 
   local defaults = find_object(text, "defaults") or ""
   local settings = find_object(text, "settings") or ""
-  -- Read first: every size below is clamped against it.
-  cfg.settings.min_percent = clamp(math.floor(number_field(settings, "min_percent") or 20), M.limits.min, M.limits.max)
-  local min = cfg.settings.min_percent
+  local min = M.limits.min
   cfg.defaults.width = clamp(math.floor(number_field(defaults, "width") or 70), min, M.limits.max)
   cfg.defaults.height = clamp(math.floor(number_field(defaults, "height") or 80), min, M.limits.max)
   cfg.defaults.max_width = math.max(0, math.floor(number_field(defaults, "max_width") or 0))
   cfg.defaults.max_height = math.max(0, math.floor(number_field(defaults, "max_height") or 0))
   cfg.defaults.align_x = clamp(math.floor(number_field(defaults, "align_x") or 50), 0, 100)
   cfg.defaults.align_y = clamp(math.floor(number_field(defaults, "align_y") or 50), 0, 100)
-  -- `step` moved from defaults to settings in 0.2; the old place is still read.
-  cfg.settings.step = clamp(math.floor(number_field(settings, "step") or number_field(defaults, "step") or 5), 1, 25)
-  cfg.defaults.step = cfg.settings.step
+  cfg.settings.step = clamp(math.floor(number_field(settings, "step") or 5), 1, 25)
   cfg.settings.fine_step = clamp(math.floor(number_field(settings, "fine_step") or 1), 1, 25)
   local notify = string_field(settings, "notify")
   if M.notify_levels[notify] then
@@ -320,7 +312,7 @@ function M.parse_config(text)
         pos = pos + 4
       elseif presets:sub(pos, pos) == "{" then
         local _, close = presets:find("%b{}", pos)
-        entry = close and parse_entry(presets:sub(pos + 1, close - 1), cfg.defaults, min)
+        entry = close and parse_entry(presets:sub(pos + 1, close - 1), cfg.defaults)
         pos = (close or pos) + 1
       end
       if entry then
@@ -341,7 +333,7 @@ function M.parse_config(text)
       cfg.workspaces[key] = false
     end
     for key, body in workspaces:gmatch('"([^"]+)"%s*:%s*{(.-)}') do
-      cfg.workspaces[key] = parse_entry(body, cfg.defaults, min)
+      cfg.workspaces[key] = parse_entry(body, cfg.defaults)
     end
   end
 
@@ -429,13 +421,12 @@ function M.encode_config(cfg)
   end
 
   return string.format(
-    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s", "all_workspaces": %s, "max_windows": %d, "min_percent": %d, "paused": %s },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
+    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s", "all_workspaces": %s, "max_windows": %d, "paused": %s },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
     cfg.settings.step,
     cfg.settings.fine_step,
     cfg.settings.notify,
     tostring(cfg.settings.all_workspaces),
     cfg.settings.max_windows,
-    cfg.settings.min_percent,
     tostring(cfg.settings.paused),
     M.encode_size(cfg.defaults),
     encode_monitors(cfg.monitors),
@@ -456,15 +447,54 @@ local function read_file(path)
   return text
 end
 
+local function shell_quote(value)
+  return "'" .. (tostring(value):gsub("'", "'\\''")) .. "'"
+end
+
+local function exists(path)
+  local file = io.open(path, "r")
+  if file then
+    file:close()
+  end
+  return file ~= nil
+end
+
+-- Where a path really points once every link is followed, or the path itself
+-- when that cannot be worked out, as for a file not written yet.
+local function real_path(path)
+  local pipe = io.popen("readlink -f -- " .. shell_quote(path) .. " 2>/dev/null")
+  local out = pipe and pipe:read("*l")
+  if pipe then
+    pipe:close()
+  end
+  if out == nil or out == "" then
+    return path
+  end
+  return out
+end
+
+-- Replace the file whole: write a sibling, then rename it over, so a crash or
+-- a full disk mid-write leaves the old file rather than half of the new one.
+-- `path` is already resolved, so a link into a dotfiles repo is kept and the
+-- file it points to is replaced. Anything that stops the sibling being
+-- written falls back to writing in place.
 local function write_file(path, text)
-  os.execute("mkdir -p '" .. path:match("^(.*)/") .. "'")
-  local file = io.open(path, "w")
+  local tmp = path .. ".tmp"
+  local file = io.open(tmp, "w")
+  if file then
+    local written = file:write(text)
+    local closed = file:close()
+    if written and closed and os.rename(tmp, path) then
+      return true
+    end
+    os.remove(tmp)
+  end
+  file = io.open(path, "w")
   if not file then
     return false
   end
-  file:write(text)
-  file:close()
-  return true
+  local written = file:write(text)
+  return file:close() and written ~= nil
 end
 
 -- Whether text is shaped like a whole JSON object: it opens with a brace, and
@@ -516,55 +546,72 @@ local notify
 -- in progress or a write cut short, is still there to fix.
 M.unreadable = false
 
+-- The file in use: config_path, unless nothing is there and a file from
+-- before 0.7 is.
+function M.state_path()
+  if M.previous_config_path and not exists(M.config_path) and exists(M.previous_config_path) then
+    return M.previous_config_path
+  end
+  return M.config_path
+end
+
+-- The file load() and save() last agreed on: its path, where that path really
+-- points, and the text it holds. The shell asks for a load after every save,
+-- so an unchanged file costs a comparison rather than a parse, and links are
+-- only followed again when something other than Ichi changed the file.
+local in_use = { path = nil, target = nil, text = nil }
+
 function M.save()
   if M.unreadable then
     return
   end
-  write_file(M.config_path, M.encode_config(M.config))
+  if in_use.path == nil then
+    in_use.path = M.state_path()
+    in_use.target = real_path(in_use.path)
+  end
+  if not exists(in_use.target) then
+    -- The first save, or the file was deleted: make sure its directory exists.
+    local dir = in_use.target:match("^(.*)/")
+    if dir then
+      os.execute("mkdir -p " .. shell_quote(dir))
+    end
+  end
+  local text = M.encode_config(M.config)
+  if write_file(in_use.target, text) then
+    in_use.text = text
+  end
 end
 
 function M.load()
-  local text = read_file(M.config_path)
-  if text then
-    if not M.well_formed(text) then
-      if not M.unreadable then
-        M.unreadable = true
-        local shown = M.config_path
-        if HOME ~= "" and shown:sub(1, #HOME + 1) == HOME .. "/" then
-          shown = "~" .. shown:sub(#HOME + 1)
-        end
-        notify(string.format("Ichi: %s does not parse, so nothing is saved until it does. Fix it, or delete it to start over.", shown))
-      end
-      return
-    end
+  local path = M.state_path()
+  local text = read_file(path)
+  if text ~= nil and text == in_use.text and path == in_use.path and not M.unreadable then
+    return
+  end
+  in_use.path, in_use.target, in_use.text = path, real_path(path), nil
+
+  if text == nil then
     M.unreadable = false
-    M.config = M.parse_config(text)
+    M.config = M.parse_config("")
+    return
+  end
+  if not M.well_formed(text) then
+    if not M.unreadable then
+      M.unreadable = true
+      local shown = path
+      if HOME ~= "" and shown:sub(1, #HOME + 1) == HOME .. "/" then
+        shown = "~" .. shown:sub(#HOME + 1)
+      end
+      notify(string.format("Ichi: %s does not parse, so nothing is saved until it does. Fix it, or delete it to start over.", shown))
+    end
     return
   end
   M.unreadable = false
-
-  local legacy_json = read_file(M.legacy_json_path)
-  if legacy_json then
-    M.config = M.parse_config(legacy_json)
-    M.save()
-    return
-  end
-
-  M.config = M.parse_config("")
-  local legacy_lines = read_file(M.legacy_lines_path)
-  if legacy_lines then
-    for id, width, height in legacy_lines:gmatch("(%d+)%s+(%d+)%s+(%d+)") do
-      M.config.workspaces[id] = M.normalize_entry({ width = tonumber(width), height = tonumber(height) })
-    end
-    M.save()
-  end
+  in_use.text = text
+  M.config = M.parse_config(text)
 end
 
 -- -------------------------------------------------------------- hyprland --
-
-local function shell_quote(value)
-  return "'" .. (tostring(value):gsub("'", "'\\''")) .. "'"
-end
 
 -- Omarchy's notifier when it is installed, libnotify when it is not, so this
 -- file runs on a plain Hyprland session. Resolved per call rather than once at
@@ -844,8 +891,8 @@ function M.adjust(delta_width, delta_height, id)
   if entry == nil or entry.mode ~= "size" then
     entry = M.resolve({ mode = "default" }, mon)
   end
-  entry.width = clamp(entry.width + (delta_width or 0), floor_percent(), M.limits.max)
-  entry.height = clamp(entry.height + (delta_height or 0), floor_percent(), M.limits.max)
+  entry.width = clamp(entry.width + (delta_width or 0), M.limits.min, M.limits.max)
+  entry.height = clamp(entry.height + (delta_height or 0), M.limits.min, M.limits.max)
   commit(id, entry, describe(id, entry), "always")
 end
 
@@ -861,8 +908,8 @@ function M.set_size(width, height, id)
   if entry == nil or entry.mode ~= "size" then
     entry = M.resolve({ mode = "default" }, mon)
   end
-  entry.width = clamp(math.floor(tonumber(width) or entry.width), floor_percent(), M.limits.max)
-  entry.height = clamp(math.floor(tonumber(height) or entry.height), floor_percent(), M.limits.max)
+  entry.width = clamp(math.floor(tonumber(width) or entry.width), M.limits.min, M.limits.max)
+  entry.height = clamp(math.floor(tonumber(height) or entry.height), M.limits.min, M.limits.max)
   commit(id, M.normalize_entry(entry), describe(id, entry), "always")
 end
 
@@ -901,79 +948,140 @@ function M.reset(id)
   commit(id, written, describe(id, entry))
 end
 
-local function positive(value, fallback)
-  value = tonumber(value)
-  if value and value > 0 then
-    return value
+-- --------------------------------------------------------------- settings --
+
+local function parse_bool(value)
+  if value == true or value == "true" or value == "on" then
+    return true
+  elseif value == false or value == "false" or value == "off" then
+    return false
   end
-  return fallback
+  return nil
 end
 
--- What a workspace gets when toggled on or reset. Workspaces already on keep
--- their own sizes. Zero or nil leaves a value as it is.
+-- A whole number clamped to a range, as the file's own values are when read.
+local function parse_int(lo, hi)
+  return function(value)
+    local n = tonumber(value)
+    if n == nil or n ~= n or math.abs(n) == math.huge then
+      return nil
+    end
+    return clamp(math.floor(n), lo, hi)
+  end
+end
+
+-- Everything `ichi set` can change, keyed by its place in the file. `about`
+-- is what a bad value is told; `apply` marks the ones that move a window.
+M.settable = {
+  ["settings.step"] = { parse = parse_int(1, 25), about = "a number of points from 1 to 25" },
+  ["settings.fine_step"] = { parse = parse_int(1, 25), about = "a number of points from 1 to 25" },
+  ["settings.notify"] = {
+    parse = function(v)
+      return M.notify_levels[v] and v or nil
+    end,
+    about = "never, changes or always",
+  },
+  ["settings.all_workspaces"] = { parse = parse_bool, about = "on or off", apply = true },
+  ["settings.max_windows"] = { parse = parse_int(1, 10), about = "a number of windows from 1 to 10", apply = true },
+  ["settings.paused"] = { parse = parse_bool, about = "on or off", apply = true },
+  ["defaults.width"] = { parse = parse_int(M.limits.min, M.limits.max), about = "a percentage from 10 to 100", apply = true },
+  ["defaults.height"] = { parse = parse_int(M.limits.min, M.limits.max), about = "a percentage from 10 to 100", apply = true },
+  ["defaults.max_width"] = { parse = parse_int(0, 100000), about = "a number of pixels, 0 for no cap", apply = true },
+  ["defaults.max_height"] = { parse = parse_int(0, 100000), about = "a number of pixels, 0 for no cap", apply = true },
+  ["defaults.align_x"] = { parse = parse_int(0, 100), about = "0 to 100, with 50 the centre", apply = true },
+  ["defaults.align_y"] = { parse = parse_int(0, 100), about = "0 to 100, with 50 the centre", apply = true },
+}
+
+-- Store one setting without saving or saying anything. Nil when the key is
+-- unknown or the value does not fit it.
+local function assign(key, value)
+  local spec = M.settable[key]
+  local parsed = spec and spec.parse(value)
+  if parsed == nil then
+    return nil
+  end
+  local section, field = key:match("^(%a+)%.(.+)$")
+  M.config[section][field] = parsed
+  return parsed
+end
+
+-- Change one setting by its place in the file: set("settings.step", 10),
+-- set("defaults.width", "65"). Values may be strings, as they arrive from the
+-- command line. Returns true when the setting took the value.
+function M.set(key, value)
+  local spec = M.settable[key]
+  if spec == nil then
+    notify(string.format("Ichi: there is no setting called '%s'", tostring(key)))
+    return false
+  end
+  local parsed = assign(key, value)
+  if parsed == nil then
+    notify(string.format("Ichi: %s takes %s", key, spec.about))
+    return false
+  end
+  M.save()
+  if spec.apply then
+    M.refresh()
+  end
+  notify(string.format("Ichi: %s is %s", key, tostring(parsed)))
+  return true
+end
+
+-- The setters set() replaces. Deprecated in 0.7 and gone in 1.0; each still
+-- does what it did, including zero or nil leaving a value alone.
+local function settle(message)
+  M.save()
+  M.refresh()
+  notify(message)
+end
+
+local function positive(value)
+  return (tonumber(value) or 0) > 0
+end
+
 function M.set_defaults(width, height, step)
-  local d, s = M.config.defaults, M.config.settings
-  d.width = clamp(math.floor(positive(width, d.width)), floor_percent(), M.limits.max)
-  d.height = clamp(math.floor(positive(height, d.height)), floor_percent(), M.limits.max)
-  s.step = clamp(math.floor(positive(step, s.step)), 1, 25)
-  d.step = s.step -- kept in sync so bindings written against 0.1 still work
-  M.save()
-  M.refresh() -- workspaces that follow the defaults pick the change up
-  notify(string.format("Ichi: defaults %d%% x %d%%", d.width, d.height))
+  if positive(width) then
+    assign("defaults.width", width)
+  end
+  if positive(height) then
+    assign("defaults.height", height)
+  end
+  if positive(step) then
+    assign("settings.step", step)
+  end
+  settle(string.format("Ichi: defaults %d%% x %d%%", M.config.defaults.width, M.config.defaults.height))
 end
 
--- Pixel caps on the box, whatever the percentage works out to. Zero is none.
 function M.set_max(width, height)
-  local d = M.config.defaults
-  d.max_width = math.max(0, math.floor(tonumber(width) or 0))
-  d.max_height = math.max(0, math.floor(tonumber(height) or 0))
-  M.save()
-  M.refresh()
-  local function show(v)
-    return v > 0 and (v .. "px") or "none"
-  end
-  notify(string.format("Ichi: max width %s, max height %s", show(d.max_width), show(d.max_height)))
+  assign("defaults.max_width", tonumber(width) or 0)
+  assign("defaults.max_height", tonumber(height) or 0)
+  settle(string.format("Ichi: max width %dpx, max height %dpx (0 is no cap)", M.config.defaults.max_width, M.config.defaults.max_height))
 end
 
--- Where the box sits in the slack: 0 is the left or top edge, 50 the centre,
--- 100 the right or bottom. Nil keeps a value.
 function M.set_align(x, y)
-  local d = M.config.defaults
-  if tonumber(x) then
-    d.align_x = clamp(math.floor(tonumber(x)), 0, 100)
-  end
-  if tonumber(y) then
-    d.align_y = clamp(math.floor(tonumber(y)), 0, 100)
-  end
-  M.save()
-  M.refresh()
-  notify(string.format("Ichi: aligned at %d%% across, %d%% down", d.align_x, d.align_y))
+  assign("defaults.align_x", x)
+  assign("defaults.align_y", y)
+  settle(string.format("Ichi: aligned at %d%% across, %d%% down", M.config.defaults.align_x, M.config.defaults.align_y))
 end
 
--- Arrow-key increments in percentage points. Zero or nil keeps a value.
 function M.set_step(step, fine)
-  local s = M.config.settings
-  s.step = clamp(math.floor(positive(step, s.step)), 1, 25)
-  s.fine_step = clamp(math.floor(positive(fine, s.fine_step)), 1, 25)
-  M.config.defaults.step = s.step
-  M.save()
-  notify(string.format("Ichi: step %d, fine step %d", s.step, s.fine_step))
+  if positive(step) then
+    assign("settings.step", step)
+  end
+  if positive(fine) then
+    assign("settings.fine_step", fine)
+  end
+  settle(string.format("Ichi: step %d, fine step %d", M.config.settings.step, M.config.settings.fine_step))
 end
 
--- The smallest share of the screen a size may be. Sizes already below the
--- new floor are left as they are until they are next touched.
-function M.set_min_percent(n)
-  M.config.settings.min_percent = clamp(math.floor(tonumber(n) or 20), M.limits.min, M.limits.max)
-  M.save()
-  notify(string.format("Ichi: sizes go down to %d%%", M.config.settings.min_percent))
+-- The floor is fixed now, so there is nothing left to set.
+function M.set_min_percent()
+  notify(string.format("Ichi: the smallest size is fixed at %d%%", M.limits.min))
 end
 
--- How many tiled windows may share the box before the inset gives way.
 function M.set_max_windows(n)
-  M.config.settings.max_windows = clamp(math.floor(tonumber(n) or 1), 1, 10)
-  M.save()
-  M.refresh()
-  notify(string.format("Ichi: inset holds up to %d window%s", M.config.settings.max_windows,
+  assign("settings.max_windows", tonumber(n) or 1)
+  settle(string.format("Ichi: inset holds up to %d window%s", M.config.settings.max_windows,
     M.config.settings.max_windows == 1 and "" or "s"))
 end
 
@@ -995,32 +1103,25 @@ end
 -- Suspend Ichi everywhere without touching a single workspace entry, for
 -- screen sharing or a presentation. Resuming puts every inset back.
 function M.set_paused(on)
-  M.config.settings.paused = on == true or on == "true" or on == "on"
-  M.save()
-  M.refresh()
-  notify(M.config.settings.paused and "Ichi: paused everywhere" or "Ichi: resumed")
+  assign("settings.paused", parse_bool(on) == true)
+  settle(M.config.settings.paused and "Ichi: paused everywhere" or "Ichi: resumed")
 end
 
 function M.toggle_pause()
   M.set_paused(not M.config.settings.paused)
 end
 
--- Every workspace on unless it opts out with a false entry.
+-- Deprecated in 0.7 for set("settings.all_workspaces", ...); gone in 1.0.
 function M.set_all_workspaces(on)
-  M.config.settings.all_workspaces = on == true or on == "true" or on == "on"
-  M.save()
-  M.refresh()
-  notify("Ichi: all workspaces " .. (M.config.settings.all_workspaces and "on" or "off"))
+  assign("settings.all_workspaces", parse_bool(on) == true)
+  settle("Ichi: all workspaces " .. (M.config.settings.all_workspaces and "on" or "off"))
 end
 
--- "never", "changes" or "always"; see M.notify_levels.
+-- Deprecated in 0.7 for set("settings.notify", ...); gone in 1.0.
 function M.set_notify(level)
-  if not M.notify_levels[level] then
-    return
+  if assign("settings.notify", level) then
+    settle("Ichi: notifications " .. level)
   end
-  M.config.settings.notify = level
-  M.save()
-  notify("Ichi: notifications " .. level)
 end
 
 -- ---------------------------------------------------------------- presets --
@@ -1162,7 +1263,9 @@ function M.adopt_defaults(id, scope)
     return
   end
   M.config.workspaces[id] = { mode = "default" }
-  M.set_defaults(entry.width, entry.height)
+  assign("defaults.width", entry.width)
+  assign("defaults.height", entry.height)
+  settle(string.format("Ichi: defaults %d%% x %d%%", M.config.defaults.width, M.config.defaults.height))
 end
 
 -- Tests load this file with a fake `hl`; only wire events into a real one.
