@@ -319,6 +319,11 @@ test("ichiBinds keeps separate rows for a partial or unlike arrow set", () => {
   assert.equal(Model.ichiBinds(unlike).length, 4)
 })
 
+test("ichiBinds does not relabel a non-resizing arrow set as resize", () => {
+  const align = arrowSet(76, ["align left", "align right", "align up", "align down"])
+  assert.deepEqual(Model.ichiBinds(align).map((row) => row.action), ["align left", "align right", "align up", "align down"])
+})
+
 test("ichiBinds is empty rather than throwing on nothing", () => {
   assert.deepEqual(Model.ichiBinds(""), [])
   assert.deepEqual(Model.ichiBinds(null), [])

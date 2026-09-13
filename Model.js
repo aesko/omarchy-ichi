@@ -267,6 +267,14 @@ function ichiBinds(text) {
 var ARROW_KEYS = ["LEFT", "RIGHT", "UP", "DOWN"]
 var DIRECTION_WORDS = /\b(left|right|up|down|narrower|wider|taller|shorter|nudge|resize)\b/gi
 
+// A description is about resizing if it names a size change outright, or pairs
+// "nudge" or "resize" with a direction. "align left" names a direction too, and
+// must not be relabelled as a resize.
+function describesResize(action) {
+  return /\b(narrower|wider|taller|shorter)\b/i.test(action)
+    || (/\b(nudge|resize)\b/i.test(action) && /\b(left|right|up|down)\b/i.test(action))
+}
+
 // Four arrows under one set of modifiers, described alike but for the
 // direction, are one row: "resize" on "<mods> + arrows". The direction words
 // of both the old "nudge left" descriptions and the newer "narrower" ones are
@@ -290,7 +298,9 @@ function collapseArrows(rows) {
     var group = groups[m]
     var keys = group.map(function (row) { return row.key.toUpperCase() }).sort().join()
     var rest = remainder(group[0].action)
-    var alike = group.every(function (row) { return remainder(row.action) === rest })
+    var alike = group.every(function (row) {
+      return describesResize(row.action) && remainder(row.action) === rest
+    })
     if (group.length === 4 && keys === ARROW_KEYS.slice().sort().join() && alike) merged[m] = rest
   }
 
