@@ -5,15 +5,21 @@
 # comment in Service.qml on why the write stays in-place rather than
 # rename-over), so this resolves that symlink deliberately rather than
 # refusing to follow it: it just requires everything resolution passes
-# through to belong to the user Ichi runs as, and to sit under $HOME. That
-# is the same ancestor check sshd's StrictModes applies to ~/.ssh.
+# through to belong to the user Ichi runs as, and to sit under $HOME.
+#
+# Resolution walks one path component at a time rather than calling
+# `readlink -f` up front, and checks ownership at every step -- of the
+# original path (a symlink could be planted at any directory leading to
+# hyprland.lua, not just at hyprland.lua itself) and of wherever a symlink
+# along the way points. That is the same ancestor check sshd's StrictModes
+# applies to ~/.ssh.
 #
 # Usage: install-hyprland-loader.sh <hyprland-lua-path> <home> <new-content>
 # Exits 0 only if the write happened.
 set -euo pipefail
 
 target=$1
-home=$2
+home_arg=$2
 content=$3
 me=$(id -u)
 
@@ -22,16 +28,15 @@ fail() {
   exit 1
 }
 
-resolved=$(readlink -f -- "$target") || fail "cannot resolve $target"
+# $HOME itself may be a symlink (an autofs or NFS home is a common case), so
+# it is resolved once up front and used as the walk's anchor and as the
+# containment boundary, alongside the raw value the caller passed in.
+home=$(readlink -f -- "$home_arg") || fail "cannot resolve \$HOME ($home_arg)"
 
-case "$resolved" in
-  "$home"/*) ;;
-  *) fail "$target resolves outside \$HOME ($resolved), refusing to write" ;;
-esac
-
-# Every directory from $HOME down to the resolved file's own directory must
-# belong to the current user and not be group- or world-writable. That is
-# how a symlink, or a directory swapped in ahead of one, gets planted.
+# Every directory the walk passes through, on the original path or after a
+# symlink redirects it, must belong to the current user and not be group- or
+# world-writable. That is how a symlink, or a directory swapped in ahead of
+# one, gets planted in the first place.
 check_dir() {
   local dir=$1 owner mode perm
   owner=$(stat -c '%u' -- "$dir") || fail "cannot stat $dir"
@@ -43,21 +48,70 @@ check_dir() {
   fi
 }
 
-rel=${resolved#"$home"/}
-dir=$home
-check_dir "$dir"
-parent=$(dirname -- "$rel")
-if [ "$parent" != "." ]; then
-  IFS='/' read -ra parts <<< "$parent"
-  for part in "${parts[@]}"; do
-    dir="$dir/$part"
-    check_dir "$dir"
-  done
-fi
+check_symlink_owner() {
+  local link=$1 owner
+  owner=$(stat -c '%u' -- "$link") || fail "cannot stat $link"
+  [ "$owner" = "$me" ] || fail "$link is a symlink not owned by the current user"
+}
+
+case "$target" in
+  "$home_arg"/*) rel=${target#"$home_arg"/} ;;
+  "$home"/*) rel=${target#"$home"/} ;;
+  *) fail "$target is not under \$HOME" ;;
+esac
+[ -n "$rel" ] || fail "$target is \$HOME itself"
+
+check_dir "$home"
+
+queue=()
+IFS='/' read -ra queue <<< "$rel"
+
+cur=$home
+hops=0
+while [ "${#queue[@]}" -gt 0 ]; do
+  comp=${queue[0]}
+  queue=("${queue[@]:1}")
+  [ -z "$comp" ] && continue
+
+  next="$cur/$comp"
+  if [ -L "$next" ]; then
+    hops=$((hops + 1))
+    (( hops > 40 )) && fail "too many symlinks resolving $target"
+    check_symlink_owner "$next"
+    link_target=$(readlink -- "$next") || fail "cannot read symlink $next"
+    case "$link_target" in
+      /*)
+        case "$link_target" in
+          "$home"/*|"$home") ;;
+          *) fail "$next resolves outside \$HOME ($link_target)" ;;
+        esac
+        cur=$home
+        rest=${link_target#"$home"}
+        rest=${rest#/}
+        ;;
+      *)
+        cur=$(dirname -- "$next")
+        rest=$link_target
+        ;;
+    esac
+    parts=()
+    IFS='/' read -ra parts <<< "$rest"
+    queue=("${parts[@]}" "${queue[@]}")
+  else
+    cur=$next
+    if [ "${#queue[@]}" -gt 0 ]; then
+      # More path remains, so this component must be a traversable directory.
+      [ -d "$cur" ] || fail "$cur does not exist or is not a directory"
+      check_dir "$cur"
+    fi
+  fi
+done
+resolved=$cur
 
 # Only ever edit an existing hyprland.lua; a missing one is not this plugin's
 # to create, and one that vanished mid-check is not this plugin's to guess at.
 [ -e "$resolved" ] || fail "$resolved no longer exists, not creating it"
+[ -L "$resolved" ] && fail "$resolved is unexpectedly still a symlink"
 owner=$(stat -c '%u' -- "$resolved") || fail "cannot stat $resolved"
 [ "$owner" = "$me" ] || fail "$resolved is not owned by the current user"
 

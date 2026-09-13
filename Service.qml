@@ -19,7 +19,12 @@ Item {
   readonly property string configDir: Quickshell.env("XDG_CONFIG_HOME") || (home + "/.config")
   readonly property string hyprlandLuaPath: configDir + "/hypr/hyprland.lua"
   readonly property string statePath: configDir + "/omarchy/ichi.json"
-  readonly property string loaderInstallerPath: String(Qt.resolvedUrl("scripts/install-hyprland-loader.sh")).replace(/^file:\/\//, "")
+  readonly property string loaderInstallerPath: decodeURIComponent(String(Qt.resolvedUrl("scripts/install-hyprland-loader.sh")).replace(/^file:\/\//, ""))
+  // For notifications: the actual path Ichi read and wrote, home-relative
+  // when it is under $HOME (it need not be, with XDG_CONFIG_HOME set).
+  readonly property string hyprlandLuaDisplayPath: root.hyprlandLuaPath.indexOf(root.home + "/") === 0
+    ? "~" + root.hyprlandLuaPath.slice(root.home.length)
+    : root.hyprlandLuaPath
 
   property var config: Model.defaultConfig()
   property bool loaderInstalled: false
@@ -142,6 +147,8 @@ Item {
     id: installLoaderProcess
     property string errorText: ""
     stderr: StdioCollector {
+      // The script's own fail() already writes "ichi: <reason>"; kept as-is
+      // here since this is also what reaches the notification.
       onStreamFinished: installLoaderProcess.errorText = String(text || "").trim()
     }
     onExited: (exitCode) => {
@@ -150,7 +157,12 @@ Item {
         // The one edit Ichi ever makes to a user file; say so when it happens.
         notifyProcess.running = true
       } else {
-        console.warn("ichi:", installLoaderProcess.errorText || "refused to edit hyprland.lua")
+        var reason = installLoaderProcess.errorText || "ichi: refused to edit hyprland.lua"
+        console.warn(reason)
+        notifyRefusedProcess.command = ["omarchy-notification-send", "-u", "normal",
+          "Ichi did not edit " + root.hyprlandLuaDisplayPath + ": " +
+          reason.replace(/^ichi:\s*/, "") +
+          ". Add the guarded loader line yourself (see the README), or fix this and run `ichi sync`."]
         notifyRefusedProcess.running = true
       }
       installLoaderProcess.errorText = ""
@@ -160,13 +172,12 @@ Item {
   Process {
     id: notifyProcess
     command: ["omarchy-notification-send", "-u", "low",
-      "Ichi added one guarded line to ~/.config/hypr/hyprland.lua so Hyprland loads it. Remove it any time; it is harmless without the plugin."]
+      "Ichi added one guarded line to " + root.hyprlandLuaDisplayPath +
+      " so Hyprland loads it. Remove it any time; it is harmless without the plugin."]
   }
 
   Process {
     id: notifyRefusedProcess
-    command: ["omarchy-notification-send", "-u", "normal",
-      "Ichi could not safely edit ~/.config/hypr/hyprland.lua (ownership check failed). Add the guarded loader line yourself, or fix permissions and run `ichi sync`."]
   }
 
   // --------------------------------------------------------- commands --

@@ -5,6 +5,12 @@ set -uo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 script="$root/scripts/install-hyprland-loader.sh"
 
+# The script refuses group-writable ancestors, and mkdir honours the caller's
+# umask; a 002 umask (the Debian/Ubuntu default) would make every directory
+# below group-writable and fail the happy-path cases for a reason that has
+# nothing to do with what they are testing.
+umask 022
+
 failures=0
 check() {
   local name=$1 ok=$2
@@ -42,6 +48,32 @@ chmod 755 "$home/dotfiles/hypr"
 rm "$home/dotfiles/hypr/hyprland.lua"
 "$script" "$home/.config/hypr/hyprland.lua" "$home" 'new' >/dev/null 2>&1
 check "refuses when the resolved target no longer exists" "$([ $? -ne 0 ] && echo 1 || echo 0)"
+
+# The attack an ancestor-only check misses: ~/.config/hypr itself (not just
+# hyprland.lua) is a symlink out to a directory anyone can write in, so an
+# attacker can point the eventual hyprland.lua leaf anywhere they like.
+rm -rf "$home/.config/hypr"
+attacker_writable=$(mktemp -d)
+trap 'rm -rf "$work" "$outside" "$attacker_writable"' EXIT
+chmod 777 "$attacker_writable"
+ln -s "$attacker_writable" "$home/.config/hypr"
+ln -s "$home/.bashrc" "$attacker_writable/hyprland.lua"
+printf 'victim bashrc\n' > "$home/.bashrc"
+"$script" "$home/.config/hypr/hyprland.lua" "$home" 'PWNED' >/dev/null 2>&1
+check "refuses a symlinked intermediate directory anyone can write in" \
+  "$([ $? -ne 0 ] && ! grep -q PWNED "$home/.bashrc" && echo 1 || echo 0)"
+rm -f "$home/.config/hypr"
+
+# $HOME itself may be a symlink (autofs, NFS, some container setups); that
+# alone should not trip the ownership checks below it.
+mkdir -p "$home/.config/hypr"
+printf -- '-- original\n' > "$home/dotfiles/hypr/hyprland.lua"
+ln -sf "$home/dotfiles/hypr/hyprland.lua" "$home/.config/hypr/hyprland.lua"
+homelink="$work/homelink"
+ln -s "$home" "$homelink"
+"$script" "$homelink/.config/hypr/hyprland.lua" "$homelink" $'-- original\nloader\n' >/dev/null 2>&1
+check "writes through a symlinked \$HOME" \
+  "$([ $? -eq 0 ] && grep -q loader "$home/dotfiles/hypr/hyprland.lua" && echo 1 || echo 0)"
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures failure(s)"
