@@ -12,22 +12,35 @@ widget's own settings and your keybindings.
   which is why the sliders stand down for it; `default` or a preset brings
   them back. Any other ratio is still `ichi aspect 21 9`. This was the last
   thing the panel could read and not write.
-- **A settings page behind the cog.** The card turns over to the widget's own
-  settings: what it shows in the bar, whether it appears where Ichi is off,
-  and what the scroll wheel and left click do. They write the same
-  `shell.json` entry Omarchy's bar settings writes, merged so that a key left
-  at its manifest default stays absent. **Hidden** is deliberately not offered
-  there — choosing it would take away the panel it was chosen from.
+- **A settings page behind the cog.** The card turns over to two short
+  sections. *Bar widget* holds what it shows in the bar and what left click
+  does; these write the same `shell.json`
+  entry Omarchy's bar settings writes, leaving out any key at its manifest
+  default. **Hidden** is deliberately not offered there — choosing it would
+  take away the panel it was chosen from. *Behaviour* holds notifications and the
+  resize step and fine step, which are Ichi's own settings in `ichi.json` and
+  work with or without the widget.
 - **Your Ichi keybindings, on the same page**, read from `hyprctl binds`. A
   bind is Ichi's when its description starts with `Ichi:`, which is how the
   README's suggested set is written. That prefix is the only link there is: a
   Lua bind reports an opaque `__lua` dispatcher, so a bind described any other
-  way works perfectly well and simply is not listed.
+  way works perfectly well and simply is not listed. Four arrows under the
+  same modifiers, described alike but for the direction, are one *resize* row
+  rather than four.
 
 ### Changed
 
 - Picking an aspect ratio from the panel raises no notification, matching
   every other panel action.
+- **The README's arrow bindings are described by what they do** — *narrower*,
+  *wider*, *taller*, *shorter* — rather than *nudge left* and so on, which
+  named the key. Existing descriptions keep working, and fold into the same
+  *resize* rows.
+
+### Removed
+
+- The *Scroll wheel* bar setting, tried out and judged not worth keeping; Ichi
+  is meant to be driven from the keyboard.
 
 ### Security
 

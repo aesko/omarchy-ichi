@@ -34,6 +34,9 @@ Panel {
   readonly property string presetName: ready && ichiStatus.preset ? String(ichiStatus.preset) : ""
   readonly property var presetNames: ready && ichiStatus.presets ? ichiStatus.presets : []
   readonly property int minPercent: ready && ichiStatus.settings ? ichiStatus.settings.min_percent : 20
+  readonly property string notifyLevel: ready && ichiStatus.settings ? ichiStatus.settings.notify : "changes"
+  readonly property int stepPoints: ready && ichiStatus.settings ? ichiStatus.settings.step : 5
+  readonly property int fineStepPoints: ready && ichiStatus.settings ? ichiStatus.settings.fine_step : 1
 
   // Aspect entries have no percentage, so the sliders stand down for them.
   readonly property bool sizeMode: !!(resolved && resolved.mode === "size")
@@ -45,11 +48,12 @@ Panel {
   readonly property int sizeHeight: sizeMode ? resolved.height : 0
 
   readonly property string glyph: ""
-  readonly property string display: setting("display", "Icon only")
+  // Mirrors manifest.json's barWidget.defaults.
+  readonly property var settingDefaults: ({ display: "Icon only", showWhenOff: true, clickAction: "Open panel" })
+  readonly property string display: setting("display", settingDefaults.display)
   readonly property bool hidden: display === "Hidden"
-  readonly property bool showWhenOff: setting("showWhenOff", true) === true
-  readonly property string scrollAction: setting("scrollAction", "Off")
-  readonly property string clickAction: setting("clickAction", "Open panel")
+  readonly property bool showWhenOff: setting("showWhenOff", settingDefaults.showWhenOff) === true
+  readonly property string clickAction: setting("clickAction", settingDefaults.clickAction)
 
   // Hidden is the opt-out for people who want the service without the widget:
   // enabling a bar-widget plugin always places it, so it hides itself instead.
@@ -72,6 +76,9 @@ Panel {
   // Read from `hyprctl binds` when the card is turned over, because bindings
   // live in the user's own config and can change between two openings.
   property var shortcuts: []
+  // False until `hyprctl binds` has answered once, so the empty-list message
+  // does not flash while the first read is under way, or show for a failure.
+  property bool shortcutsLoaded: false
 
   // The ratios offered as chips: the shapes a window is usually wanted in.
   // Any other ratio is still reachable from the command line, which is where
@@ -95,14 +102,6 @@ Panel {
   // notification would land on top of the panel that caused it.
   function call(name) {
     if (ichiService && typeof ichiService[name] === "function") ichiService[name](true)
-  }
-
-  function onScroll(delta) {
-    if (!ichiService) return
-    var direction = delta > 0 ? 1 : -1
-    if (scrollAction === "Resize width") ichiService.cmdNudge(direction, 0, false, true)
-    else if (scrollAction === "Resize height") ichiService.cmdNudge(0, direction, false, true)
-    else if (scrollAction === "Cycle presets") ichiService.cmdCycle(direction, true)
   }
 
   // ------------------------------------------------------------- the bar --
@@ -134,13 +133,7 @@ Panel {
         if (root.clickAction === "Toggle") root.call("cmdToggle")
         else root.toggle()
       }
-    }
-
-    WheelHandler {
-      enabled: root.scrollAction !== "Off"
-      onWheel: function (event) { root.onScroll(event.angleDelta.y) }
-    }
-  }
+    }  }
 
   // ----------------------------------------------------------- the panel --
 
@@ -454,6 +447,12 @@ Panel {
             }
           }
 
+          PanelSectionHeader {
+            Layout.fillWidth: true
+            text: "Bar widget"
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+          }
+
           // The widget's own settings, the same keys Omarchy's bar settings
           // writes. "Hidden" is deliberately not offered: choosing it here
           // would take away the panel that was chosen from, and a widget
@@ -470,36 +469,6 @@ Panel {
             Binding on value { value: root.display }
           }
 
-          RowLayout {
-            Layout.fillWidth: true
-            spacing: Style.space(8)
-
-            Text {
-              Layout.fillWidth: true
-              text: "Show where Ichi is off"
-              color: root.bar ? root.bar.foreground : Color.foreground
-              font.family: Style.font.family
-              font.pixelSize: Style.font.body
-              wrapMode: Text.WordWrap
-            }
-
-            ToggleSwitch {
-              checked: root.showWhenOff
-              foreground: root.bar ? root.bar.foreground : Color.foreground
-              onToggled: root.persistSettings({ showWhenOff: !root.showWhenOff })
-            }
-          }
-
-          Dropdown {
-            Layout.fillWidth: true
-            label: "Scroll wheel"
-            options: ["Off", "Resize width", "Resize height", "Cycle presets"]
-            foreground: root.bar ? root.bar.foreground : Color.foreground
-            onChanged: function (choice) { root.persistSettings({ scrollAction: choice }) }
-
-            Binding on value { value: root.scrollAction }
-          }
-
           Dropdown {
             Layout.fillWidth: true
             label: "Left click"
@@ -508,6 +477,55 @@ Panel {
             onChanged: function (choice) { root.persistSettings({ clickAction: choice }) }
 
             Binding on value { value: root.clickAction }
+          }
+
+          PanelSeparator { Layout.fillWidth: true }
+
+          // Ichi's own settings, in ichi.json rather than shell.json: they
+          // hold with or without the widget, so they get their own heading.
+          PanelSectionHeader {
+            Layout.fillWidth: true
+            text: "Behaviour"
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+          }
+
+          // Labels for the stored levels: "changes" reports everything but
+          // stepwise resizing, which its own name does not say.
+          Dropdown {
+            id: notifyDropdown
+            readonly property var labels: ({ never: "Never", changes: "All but resizing", always: "All" })
+            Layout.fillWidth: true
+            label: "Notifications"
+            options: [labels.never, labels.changes, labels.always]
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onChanged: function (choice) {
+              for (var level in labels) {
+                if (labels[level] === choice && root.ichiService) root.ichiService.cmdNotify(level, true)
+              }
+            }
+
+            Binding on value { value: notifyDropdown.labels[root.notifyLevel] || notifyDropdown.labels.changes }
+          }
+
+          // The arrow keys' increments, next to the list that shows those keys.
+          NumberField {
+            label: "Resize step"
+            value: root.stepPoints
+            from: 1
+            to: 25
+            stepSize: 1
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onModified: function (v) { if (root.ichiService) root.ichiService.cmdStep(v, true) }
+          }
+
+          NumberField {
+            label: "Fine step"
+            value: root.fineStepPoints
+            from: 1
+            to: 25
+            stepSize: 1
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onModified: function (v) { if (root.ichiService) root.ichiService.cmdFineStep(v, true) }
           }
 
           PanelSeparator { Layout.fillWidth: true }
@@ -523,8 +541,8 @@ Panel {
           // someone who has not written any yet, not a failure.
           Text {
             Layout.fillWidth: true
-            visible: root.shortcuts.length === 0
-            text: "No keybindings describe themselves as Ichi's. The README has a set to paste."
+            visible: root.shortcutsLoaded && root.shortcuts.length === 0
+            text: "No Ichi keybindings yet. Bindings whose description starts with “Ichi:” show up here; the README has a set to paste."
             color: root.bar ? root.bar.foreground : Color.foreground
             opacity: 0.6
             font.family: Style.font.family
@@ -548,8 +566,8 @@ Panel {
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
                 // Wrapped rather than elided: with four modifiers spelled out
-                // the widest rows leave the action no room, and "nudge left"
-                // cut short of "(fine)" is the wrong half to lose.
+                // the widest rows leave the action no room, and "resize" cut
+                // short of "(fine)" is the wrong half to lose.
                 wrapMode: Text.WordWrap
               }
 
@@ -591,8 +609,13 @@ Panel {
   // rather than being frozen at today's value.
   function persistSettings(values) {
     var entry = { id: root.moduleName }
-    for (var existing in root.settings) if (existing !== "id") entry[existing] = root.settings[existing]
+    // Only keys the widget still has, so a stored key no setting reads any more
+    // is not copied forward on every save.
+    for (var existing in root.settingDefaults) if (root.settings[existing] !== undefined) entry[existing] = root.settings[existing]
     for (var key in values) entry[key] = values[key]
+    // Omarchy stores whatever it is handed, so a key at its default is left
+    // out here; an entry stays bare until a setting really differs.
+    for (var name in root.settingDefaults) if (entry[name] === root.settingDefaults[name]) delete entry[name]
 
     // Applied locally first so the control moves under the click; the shell's
     // write comes back through the bar as the same value.
@@ -607,7 +630,13 @@ Panel {
     id: bindsProcess
     command: ["hyprctl", "binds"]
     stdout: StdioCollector {
-      onStreamFinished: root.shortcuts = Model.ichiBinds(text)
+      onStreamFinished: {
+        // Hyprland always reports some binds; empty output means the call
+        // failed, which is not the same as having none of Ichi's.
+        if (String(text || "").trim() === "") return
+        root.shortcuts = Model.ichiBinds(text)
+        root.shortcutsLoaded = true
+      }
     }
   }
 

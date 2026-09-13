@@ -119,11 +119,11 @@ end)
 o.bind("SUPER + CTRL + ALT + A", "Ichi: adopt as default", function()
   if ichi then ichi.adopt_defaults() end
 end)
-for key, dw, dh in ("LEFT,-1,0 RIGHT,1,0 UP,0,1 DOWN,0,-1"):gmatch("(%a+),(-?%d),(-?%d)") do
-  o.bind("SUPER + CTRL + ALT + " .. key, "Ichi: nudge " .. key:lower(), function()
+for key, dw, dh, word in ("LEFT,-1,0,narrower RIGHT,1,0,wider UP,0,1,taller DOWN,0,-1,shorter"):gmatch("(%a+),(-?%d),(-?%d),(%a+)") do
+  o.bind("SUPER + CTRL + ALT + " .. key, "Ichi: " .. word, function()
     if ichi then ichi.nudge(tonumber(dw), tonumber(dh)) end
   end, { repeating = true })
-  o.bind("SUPER + CTRL + ALT + SHIFT + " .. key, "Ichi: nudge " .. key:lower() .. " (fine)", function()
+  o.bind("SUPER + CTRL + ALT + SHIFT + " .. key, "Ichi: " .. word .. " (fine)", function()
     if ichi then ichi.nudge(tonumber(dw), tonumber(dh), true) end
   end, { repeating = true })
 end
@@ -137,7 +137,8 @@ workspace on, tune it with the arrows, then press adopt.
 Keep the `Ichi:` prefix on the descriptions. The panel's shortcut list matches
 on it, and a Lua bind gives Hyprland nothing else to match — it reports an
 opaque `__lua` dispatcher, so your description is the only link between a key
-and what it does.
+and what it does. Four arrows under the same modifiers, described alike but for
+the direction, show there as a single *resize* row.
 
 ## Bar widget
 
@@ -155,14 +156,21 @@ stand down for it; `default` or a preset brings them back. Any other ratio is
 `omarchy-shell ichi aspect 21 9`.
 
 The cog turns the panel over. On the back are the widget's own settings — what
-it shows in the bar, whether it appears where Ichi is off, and what the scroll
-wheel and left click do — and a list of your Ichi keybindings, read from
+it shows in the bar and what left click does — then Ichi's notifications and
+its resize step and fine step, and a list of your Ichi keybindings, read from
 `hyprctl binds`.
 
 `omarchy-shell ichi.panel toggle` opens the panel, so you can bind it to a key.
 
 To move the widget, `omarchy plugin enable io.github.aesko.ichi --section
-center`. To keep Ichi without it, set **Show in the bar** to *Hidden*.
+center`. Two settings are only reachable from the command line — keeping Ichi
+without the widget, and showing the icon only on workspaces where Ichi is on:
+
+```bash
+omarchy bar set io.github.aesko.ichi display Hidden
+omarchy bar set io.github.aesko.ichi showWhenOff false --json
+```
+
 Upgrading from 0.3 or earlier is the one case where the widget does not appear
 on its own — your config already lists the plugin as enabled, so Omarchy sees
 nothing to place. Disable and enable it once:

@@ -251,13 +251,13 @@ Item {
   }
 
   // Arrow-key increment in percentage points, e.g. step 10.
-  function cmdStep(points) {
-    root.evaluate("if ichi then ichi.set_step(" + (Number(points) || 0) + ", 0) end")
+  function cmdStep(points, quiet) {
+    run("ichi.set_step(" + (Number(points) || 0) + ", 0)", quiet)
   }
 
   // The shifted arrows' increment, e.g. fine_step 2.
-  function cmdFineStep(points) {
-    root.evaluate("if ichi then ichi.set_step(0, " + (Number(points) || 0) + ") end")
+  function cmdFineStep(points, quiet) {
+    run("ichi.set_step(0, " + (Number(points) || 0) + ")", quiet)
   }
 
   // An absolute size for the focused workspace, which is what a slider has.
@@ -299,9 +299,9 @@ Item {
   }
 
   // How chatty to be: never, changes or always.
-  function cmdNotify(level) {
+  function cmdNotify(level, quiet) {
     if (Model.NOTIFY_LEVELS.indexOf(level) === -1) return
-    root.evaluate("if ichi then ichi.set_notify(\"" + level + "\") end")
+    run("ichi.set_notify(\"" + level + "\")", quiet)
   }
 
   // Give the focused workspace a preset by name.

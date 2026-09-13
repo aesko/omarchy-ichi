@@ -99,9 +99,10 @@ dropped; a malformed file keeps the last good document.
 
 - `step` and `fine_step` are the arrow-key increments in percentage points,
   for the plain and the shifted arrows.
-- `notify` is how much Ichi says: `never` is silent, `changes` is the default
-  and reports toggles, resets and setting changes, `always` also reports every
-  arrow-key nudge.
+- `notify` is how much Ichi says: `never` is silent; `changes`, the default,
+  reports everything except resizing step by step (arrow-key nudges and
+  `size`); `always` reports those too. The panel labels them *Never*, *All but
+  resizing* and *All*.
 - `paused` suspends Ichi everywhere. Every workspace goes back to normal gaps
   and keeps its entry, so resuming restores the lot. Meant for screen sharing.
 - `all_workspaces` turns every workspace on. A workspace with no entry then

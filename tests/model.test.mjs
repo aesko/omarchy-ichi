@@ -285,6 +285,40 @@ test("ichiBinds closes the last record without a trailing blank line", () => {
   assert.deepEqual(Model.ichiBinds(text), [{ keys: "SUPER + J", action: "toggle" }])
 })
 
+const DIRECTIONS = ["LEFT", "RIGHT", "UP", "DOWN"]
+function bindText(modmask, key, description) {
+  return `binded\n\tmodmask: ${modmask}\n\tkey: ${key}\n\tkeycode: 0\n\tdescription: ${description}\n`
+}
+function arrowSet(modmask, words, suffix = "") {
+  return DIRECTIONS.map((key, i) => bindText(modmask, key, "Ichi: " + words[i] + suffix)).join("\n")
+}
+
+test("ichiBinds folds the README's arrow set into two resize rows", () => {
+  const words = ["narrower", "wider", "taller", "shorter"]
+  const text = [bindText(76, "I", "Ichi: toggle"), arrowSet(76, words), arrowSet(77, words, " (fine)")].join("\n")
+  assert.deepEqual(Model.ichiBinds(text), [
+    { keys: "SUPER CTRL ALT + I", action: "toggle" },
+    { keys: "SUPER CTRL ALT + arrows", action: "resize" },
+    { keys: "SUPER SHIFT CTRL ALT + arrows", action: "resize (fine)" },
+  ])
+})
+
+test("ichiBinds folds the older nudge descriptions the same way", () => {
+  const words = ["nudge left", "nudge right", "nudge up", "nudge down"]
+  const text = [arrowSet(76, words), arrowSet(77, words, " (fine)")].join("\n")
+  assert.deepEqual(Model.ichiBinds(text), [
+    { keys: "SUPER CTRL ALT + arrows", action: "resize" },
+    { keys: "SUPER SHIFT CTRL ALT + arrows", action: "resize (fine)" },
+  ])
+})
+
+test("ichiBinds keeps separate rows for a partial or unlike arrow set", () => {
+  const partial = DIRECTIONS.slice(0, 3).map((key) => bindText(76, key, "Ichi: " + key.toLowerCase())).join("\n")
+  assert.equal(Model.ichiBinds(partial).length, 3)
+  const unlike = arrowSet(76, ["narrower", "wider", "taller", "next preset"])
+  assert.equal(Model.ichiBinds(unlike).length, 4)
+})
+
 test("ichiBinds is empty rather than throwing on nothing", () => {
   assert.deepEqual(Model.ichiBinds(""), [])
   assert.deepEqual(Model.ichiBinds(null), [])

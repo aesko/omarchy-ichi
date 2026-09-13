@@ -29,7 +29,6 @@
     "defaults": {
       "display": "Icon only",
       "showWhenOff": true,
-      "scrollAction": "Off",
       "clickAction": "Open panel"
     },
     "schema": [
@@ -52,19 +51,6 @@
         "label": "Show on workspaces where Ichi is off",
         "defaultValue": true,
         "description": "Turn this off and the widget appears only where it is doing something."
-      },
-      {
-        "key": "scrollAction",
-        "type": "enum",
-        "label": "Scroll wheel",
-        "options": [
-          "Off",
-          "Resize width",
-          "Resize height",
-          "Cycle presets"
-        ],
-        "defaultValue": "Off",
-        "description": "Off by default, because a bar that resizes windows when the pointer passes over it is a surprise."
       },
       {
         "key": "clickAction",

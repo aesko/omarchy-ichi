@@ -236,9 +236,11 @@ function ichiBinds(text) {
     if (plus !== -1) key = key.slice(plus + 3)
     if (key === "" && record.keycode && record.keycode !== "0") key = "code:" + record.keycode
     if (key === "") return
-    var mods = modifierNames(record.modmask)
+    var mods = modifierNames(record.modmask).join(" ")
     rows.push({
-      keys: mods.length > 0 ? mods.join(" ") + " + " + key : key,
+      mods: mods,
+      key: key,
+      keys: mods !== "" ? mods + " + " + key : key,
       action: record.description.slice(5).trim(),
     })
   }
@@ -257,7 +259,60 @@ function ichiBinds(text) {
     else flush()
   }
   flush()
-  return rows
+  return collapseArrows(rows).map(function (row) {
+    return { keys: row.keys, action: row.action }
+  })
+}
+
+var ARROW_KEYS = ["LEFT", "RIGHT", "UP", "DOWN"]
+var DIRECTION_WORDS = /\b(left|right|up|down|narrower|wider|taller|shorter|nudge|resize)\b/gi
+
+// Four arrows under one set of modifiers, described alike but for the
+// direction, are one row: "resize" on "<mods> + arrows". The direction words
+// of both the old "nudge left" descriptions and the newer "narrower" ones are
+// ignored, so either set collapses. A partial or differently described set
+// keeps its own rows, since merging those would hide what a key does.
+function collapseArrows(rows) {
+  var groups = {}
+  for (var i = 0; i < rows.length; i++) {
+    if (ARROW_KEYS.indexOf(rows[i].key.toUpperCase()) === -1) continue
+    var mods = rows[i].mods
+    if (!groups[mods]) groups[mods] = []
+    groups[mods].push(rows[i])
+  }
+
+  function remainder(action) {
+    return action.replace(DIRECTION_WORDS, "").replace(/\s+/g, " ").trim()
+  }
+
+  var merged = {}
+  for (var m in groups) {
+    var group = groups[m]
+    var keys = group.map(function (row) { return row.key.toUpperCase() }).sort().join()
+    var rest = remainder(group[0].action)
+    var alike = group.every(function (row) { return remainder(row.action) === rest })
+    if (group.length === 4 && keys === ARROW_KEYS.slice().sort().join() && alike) merged[m] = rest
+  }
+
+  var out = []
+  var placed = {}
+  for (var j = 0; j < rows.length; j++) {
+    var row = rows[j]
+    var isArrow = ARROW_KEYS.indexOf(row.key.toUpperCase()) !== -1
+    if (!isArrow || merged[row.mods] === undefined) {
+      out.push(row)
+      continue
+    }
+    if (placed[row.mods]) continue
+    placed[row.mods] = true
+    out.push({
+      mods: row.mods,
+      key: "arrows",
+      keys: row.mods !== "" ? row.mods + " + arrows" : "arrows",
+      action: merged[row.mods] !== "" ? "resize " + merged[row.mods] : "resize",
+    })
+  }
+  return out
 }
 
 function padRight(text, width) {
