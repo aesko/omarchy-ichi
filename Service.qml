@@ -19,6 +19,7 @@ Item {
   readonly property string configDir: Quickshell.env("XDG_CONFIG_HOME") || (home + "/.config")
   readonly property string hyprlandLuaPath: configDir + "/hypr/hyprland.lua"
   readonly property string statePath: configDir + "/omarchy/ichi.json"
+  readonly property string loaderInstallerPath: String(Qt.resolvedUrl("scripts/install-hyprland-loader.sh")).replace(/^file:\/\//, "")
 
   property var config: Model.defaultConfig()
   property bool loaderInstalled: false
@@ -104,25 +105,30 @@ Item {
   //
   // Hyprland only reads what its config asks for, so ichi.lua needs one
   // `dofile` line in hyprland.lua. It is guarded by an existence check, so
-  // removing the plugin can never break the config. Written in place rather
-  // than atomically: hyprland.lua is often a symlink into a dotfiles repo, and
-  // a rename-over would silently replace the link with a plain file.
+  // removing the plugin can never break the config.
+  //
+  // hyprland.lua is often a symlink into a dotfiles repo, so this reads it
+  // through FileView but never writes through it: FileView has no ownership
+  // or no-follow controls, and a plain in-place write would happily follow
+  // a symlink planted by anyone. The actual write goes through
+  // scripts/install-hyprland-loader.sh, which resolves that symlink chain
+  // itself and refuses unless every step of it belongs to the current user.
 
   FileView {
     id: hyprlandLuaFile
     path: root.hyprlandLuaPath
-    atomicWrites: false
     watchChanges: false
     printErrors: false
 
     onLoaded: {
       var current = text()
       if (Model.needsLoader(current)) {
-        setText(Model.withLoader(current))
-        // The one edit Ichi ever makes to a user file; say so when it happens.
-        notifyProcess.running = true
+        installLoaderProcess.command = [root.loaderInstallerPath,
+          root.hyprlandLuaPath, root.home, Model.withLoader(current)]
+        installLoaderProcess.running = true
+      } else {
+        root.loaderInstalled = true
       }
-      root.loaderInstalled = true
     }
 
     onLoadFailed: {
@@ -133,9 +139,34 @@ Item {
   }
 
   Process {
+    id: installLoaderProcess
+    property string errorText: ""
+    stderr: StdioCollector {
+      onStreamFinished: installLoaderProcess.errorText = String(text || "").trim()
+    }
+    onExited: (exitCode) => {
+      root.loaderInstalled = exitCode === 0
+      if (exitCode === 0) {
+        // The one edit Ichi ever makes to a user file; say so when it happens.
+        notifyProcess.running = true
+      } else {
+        console.warn("ichi:", installLoaderProcess.errorText || "refused to edit hyprland.lua")
+        notifyRefusedProcess.running = true
+      }
+      installLoaderProcess.errorText = ""
+    }
+  }
+
+  Process {
     id: notifyProcess
     command: ["omarchy-notification-send", "-u", "low",
       "Ichi added one guarded line to ~/.config/hypr/hyprland.lua so Hyprland loads it. Remove it any time; it is harmless without the plugin."]
+  }
+
+  Process {
+    id: notifyRefusedProcess
+    command: ["omarchy-notification-send", "-u", "normal",
+      "Ichi could not safely edit ~/.config/hypr/hyprland.lua (ownership check failed). Add the guarded loader line yourself, or fix permissions and run `ichi sync`."]
   }
 
   // --------------------------------------------------------- commands --

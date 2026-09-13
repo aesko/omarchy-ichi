@@ -29,6 +29,20 @@ widget's own settings and your keybindings.
 - Picking an aspect ratio from the panel raises no notification, matching
   every other panel action.
 
+### Security
+
+- **The `hyprland.lua` loader line is now installed through an ownership
+  check, not an unconditional in-place write.** `hyprland.lua` is often a
+  symlink into a dotfiles repo, which Ichi has always followed on purpose —
+  but nothing previously checked *who* that symlink, or the directories
+  above it, belonged to. Installation now resolves the whole chain up to
+  your home directory and refuses to write unless every step of it is
+  yours, the same ancestor check sshd applies to `~/.ssh`. A setup this
+  rules out (a Nix or home-manager–managed `hyprland.lua`, most commonly,
+  since it resolves outside your home directory) gets a notification
+  instead of a silent write; see the README's Install section for the
+  manual line and `ichi sync`.
+
 ## 0.5.0 — 2026-09-12
 
 Ichi runs on plain Hyprland, `status` is written for a person to read, and the

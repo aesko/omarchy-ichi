@@ -14,4 +14,5 @@ if command -v node >/dev/null; then
 else
   echo "skip: node not installed (model.test.mjs)"
 fi
+tests/loader_install_test.sh || status=1
 exit $status

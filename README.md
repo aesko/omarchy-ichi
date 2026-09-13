@@ -45,6 +45,15 @@ appends one guarded line to `~/.config/hypr/hyprland.lua` that loads
 `ichi.lua`, and tells you it did. Nothing is inset until you turn a workspace
 on, so installing changes nothing about how your desktop tiles.
 
+`hyprland.lua` is often a symlink into a dotfiles repo, and Ichi follows it —
+but only after checking that every step of that symlink, and every directory
+above it up to your home directory, belongs to you. If that check fails (for
+example, `hyprland.lua` resolves to a path outside your home directory, as a
+Nix or home-manager–managed config typically does), Ichi leaves the file
+alone and tells you so instead of writing through it; add the loader block
+from [Without Omarchy](#without-omarchy) by hand in that case, then run
+`omarchy-shell ichi sync` once it is in place.
+
 To update:
 
 ```bash
