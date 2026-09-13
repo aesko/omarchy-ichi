@@ -591,6 +591,28 @@ check("set_notify ignores an unknown level", M.config.settings.notify == "always
 M.set_notify("never")
 check("set_notify persists", M.parse_config(io.open(M.config_path):read("*a")).settings.notify == "never")
 M.set_notify("always")
+
+-- Adopt on a named workspace: its key is not a number, and each "why not"
+-- message has to say so without failing.
+fake.workspaces[-1338] = { id = -1338, name = "mail", config_name = "name:mail", tiled_layout = "dwindle",
+  monitor = { name = "DP-1", width = 2560, height = 1440, reserved = {} } }
+fake.notes = {}
+check("adopt on a named workspace that is off says why",
+  pcall(M.adopt_defaults, "mail") and #fake.notes == 1 and fake.notes[1]:find("workspace mail is off", 1, true) ~= nil,
+  fake.notes[1])
+M.config.workspaces["mail"] = { mode = "default" }
+fake.notes = {}
+check("adopt on a named workspace that follows the defaults says why",
+  pcall(M.adopt_defaults, "mail") and #fake.notes == 1 and fake.notes[1]:find("workspace mail already", 1, true) ~= nil,
+  fake.notes[1])
+M.config.workspaces["mail"] = { mode = "aspect", ratio_w = 4, ratio_h = 3 }
+fake.notes = {}
+check("adopt on a named aspect workspace says why",
+  pcall(M.adopt_defaults, "mail") and #fake.notes == 1 and fake.notes[1]:find("workspace mail is an aspect", 1, true) ~= nil,
+  fake.notes[1])
+M.config.workspaces["mail"] = nil
+fake.workspaces[-1338] = nil
+
 os.remove(M.config_path)
 os.remove(M.legacy_lines_path)
 
