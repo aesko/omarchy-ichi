@@ -55,6 +55,43 @@ for settings, and a state file that cannot be left half-written.
   Ichi keeps the last good settings, says so whatever `settings.notify` says,
   shows it in `ichi status`, and saves nothing until the file is fixed. A file
   cut short had lost every workspace the missing half held on the next change.
+- **`hyprland.lua` is replaced, not rewritten in place.** The loader install
+  wrote into the file directly: it opened with `O_TRUNC` and only then wrote,
+  so anything that went wrong in between — a full disk, a killed process, a
+  short write whose return value was never checked — left an empty or
+  half-written config behind, and the plugin still reported success. The new
+  text now goes to a temporary file in the same directory and is renamed over
+  the target, so a failure anywhere leaves the file exactly as it was. A
+  dotfiles symlink still survives the edit, because the rename lands on the
+  file the symlink resolves to, not on the link. A hard link to the same file
+  does not, which is the one behaviour this changes.
+- **The no-`python3` fallback is gone, along with the race it carried.** It
+  re-tested `-L` and then wrote through `>`, which follows a symlink swapped
+  in after the test — the same check-then-follow gap the rest of the script
+  exists to close. `rename(2)` does not follow a symlink at its destination,
+  so the ownership checks no longer hand off to a weaker write at the last
+  step, and the install no longer behaves differently depending on whether
+  `python3` happens to be installed.
+- **A workspace name can no longer break `ichi.json`.** Preset names and
+  monitor descriptions had the two characters that end a JSON string taken out
+  of them, but a workspace key is the live workspace's name and was written
+  raw. A workspace called `say "hi"` — or one with a backslash or a newline in
+  its name — produced a document that is not valid JSON, at which point the
+  shell side keeps the last good file and the widget stops following along,
+  which does not look like a naming problem at all. Every string the state file
+  writes is now escaped. An escaped key still will not match its workspace
+  again after a reload, because the Lua reader matches keys with a plain
+  pattern, so Ichi now says that once instead of letting the setting quietly
+  fail to return.
+
+### Security
+
+- **The config no longer travels through `argv`.** The whole of
+  `hyprland.lua` was passed to the install script as a command-line argument,
+  and `/proc/<pid>/cmdline` is readable by every local account — including the
+  one the script's ownership checks are written to defend against. It now
+  arrives in `ICHI_LOADER_CONTENT`, and `/proc/<pid>/environ` is readable only
+  by its owner.
 
 ### Migration
 

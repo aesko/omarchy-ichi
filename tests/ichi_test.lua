@@ -428,6 +428,43 @@ check("disabling a named workspace resets its gaps", fake.rules["name:code"].lef
 fake.workspaces[-1337] = nil
 fake.windows[-1337] = nil
 
+-- A workspace key is whatever Hyprland reports as the workspace's name. Unlike
+-- a preset name or a monitor description, it is not a label Ichi gets to
+-- sanitise: rewriting it would lose the workspace it points at. One quote in a
+-- name used to make the whole document invalid JSON, and the shell side
+-- answers that by keeping the last good file -- which looks like the widget
+-- freezing rather than like a bad key.
+check("json_string escapes a quote", M.json_string('say "hi"') == '"say \\"hi\\""', M.json_string('say "hi"'))
+check("json_string escapes a backslash", M.json_string("back\\slash") == '"back\\\\slash"', M.json_string("back\\slash"))
+check("json_string escapes a control character", M.json_string("new\nline") == '"new\\u000aline"', M.json_string("new\nline"))
+check("json_string leaves utf-8 alone", M.json_string("\195\188mlaut") == '"\195\188mlaut"', M.json_string("\195\188mlaut"))
+
+local hostile = M.parse_config("")
+hostile.workspaces['say "hi"'] = { mode = "default" }
+hostile.presets[#hostile.presets + 1] = { name = 'quoted"preset', entry = { mode = "default" } }
+hostile.monitors[#hostile.monitors + 1] = { key = 'desc:Acme "27', width = 50, height = 50 }
+local hostile_text = M.encode_config(hostile)
+check("encode escapes a workspace key", hostile_text:find('"say \\"hi\\"": true', 1, true) ~= nil, hostile_text)
+check("encode escapes a preset name", hostile_text:find('"quoted\\"preset": true', 1, true) ~= nil, hostile_text)
+check("encode escapes a monitor key", hostile_text:find('"desc:Acme \\"27": {', 1, true) ~= nil, hostile_text)
+
+local plain_cfg = M.parse_config("")
+plain_cfg.workspaces["3"] = { mode = "default" }
+check("encode leaves an ordinary key alone", M.encode_config(plain_cfg):find("\\", 1, true) == nil, M.encode_config(plain_cfg))
+
+-- Escaping keeps the document valid, but this file's own reader matches keys
+-- with a plain "([^"]+)" and will not find an escaped one, so the setting does
+-- not come back after a reload. That has to be said rather than just happening.
+M.set_notify("changes")
+local before_notes = #fake.notes
+M.enable('say "hi"')
+local said = false
+for i = before_notes + 1, #fake.notes do
+  if fake.notes[i]:find("will not survive a reload", 1, true) then said = true end
+end
+check("a workspace name that cannot round-trip says so", said, table.concat(fake.notes, " | "))
+M.config.workspaces['say "hi"'] = nil
+
 -- Quiet mode: what the panel uses, because it shows its own result in the
 -- same corner the notifications appear in.
 M.set_notify("always")

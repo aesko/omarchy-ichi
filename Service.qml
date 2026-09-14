@@ -157,7 +157,9 @@ Item {
   // or no-follow controls, and a plain in-place write would happily follow
   // a symlink planted by anyone. The actual write goes through
   // scripts/install-hyprland-loader.sh, which resolves that symlink chain
-  // itself and refuses unless every step of it belongs to the current user.
+  // itself, refuses unless every step of it belongs to the current user, and
+  // replaces the file by rename rather than truncating it in place, so a
+  // write that fails partway leaves the config as it was.
 
   FileView {
     id: hyprlandLuaFile
@@ -168,8 +170,12 @@ Item {
     onLoaded: {
       var current = text()
       if (Model.needsLoader(current)) {
+        // The content travels in the environment, not in argv: this is the
+        // user's whole Hyprland config and /proc/<pid>/cmdline is readable by
+        // every local account, while /proc/<pid>/environ is not.
+        installLoaderProcess.environment = ({ "ICHI_LOADER_CONTENT": Model.withLoader(current) })
         installLoaderProcess.command = [root.loaderInstallerPath,
-          root.hyprlandLuaPath, root.home, Model.withLoader(current)]
+          root.hyprlandLuaPath, root.home]
         installLoaderProcess.running = true
       } else {
         root.loaderInstalled = true
@@ -206,6 +212,8 @@ Item {
         notifyRefusedProcess.running = true
       }
       installLoaderProcess.errorText = ""
+      // Not kept around any longer than the one run that needs it.
+      installLoaderProcess.environment = ({})
     }
   }
 

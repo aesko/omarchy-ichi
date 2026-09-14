@@ -54,6 +54,12 @@ alone and tells you so instead of writing through it; add the loader block
 from [Without Omarchy](#without-omarchy) by hand in that case, then run
 `omarchy-shell ichi sync` once it is in place.
 
+The edit itself replaces the file rather than rewriting it in place: the new
+text is written alongside and renamed over the old one, so an interrupted
+install leaves your `hyprland.lua` as it was rather than empty. A symlink
+pointing at it still points at it afterwards. A *hard* link to the same file
+does not — that copy keeps the old text.
+
 To update:
 
 ```bash
