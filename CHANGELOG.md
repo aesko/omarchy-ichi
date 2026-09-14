@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.0 — unreleased
+## 0.7.0 — 2026-09-14
 
 The release before 1.0. Nothing new to do; fewer ways to do it, one place
 for settings, and a state file that cannot be left half-written.
