@@ -55,7 +55,7 @@ M.config = default_config()
 -- Workspaces enabled at some point this session, so disabling one still gets
 -- its gaps reset instead of keeping the last inset that was applied.
 local touched = {}
-local warned = { builtin = false, layouts = {} }
+local warned = { builtin = false, layouts = {}, names = {} }
 
 -- ------------------------------------------------------------------ pure --
 
@@ -348,6 +348,21 @@ function M.parse_config(text)
   return cfg
 end
 
+-- Every string this file writes into the document goes through here. Preset
+-- names and monitor descriptions have the two characters that would end a
+-- JSON string taken out of them when they are set, but a workspace key is the
+-- live workspace's name and cannot be rewritten without losing what it points
+-- at, so it is escaped instead. Control characters go too: a raw newline
+-- inside a string is invalid JSON, and one such key used to cost the whole
+-- document -- the shell side drops a file it cannot parse and sits on the last
+-- good one, so the widget quietly stops following along.
+function M.json_string(value)
+  local escaped = tostring(value)
+    :gsub('[\\"]', "\\%0")
+    :gsub("%c", function(c) return string.format("\\u%04x", c:byte()) end)
+  return '"' .. escaped .. '"'
+end
+
 -- The fields of a defaults-like table: width and height when present, caps
 -- only when set.
 function M.encode_size(d)
@@ -377,7 +392,7 @@ local function encode_monitors(monitors)
   end
   local lines = {}
   for _, block in ipairs(monitors) do
-    lines[#lines + 1] = string.format('    "%s": { %s }', block.key, M.encode_size(block))
+    lines[#lines + 1] = string.format('    %s: { %s }', M.json_string(block.key), M.encode_size(block))
   end
   return '  "monitors": {\n' .. table.concat(lines, ",\n") .. "\n  },\n"
 end
@@ -399,7 +414,7 @@ local function encode_presets(presets)
   end
   local lines = {}
   for _, p in ipairs(presets) do
-    lines[#lines + 1] = string.format('    "%s": %s', p.name, M.encode_entry(p.entry))
+    lines[#lines + 1] = string.format('    %s: %s', M.json_string(p.name), M.encode_entry(p.entry))
   end
   return '  "presets": {\n' .. table.concat(lines, ",\n") .. "\n  },\n"
 end
@@ -425,14 +440,14 @@ function M.encode_config(cfg)
 
   local lines = {}
   for _, id in ipairs(ids) do
-    lines[#lines + 1] = string.format('    "%s": %s', id, M.encode_entry(cfg.workspaces[id]))
+    lines[#lines + 1] = string.format('    %s: %s', M.json_string(id), M.encode_entry(cfg.workspaces[id]))
   end
 
   return string.format(
-    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": "%s", "all_workspaces": %s, "max_windows": %d, "min_percent": %d, "paused": %s },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
+    '{\n  "settings": { "step": %d, "fine_step": %d, "notify": %s, "all_workspaces": %s, "max_windows": %d, "min_percent": %d, "paused": %s },\n  "defaults": { %s },\n%s%s  "workspaces": {\n%s\n  }\n}\n',
     cfg.settings.step,
     cfg.settings.fine_step,
-    cfg.settings.notify,
+    M.json_string(cfg.settings.notify),
     tostring(cfg.settings.all_workspaces),
     cfg.settings.max_windows,
     cfg.settings.min_percent,
@@ -719,11 +734,25 @@ local function key_of(id)
   return tostring(id)
 end
 
+-- Escaping keeps the document valid, but this file's own reader matches keys
+-- with a plain "([^"]+)" and will not find one that had to be escaped. The
+-- entry is written and the shell side reads it fine; it just will not come
+-- back after a reload, so say so once rather than letting a setting look like
+-- it never took.
+local function survives_reload(id)
+  return tostring(id):find('[\\"]') == nil
+end
+
 local function commit(id, entry, message, level)
   M.config.workspaces[id] = entry
   M.save()
   M.refresh()
   notify(message, level)
+  if not survives_reload(id) and not warned.names[id] then
+    warned.names[id] = true
+    notify(string.format(
+      "Ichi: workspace %s has a quote or backslash in its name, so this setting will not survive a reload", id))
+  end
 end
 
 -- Without an explicit entry the workspace follows the defaults, now and

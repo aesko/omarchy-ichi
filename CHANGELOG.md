@@ -22,6 +22,18 @@
   step, and the install no longer behaves differently depending on whether
   `python3` happens to be installed.
 
+- **A workspace name can no longer break `ichi.json`.** Preset names and
+  monitor descriptions had the two characters that end a JSON string taken out
+  of them, but a workspace key is the live workspace's name and was written
+  raw. A workspace called `say "hi"` — or one with a backslash or a newline in
+  its name — produced a document that is not valid JSON, at which point the
+  shell side keeps the last good file and the widget stops following along,
+  which does not look like a naming problem at all. Every string the state file
+  writes is now escaped. An escaped key still will not match its workspace
+  again after a reload, because the Lua reader matches keys with a plain
+  pattern, so Ichi now says that once instead of letting the setting quietly
+  fail to return.
+
 ### Security
 
 - **The config no longer travels through `argv`.** The whole of
