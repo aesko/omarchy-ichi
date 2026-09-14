@@ -32,7 +32,9 @@ function settingProblem(key, value) {
   var kind = SETTING_KINDS[key]
   var text = String(value)
   if (!kind) return "there is no setting called " + key + ". Settings: " + SETTABLE.join(", ")
-  if (kind === "number" && !/^\s*-?\d+(\.\d+)?\s*$/.test(text)) return key + " takes a number"
+  // Number() rather than a pattern, so +5, 2e3 and 0x10 pass as ichi.lua's
+  // tonumber takes them; the range is ichi.lua's to clamp.
+  if (kind === "number" && (text.trim() === "" || !isFinite(Number(text)))) return key + " takes a number"
   if (kind === "switch" && ["on", "off", "true", "false"].indexOf(text) === -1) return key + " takes on or off"
   if (kind === "level" && NOTIFY_LEVELS.indexOf(text) === -1) return key + " takes " + NOTIFY_LEVELS.join(", ")
   return ""
@@ -143,7 +145,36 @@ function readState(last, outcome, text) {
   if (outcome === "unreadable") return { present: true, config: kept, problem: "cannot be read" }
   var parsed = parseConfig(text)
   if (parsed) return { present: true, config: parsed, problem: null }
-  return { present: true, config: kept, problem: "does not parse" }
+  // Not strict JSON. ichi.lua still reads and saves a file that is well
+  // formed, one with a trailing comma say, so only a file that is not says
+  // saving is blocked. Either way the last good config stays on show.
+  return { present: true, config: kept, problem: wellFormed(text) ? null : "does not parse" }
+}
+
+// Mirrors ichi.lua's M.well_formed: an object whose braces and brackets pair
+// up, outside strings, to close exactly at the end. It is what decides
+// whether ichi.lua blocks saving, so the shell reports that by the same test.
+function wellFormed(text) {
+  var s = String(text === undefined || text === null ? "" : text)
+  var i = s.search(/\S/)
+  if (i === -1 || s[i] !== "{") return false
+  var stack = []
+  for (; i < s.length; i++) {
+    var c = s[i]
+    if (c === '"') {
+      // Skip the string, escapes included, so a brace in a name is not counted.
+      for (i++; i < s.length && s[i] !== '"'; i++) {
+        if (s[i] === "\\") i++
+      }
+      if (i >= s.length) return false
+    } else if (c === "{" || c === "[") {
+      stack.push(c === "{" ? "}" : "]")
+    } else if (c === "}" || c === "]") {
+      if (stack.pop() !== c) return false
+      if (stack.length === 0) return /^\s*$/.test(s.slice(i + 1))
+    }
+  }
+  return false
 }
 
 // Which state file is in use, by ichi.lua's rule: the new path when anything

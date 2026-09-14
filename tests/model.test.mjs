@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "Model.js"), "utf8")
   .replace(/^\.pragma library\s*$/m, "")
 const Model = new Function(source + `
-  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, SETTING_KINDS, LIMITS, settingProblem, readState, chooseState }
+  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, SETTING_KINDS, LIMITS, settingProblem, readState, chooseState, wellFormed }
 `)()
 
 let passed = 0
@@ -87,6 +87,13 @@ test("settingProblem refuses what ichi.lua could not take, and says why", () => 
   assert.equal(Model.settingProblem("settings.step", "10"), "")
   assert.equal(Model.settingProblem("defaults.align_x", "-3"), "")
   assert.match(Model.settingProblem("settings.step", "ten"), /^settings\.step takes a number$/)
+  // Every form ichi.lua's tonumber reads gets through; ichi.lua clamps.
+  for (const number of ["+5", "2e3", "0x10", ".5", "5.", " 7 "]) {
+    assert.equal(Model.settingProblem("defaults.max_width", number), "", number)
+  }
+  for (const notNumber of ["", "  ", "Infinity", "1e999", "5px"]) {
+    assert.match(Model.settingProblem("defaults.max_width", notNumber), /takes a number$/, notNumber)
+  }
   assert.equal(Model.settingProblem("settings.paused", "on"), "")
   assert.match(Model.settingProblem("settings.paused", "yes"), /takes on or off$/)
   assert.equal(Model.settingProblem("settings.notify", "never"), "")
@@ -115,6 +122,24 @@ test("the shell picks the state file by ichi.lua's rule", () => {
   assert.equal(Model.chooseState(broken, missing).problem, "does not parse")
   assert.deepEqual(keys(Model.chooseState(broken, missing)), ["3"])
   assert.equal(Model.chooseState(current, previous).problem, null)
+  // A trailing comma is not JSON, but ichi.lua reads and saves it, so saving
+  // is not reported blocked; the last good config stays on show meanwhile.
+  const trailing = Model.readState(current, "text", '{ "settings": { "step": 7, }, "workspaces": {} }')
+  assert.equal(Model.chooseState(trailing, missing).problem, null)
+  assert.deepEqual(keys(Model.chooseState(trailing, missing)), ["3"])
+})
+
+test("wellFormed agrees with ichi.lua's M.well_formed", () => {
+  assert.ok(Model.wellFormed(JSON.stringify(Model.defaultConfig())))
+  assert.ok(Model.wellFormed('{ "presets": { "a}\\"{": true } }'))
+  assert.ok(Model.wellFormed('{ "settings": { "step": 7, } }'))
+  assert.ok(!Model.wellFormed(""))
+  assert.ok(!Model.wellFormed("  \n"))
+  assert.ok(!Model.wellFormed('{ "workspaces": { "1": true,'))
+  assert.ok(!Model.wellFormed('{ "workspaces": { "2": { "width": 60 } }'))
+  assert.ok(!Model.wellFormed('{ "ratio": [4, 3} }'))
+  assert.ok(!Model.wellFormed('{ "wor'))
+  assert.ok(!Model.wellFormed("{ } }"))
 })
 
 test("statusText says when saving is blocked", () => {
