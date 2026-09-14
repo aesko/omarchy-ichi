@@ -92,6 +92,10 @@ for settings, and a state file that cannot be left half-written.
   one the script's ownership checks are written to defend against. It now
   arrives in `ICHI_LOADER_CONTENT`, and `/proc/<pid>/environ` is readable only
   by its owner.
+- **`ichi.json`'s own save had the same class of bug the loader install
+  just lost.** Its temp file was a fixed name (`ichi.json.tmp`), so a symlink
+  planted there ahead of time would catch the write, the way the loader's old
+  no-`python3` fallback did. The name is random now, on every save.
 
 ### Migration
 

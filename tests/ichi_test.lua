@@ -725,6 +725,17 @@ local link = io.popen("readlink '" .. M.config_path .. "'"):read("*l")
 check("a save through a link keeps the link", link == dotfile, link)
 check("a save through a link writes where it points", M.parse_config(io.open(dotfile):read("*a")).settings.step == 9)
 check("a save leaves no temporary file", io.open(dotfile .. ".tmp", "r") == nil and io.open(M.config_path .. ".tmp", "r") == nil)
+
+-- The temp name used to be fixed (path .. ".tmp"), so a symlink planted at
+-- that exact name ahead of time would catch the write. The name is random
+-- now: nothing is waiting at the one name a symlink could be planted at.
+local victim = tmp .. ".victim"
+os.execute("ln -sf '" .. victim .. "' '" .. dotfile .. ".tmp'")
+M.set("settings.step", 10)
+check("a save does not write through a symlink at the old fixed temp name", io.open(victim, "r") == nil)
+check("the save still reached the real file", M.parse_config(io.open(dotfile):read("*a")).settings.step == 10)
+os.remove(dotfile .. ".tmp")
+
 os.remove(M.config_path)
 os.remove(dotfile)
 

@@ -508,12 +508,38 @@ local function real_path(path)
   return out
 end
 
--- Replace the file whole: write a sibling, then rename it over, so a crash or
--- a full disk mid-write leaves the previous file. `path` has its links
--- resolved already, so a link into a dotfiles repo survives. When the sibling
--- cannot be written or moved, the file is left exactly as it was.
+-- Six random bytes from /dev/urandom, hex-encoded, or nil if it cannot be
+-- read. A fixed name here would let a symlink planted ahead of time catch
+-- the write the way install-hyprland-loader.sh's old fallback did; this
+-- makes the name unpredictable instead of checking it right before opening
+-- it, which is a race the check can lose. `io.open` still has no O_EXCL, so
+-- a suffix that happened to already exist would still be opened through --
+-- unlike the loader script's `mktemp`, Lua's stdlib has no way to refuse
+-- that. 48 bits of randomness is what stands in for it here.
+local function random_suffix()
+  local f = io.open("/dev/urandom", "rb")
+  if not f then
+    return nil
+  end
+  local bytes = f:read(6)
+  f:close()
+  if not bytes or #bytes < 6 then
+    return nil
+  end
+  return (bytes:gsub(".", function(c) return string.format("%02x", c:byte()) end))
+end
+
+-- Replace the file whole: write a sibling with an unpredictable name, then
+-- rename it over, so a crash or a full disk mid-write leaves the previous
+-- file. `path` has its links resolved already, so a link into a dotfiles
+-- repo survives. When the sibling cannot be named, written or moved, the
+-- file is left exactly as it was.
 local function replace_file(path, text)
-  local tmp = path .. ".tmp"
+  local suffix = random_suffix()
+  if not suffix then
+    return false
+  end
+  local tmp = path .. ".tmp-" .. suffix
   local file = io.open(tmp, "w")
   if not file then
     return false
