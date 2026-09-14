@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`hyprland.lua` is replaced, not rewritten in place.** The loader install
+  wrote into the file directly: it opened with `O_TRUNC` and only then wrote,
+  so anything that went wrong in between — a full disk, a killed process, a
+  short write whose return value was never checked — left an empty or
+  half-written config behind, and the plugin still reported success. The new
+  text now goes to a temporary file in the same directory and is renamed over
+  the target, so a failure anywhere leaves the file exactly as it was. A
+  dotfiles symlink still survives the edit, because the rename lands on the
+  file the symlink resolves to, not on the link. A hard link to the same file
+  does not, which is the one behaviour this changes.
+- **The no-`python3` fallback is gone, along with the race it carried.** It
+  re-tested `-L` and then wrote through `>`, which follows a symlink swapped
+  in after the test — the same check-then-follow gap the rest of the script
+  exists to close. `rename(2)` does not follow a symlink at its destination,
+  so the ownership checks no longer hand off to a weaker write at the last
+  step, and the install no longer behaves differently depending on whether
+  `python3` happens to be installed.
+
+### Security
+
+- **The config no longer travels through `argv`.** The whole of
+  `hyprland.lua` was passed to the install script as a command-line argument,
+  and `/proc/<pid>/cmdline` is readable by every local account — including the
+  one the script's ownership checks are written to defend against. It now
+  arrives in `ICHI_LOADER_CONTENT`, and `/proc/<pid>/environ` is readable only
+  by its owner.
+
 ## 0.6.0 — 2026-09-12
 
 The panel gains the one shape it could never set, and a back side holding the
