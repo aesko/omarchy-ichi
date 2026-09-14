@@ -4,8 +4,38 @@ on:
   push:
   pull_request:
 
+# Each job fails on a skipped suite as well as a failed one. tests/run.sh and
+# the Lua tests skip what they cannot run, which suits a laptop but would let
+# CI pass on half the tests: a missing runtime, or permission tests under root.
+# The test steps name bash as their shell, which runs them with pipefail, so a
+# failure is not hidden by the tee after it.
 jobs:
-  test:
+  arch:
+    name: Arch Linux, Lua 5.5 as Hyprland embeds it
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      # git first, so checkout clones the repository rather than downloading it.
+      - name: Install packages
+        run: pacman -Syu --noconfirm --needed lua nodejs git
+      - uses: actions/checkout@v4
+      # The container runs as root, which reads and writes whatever the
+      # permission tests lock away, so the tests run as an ordinary user.
+      - name: Run the tests as an ordinary user
+        shell: bash
+        run: |
+          useradd --create-home tester
+          chown -R tester: "$GITHUB_WORKSPACE"
+          lua -v
+          node --version
+          runuser -u tester -- tests/run.sh | tee "$RUNNER_TEMP/tests.log"
+          if grep -q '^skip:' "$RUNNER_TEMP/tests.log"; then
+            echo "::error::A test suite was skipped; see the skip: lines above."
+            exit 1
+          fi
+
+  ubuntu:
+    name: Ubuntu, Lua 5.4
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,11 +44,13 @@ jobs:
           node-version: 22
       - name: Install Lua
         run: sudo apt-get update && sudo apt-get install -y lua5.4
-      # tests/run.sh skips a suite whose runtime is missing, which is right on
-      # a laptop and wrong here: fail instead of passing on half the tests.
-      - name: Check runtimes
+      - name: Run the tests
+        shell: bash
         run: |
-          command -v lua || sudo ln -s "$(command -v lua5.4)" /usr/local/bin/lua
           lua -v
           node --version
-      - run: tests/run.sh
+          tests/run.sh | tee "$RUNNER_TEMP/tests.log"
+          if grep -q '^skip:' "$RUNNER_TEMP/tests.log"; then
+            echo "::error::A test suite was skipped; see the skip: lines above."
+            exit 1
+          fi

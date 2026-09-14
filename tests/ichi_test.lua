@@ -769,6 +769,9 @@ if io.popen("id -u"):read("*l") ~= "0" then
   check("a file that cannot be read is never replaced", slurp(M.config_path) == good)
   M.load()
   check("once it can be read again, it is", M.blocked == nil and M.config.settings.step == 5)
+else
+  -- Said in run.sh's own words, so CI can fail on it rather than pass without them.
+  print("skip: the permission tests, which mean nothing when run as root")
 end
 
 -- An emptied file says nothing until a save is refused.
