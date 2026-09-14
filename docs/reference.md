@@ -61,8 +61,8 @@ These still work in 0.7 and print what replaces them. They go in 1.0.
 |---|---|
 | `adjust 5 0` | `nudge 1 0`, or `size` |
 | `defaults 65 85` | `set defaults.width 65`, `set defaults.height 85` |
-| `max 1800 0` | `set defaults.max_width 1800` |
-| `align 50 40` | `set defaults.align_y 40` |
+| `max 1800 0` | `set defaults.max_width 1800`, `set defaults.max_height 0` |
+| `align 50 40` | `set defaults.align_x 50`, `set defaults.align_y 40` |
 | `step 10` | `set settings.step 10` |
 | `fine_step 2` | `set settings.fine_step 2` |
 | `windows 2` | `set settings.max_windows 2` |
@@ -124,9 +124,12 @@ the workspace stays on after that.
 State lives in `~/.config/ichi/ichi.json` (under `$XDG_CONFIG_HOME` when it
 is set), plain JSON you can read, edit and keep in your dotfiles. Edits apply
 within a second. A malformed entry is
-dropped. A file that does not parse at all, say one missing a brace, is left
-as it is: Ichi keeps the last good settings, tells you once, and saves nothing
-until the file is fixed.
+dropped. A file that does not parse at all, say one missing a brace, or that
+cannot be read, is left as it is: Ichi keeps the last good settings, tells you
+whatever `settings.notify` says, shows it in `ichi status`, and saves nothing
+until the file is fixed. A save that fails leaves the file as it was and says
+so the same way. Saving replaces the file, so it takes your default
+permissions rather than any you set on it.
 
 Before 0.7 the file was `~/.config/omarchy/ichi.json`. One there is still
 read and written where it is, never moved, for as long as nothing exists at

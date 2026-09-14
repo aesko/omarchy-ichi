@@ -26,9 +26,11 @@ for settings, and a state file that cannot be left half-written.
 - **The smallest size is fixed at 10%**, for width and height alike, instead
   of the `min_percent` setting's 20.
 - **Saves replace the file whole**: a sibling is written and renamed over it,
-  so a crash mid-save leaves the previous file. Through a link, the file it
-  points to is replaced and the link kept. Saving no longer starts a shell
-  inside Hyprland each time.
+  so a crash mid-save leaves the previous file, and a save that fails leaves
+  it as it was and says so, whatever `settings.notify` says. Through a link,
+  the file it points to is replaced and the link kept. The file takes your
+  default permissions. Saving no longer starts a shell inside Hyprland each
+  time.
 
 ### Deprecated
 
@@ -49,10 +51,10 @@ for settings, and a state file that cannot be left half-written.
 
 - `adopt` on a named workspace that is off, already follows the defaults or
   holds an aspect ratio explained nothing and failed instead.
-- A state file that does not parse is never saved over. Ichi keeps the last
-  good settings, says so once, and saves nothing until the file is fixed; a
-  file cut short had lost every workspace the missing half held on the next
-  change.
+- A state file that does not parse, or cannot be read, is never saved over.
+  Ichi keeps the last good settings, says so whatever `settings.notify` says,
+  shows it in `ichi status`, and saves nothing until the file is fixed. A file
+  cut short had lost every workspace the missing half held on the next change.
 
 ### Migration
 

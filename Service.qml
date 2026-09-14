@@ -18,21 +18,31 @@ Item {
   readonly property string home: Quickshell.env("HOME")
   readonly property string configDir: Quickshell.env("XDG_CONFIG_HOME") || (home + "/.config")
   readonly property string hyprlandLuaPath: configDir + "/hypr/hyprland.lua"
-  // The state file, in the order ichi.lua picks it: ichi/ichi.json, or while
+  // The state file, picked the way ichi.lua picks it: ichi/ichi.json, or while
   // nothing is there, a file from before 0.7 at omarchy/ichi.json, used where
-  // it is. usePreviousPath flips once, when the first path cannot be read.
+  // it is. Both are watched and what each watch last found decides, so the
+  // pick follows a file that appears or goes away while the shell runs.
   readonly property string statePath: configDir + "/ichi/ichi.json"
   readonly property string previousStatePath: configDir + "/omarchy/ichi.json"
-  property bool usePreviousPath: false
-  property bool checkedPreviousPath: false
+  property var stateRead: null
+  property var previousStateRead: null
+  property bool stateDirMade: false
+  readonly property var stateChoice: Model.chooseState(stateRead, previousStateRead)
+  // Why saving is blocked, as `status` shows it; null while it is not.
+  readonly property var stateProblem: stateChoice.problem
+    ? homeRelative(stateChoice.previous ? previousStatePath : statePath) + " " + stateChoice.problem
+    : null
   readonly property string loaderInstallerPath: decodeURIComponent(String(Qt.resolvedUrl("scripts/install-hyprland-loader.sh")).replace(/^file:\/\//, ""))
-  // For notifications: the actual path Ichi read and wrote, home-relative
-  // when it is under $HOME (it need not be, with XDG_CONFIG_HOME set).
-  readonly property string hyprlandLuaDisplayPath: root.hyprlandLuaPath.indexOf(root.home + "/") === 0
-    ? "~" + root.hyprlandLuaPath.slice(root.home.length)
-    : root.hyprlandLuaPath
+  // For notifications: the actual path Ichi read and wrote.
+  readonly property string hyprlandLuaDisplayPath: homeRelative(hyprlandLuaPath)
 
-  property var config: Model.defaultConfig()
+  // Home-relative when under $HOME, which a path need not be with
+  // XDG_CONFIG_HOME set.
+  function homeRelative(path) {
+    return path.indexOf(root.home + "/") === 0 ? "~" + path.slice(root.home.length) : path
+  }
+
+  readonly property var config: stateChoice.config
   property bool loaderInstalled: false
   property string lastError: ""
 
@@ -45,7 +55,7 @@ Item {
   readonly property var activeMonitor: Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.monitor
     ? { name: Hyprland.focusedWorkspace.monitor.name, description: Hyprland.focusedWorkspace.monitor.description }
     : null
-  readonly property var status: Model.status(config, activeWorkspaceId, activeMonitor)
+  readonly property var status: Model.status(config, activeWorkspaceId, activeMonitor, stateProblem)
   readonly property bool enabled: status.enabled
 
   // ------------------------------------------------------------- eval --
@@ -86,44 +96,47 @@ Item {
   // Written by ichi.lua, read here. A hand-edit arrives on the same path,
   // so Hyprland is asked to re-read after every change; its own writes come
   // back through here too, which costs one idempotent refresh.
+  //
+  // text() is stale inside a change signal, so each watch re-reads and lets
+  // onLoaded parse the fresh content.
 
   FileView {
     id: stateFile
-    path: root.usePreviousPath ? root.previousStatePath : root.statePath
+    path: root.statePath
     watchChanges: true
     printErrors: false
-
-    onLoaded: {
-      var parsed = Model.parseConfig(text())
-      if (parsed) {
-        root.config = parsed
-      } else {
-        console.warn("ichi: state file is not valid JSON, keeping the last good document")
-      }
-    }
-
-    onLoadFailed: {
-      root.config = Model.defaultConfig()
-      if (!root.checkedPreviousPath) {
-        // Nothing at the new path: try the one from before 0.7. Deferred,
-        // because a reload from inside this handler does not load.
-        root.checkedPreviousPath = true
-        root.usePreviousPath = true
-        Qt.callLater(stateFile.reload)
-      } else if (root.usePreviousPath) {
-        // Neither exists. Go back to the new path, where ichi.lua will create
-        // the file, and make its directory first: a watch on a file whose
-        // directory is missing never sees the file appear.
-        root.usePreviousPath = false
-        stateDirProcess.running = true
-      }
-    }
-
-    // text() is stale inside the change signal, so re-read and let onLoaded
-    // parse fresh content.
+    onLoaded: root.stateRead = Model.readState(root.stateRead, "text", text())
+    onLoadFailed: (error) => root.stateReadFailed(false, error)
     onFileChanged: {
       reload()
       root.evaluate("if ichi then ichi.load(); ichi.refresh() end")
+    }
+  }
+
+  FileView {
+    id: previousStateFile
+    path: root.previousStatePath
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.previousStateRead = Model.readState(root.previousStateRead, "text", text())
+    onLoadFailed: (error) => root.stateReadFailed(true, error)
+    onFileChanged: {
+      reload()
+      root.evaluate("if ichi then ichi.load(); ichi.refresh() end")
+    }
+  }
+
+  function stateReadFailed(previous, error) {
+    var outcome = error === FileViewError.FileNotFound ? "missing" : "unreadable"
+    if (previous) root.previousStateRead = Model.readState(root.previousStateRead, outcome)
+    else root.stateRead = Model.readState(root.stateRead, outcome)
+    // With neither file there, make the new one's directory, where ichi.lua
+    // will create it: a watch on a file whose directory is missing never sees
+    // the file appear.
+    if (!root.stateDirMade && root.stateRead && root.previousStateRead
+        && !root.stateRead.present && !root.previousStateRead.present) {
+      root.stateDirMade = true
+      stateDirProcess.running = true
     }
   }
 
@@ -255,12 +268,11 @@ Item {
   }
 
   // One setting by its place in the file, e.g. set settings.step 10. An
-  // unknown key is refused here, so the command line hears why; ichi.lua
-  // checks the value and says what the setting takes.
+  // unknown key or a value of the wrong kind is refused here, so the command
+  // line hears why; ichi.lua clamps numbers to their range.
   function cmdSet(key, value, quiet) {
-    if (Model.SETTABLE.indexOf(key) === -1) {
-      return "ichi: there is no setting called " + key + ". Settings: " + Model.SETTABLE.join(", ")
-    }
+    var problem = Model.settingProblem(key, value)
+    if (problem !== "") return "ichi: " + problem
     run("ichi.set(" + JSON.stringify(String(key)) + ", " + JSON.stringify(String(value)) + ")", quiet)
     return ""
   }
@@ -411,5 +423,6 @@ Item {
   Component.onCompleted: {
     hyprlandLuaFile.reload()
     stateFile.reload()
+    previousStateFile.reload()
   }
 }

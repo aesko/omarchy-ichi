@@ -616,12 +616,12 @@ local function read()
 end
 write(good)
 M.load()
-check("a good file loads", M.config.workspaces["code"] ~= nil and not M.unreadable)
+check("a good file loads", M.config.workspaces["code"] ~= nil and M.blocked == nil)
 fake.active = { id = 2, name = "2" }
 fake.notes = {}
 write(cut)
 M.load()
-check("a file cut short keeps the last good settings", M.unreadable and M.config.workspaces["2"].width == 60
+check("a file cut short keeps the last good settings", M.blocked == "does not parse" and M.config.workspaces["2"].width == 60
   and M.config.workspaces["code"] ~= nil)
 check("a file cut short is reported once", #fake.notes == 1 and fake.notes[1]:find("does not parse", 1, true) ~= nil, fake.notes[1])
 M.load()
@@ -633,12 +633,12 @@ check("a nudge still applies while the file does not parse", M.config.workspaces
 check("a nudge does not overwrite the file", read() == cut)
 write("")
 M.load()
-check("an emptied file is not overwritten either", M.unreadable and M.config.workspaces["code"] ~= nil)
+check("an emptied file is not overwritten either", M.blocked ~= nil and M.config.workspaces["code"] ~= nil)
 M.toggle(2)
 check("a toggle does not overwrite an emptied file", read() == "")
 write(good)
 M.load()
-check("fixing the file reads it again", not M.unreadable and M.config.workspaces["2"].width == 60)
+check("fixing the file reads it again", M.blocked == nil and M.config.workspaces["2"].width == 60)
 M.nudge(1, 0, false, 2)
 check("fixing the file lets saves through", M.parse_config(read()).workspaces["2"].width == 65)
 fake.active = nil
@@ -716,6 +716,117 @@ M.load()
 check("a file at config_path wins", M.state_path() == M.config_path and M.config.workspaces["8"] ~= nil
   and M.config.workspaces["7"] == nil)
 check("the old file is left alone", M.parse_config(io.open(M.previous_config_path):read("*a")).settings.step == 11)
+
+-- Saving and loading fail safe, and say so whatever settings.notify says.
+os.remove(M.previous_config_path)
+local function slurp(path)
+  local file = io.open(path, "r")
+  if not file then
+    return nil
+  end
+  local text = file:read("*a")
+  file:close()
+  return text
+end
+local function noted(text)
+  for _, note in ipairs(fake.notes) do
+    if note:find(text, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+local safe_dir = tmp .. ".safe"
+os.execute("rm -rf '" .. safe_dir .. "' && mkdir -p '" .. safe_dir .. "'")
+M.config_path = safe_dir .. "/ichi.json"
+write(good)
+M.load()
+
+-- Permission tests mean nothing as root, which reads and writes regardless.
+if io.popen("id -u"):read("*l") ~= "0" then
+  os.execute("chmod 555 '" .. safe_dir .. "'")
+  M.config.settings.notify = "never"
+  fake.notes = {}
+  M.set("settings.step", 13)
+  check("a save that cannot write leaves the file as it was", slurp(M.config_path) == good)
+  check("a failed save is reported even with notify never", noted("could not save"), fake.notes[1])
+  M.set("settings.step", 14)
+  check("a failed save is reported once while it keeps failing", #fake.notes == 1, tostring(#fake.notes))
+  os.execute("chmod 755 '" .. safe_dir .. "'")
+  M.set("settings.step", 15)
+  check("the next save that can write does", M.parse_config(slurp(M.config_path)).settings.step == 15)
+
+  write(good)
+  M.load()
+  os.execute("chmod 000 '" .. M.config_path .. "'")
+  M.config.settings.notify = "never"
+  fake.notes = {}
+  M.load()
+  check("a file that cannot be read blocks saves", M.blocked == "cannot be read" and M.config.workspaces["code"] ~= nil)
+  check("a file that cannot be read is reported even with notify never", noted("cannot be read"), fake.notes[1])
+  M.set("settings.step", 16)
+  os.execute("chmod 644 '" .. M.config_path .. "'")
+  check("a file that cannot be read is never replaced", slurp(M.config_path) == good)
+  M.load()
+  check("once it can be read again, it is", M.blocked == nil and M.config.settings.step == 5)
+end
+
+-- An emptied file says nothing until a save is refused.
+write(good)
+M.load()
+fake.notes = {}
+write("")
+M.load()
+check("an emptied file is not reported on load", #fake.notes == 0 and M.blocked == "does not parse")
+M.set("settings.step", 17)
+check("a save refused while it is empty is reported", noted("not saved"), fake.notes[1])
+write(good)
+M.load()
+
+-- A link whose target is not there yet stays a link.
+local linked = safe_dir .. "/linked.json"
+local repo_file = safe_dir .. "/repo/omarchy/ichi.json"
+os.execute("ln -s '" .. repo_file .. "' '" .. linked .. "'")
+M.config_path = linked
+M.load()
+M.set("settings.step", 18)
+local function link_of(path)
+  local pipe = io.popen("readlink '" .. path .. "'")
+  local out = pipe:read("*l")
+  pipe:close()
+  return out
+end
+check("a save through a dangling link keeps the link", link_of(linked) == repo_file, link_of(linked))
+check("a save through a dangling link writes where it points", M.parse_config(slurp(repo_file) or "").settings.step == 18)
+
+-- Without io.popen links cannot be resolved, so the save writes through the
+-- link in place rather than renaming over it.
+local real_popen = io.popen
+write((slurp(linked):gsub('"step": 18', '"step": 20')))
+M.load()
+io.popen = nil
+M.set("settings.step", 19)
+io.popen = real_popen
+check("without io.popen a save keeps the link", link_of(linked) == repo_file, link_of(linked))
+check("without io.popen a save writes through the link", M.parse_config(slurp(repo_file)).settings.step == 19)
+
+-- Links are resolved by a save that needs them, not by every load.
+local popens = 0
+io.popen = function(...)
+  popens = popens + 1
+  return real_popen(...)
+end
+write((slurp(linked):gsub('"step": 19', '"step": 21')))
+M.load()
+check("a load does not resolve links", popens == 0, tostring(popens))
+M.set("settings.step", 22)
+M.set("settings.step", 23)
+check("saves resolve links once", popens == 1, tostring(popens))
+io.popen = real_popen
+
+os.execute("rm -rf '" .. safe_dir .. "'")
+M.config_path = tmp .. ".json"
+M.load()
 
 -- The hl.on example in docs/reference.md runs as written.
 local reference = io.open(root .. "/docs/reference.md"):read("*a")

@@ -14,11 +14,29 @@ var LIMITS = { min: 10, max: 100 }
 
 var NOTIFY_LEVELS = ["never", "changes", "always"]
 
-// The keys `ichi set` takes, by their place in the file; mirrors ichi.lua's
-// M.settable, which checks the values.
-var SETTABLE = ["settings.step", "settings.fine_step", "settings.notify", "settings.all_workspaces",
-  "settings.max_windows", "settings.paused", "defaults.width", "defaults.height",
-  "defaults.max_width", "defaults.max_height", "defaults.align_x", "defaults.align_y"]
+// The keys `ichi set` takes, by their place in the file, and the kind of
+// value each one reads. Mirrors the parse functions in ichi.lua's
+// M.settable, and a test holds the two together; ranges are left to
+// ichi.lua, which clamps.
+var SETTING_KINDS = {
+  "settings.step": "number", "settings.fine_step": "number", "settings.notify": "level",
+  "settings.all_workspaces": "switch", "settings.max_windows": "number", "settings.paused": "switch",
+  "defaults.width": "number", "defaults.height": "number",
+  "defaults.max_width": "number", "defaults.max_height": "number",
+  "defaults.align_x": "number", "defaults.align_y": "number",
+}
+var SETTABLE = Object.keys(SETTING_KINDS)
+
+// Why `set key value` would be refused, or "" when ichi.lua can take it.
+function settingProblem(key, value) {
+  var kind = SETTING_KINDS[key]
+  var text = String(value)
+  if (!kind) return "there is no setting called " + key + ". Settings: " + SETTABLE.join(", ")
+  if (kind === "number" && !/^\s*-?\d+(\.\d+)?\s*$/.test(text)) return key + " takes a number"
+  if (kind === "switch" && ["on", "off", "true", "false"].indexOf(text) === -1) return key + " takes on or off"
+  if (kind === "level" && NOTIFY_LEVELS.indexOf(text) === -1) return key + " takes " + NOTIFY_LEVELS.join(", ")
+  return ""
+}
 
 function defaultConfig() {
   return {
@@ -112,6 +130,32 @@ function parseConfig(text) {
     return normalizeConfig(JSON.parse(String(text || "")))
   } catch (error) {
     return null
+  }
+}
+
+// What one watch of a state file found: `outcome` is "missing", "unreadable"
+// or "text". A file that cannot be read or does not parse is still there, and
+// keeps the last good config its watch had, so the panel does not drop to
+// the defaults halfway through an edit.
+function readState(last, outcome, text) {
+  if (outcome === "missing") return { present: false, config: null, problem: null }
+  var kept = last && last.config ? last.config : null
+  if (outcome === "unreadable") return { present: true, config: kept, problem: "cannot be read" }
+  var parsed = parseConfig(text)
+  if (parsed) return { present: true, config: parsed, problem: null }
+  return { present: true, config: kept, problem: "does not parse" }
+}
+
+// Which state file is in use, by ichi.lua's rule: the new path when anything
+// is there, else the pre-0.7 path when anything is there, else the new path.
+// A read is null until its watch has reported.
+function chooseState(current, previous) {
+  var useCurrent = !!(current && current.present) || !(previous && previous.present)
+  var read = useCurrent ? current : previous
+  return {
+    previous: !useCurrent,
+    config: read && read.config ? read.config : defaultConfig(),
+    problem: read ? read.problem : null,
   }
 }
 
@@ -356,6 +400,7 @@ function monitorLine(block) {
 // printed empty, so a stock setup stays short.
 function statusText(s) {
   var rows = [["Workspace", s.workspace === null ? "none focused" : s.workspace]]
+  if (s.problem) rows.push(["Saving", "blocked: " + s.problem])
   rows.push(["Inset", s.paused ? s.summary + " (paused)" : s.summary])
   if (s.preset) rows.push(["Preset", s.preset])
   rows.push(["Default", sizeText(s.defaults.width, s.defaults.height)])
@@ -380,12 +425,13 @@ function statusText(s) {
 }
 
 // `activeWorkspace` is the focused workspace's name, which is its number on a
-// numeric workspace.
-function status(config, activeWorkspaceId, monitor) {
+// numeric workspace. `problem` says why saving is blocked, if it is.
+function status(config, activeWorkspaceId, monitor, problem) {
   var key = activeWorkspaceId === null || activeWorkspaceId === undefined ? null : String(activeWorkspaceId)
   var entry = key !== null ? entryFor(config, key) : null
   return {
     workspace: key,
+    problem: problem || null,
     enabled: entry !== null,
     entry: entry,
     summary: describe(entry, config, monitor),

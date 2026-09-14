@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "Model.js"), "utf8")
   .replace(/^\.pragma library\s*$/m, "")
 const Model = new Function(source + `
-  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, LIMITS }
+  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, SETTING_KINDS, LIMITS, settingProblem, readState, chooseState }
 `)()
 
 let passed = 0
@@ -72,10 +72,55 @@ test("settings block is read", () => {
 // agree with it on the keys and the floor.
 const ichiLua = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "ichi.lua"), "utf8")
 
-test("SETTABLE lists exactly the keys ichi.lua's set takes", () => {
-  const keys = [...ichiLua.matchAll(/^\s*\["((?:settings|defaults)\.[a-z_]+)"\] = \{/gm)].map((match) => match[1])
-  assert.equal(keys.length, 12)
-  assert.deepEqual([...keys].sort(), [...Model.SETTABLE].sort())
+test("SETTING_KINDS has exactly ichi.lua's keys, each read the same way", () => {
+  const kinds = { parse_int: "number", parse_bool: "switch", function: "level" }
+  const found = {}
+  for (const match of ichiLua.matchAll(/\["((?:settings|defaults)\.[a-z_]+)"\] = \{\s*parse = (parse_int|parse_bool|function)/g)) {
+    found[match[1]] = kinds[match[2]]
+  }
+  assert.equal(Object.keys(found).length, 12)
+  assert.deepEqual(found, Model.SETTING_KINDS)
+  assert.deepEqual([...Model.SETTABLE].sort(), Object.keys(found).sort())
+})
+
+test("settingProblem refuses what ichi.lua could not take, and says why", () => {
+  assert.equal(Model.settingProblem("settings.step", "10"), "")
+  assert.equal(Model.settingProblem("defaults.align_x", "-3"), "")
+  assert.match(Model.settingProblem("settings.step", "ten"), /^settings\.step takes a number$/)
+  assert.equal(Model.settingProblem("settings.paused", "on"), "")
+  assert.match(Model.settingProblem("settings.paused", "yes"), /takes on or off$/)
+  assert.equal(Model.settingProblem("settings.notify", "never"), "")
+  assert.match(Model.settingProblem("settings.notify", "loudly"), /takes never, changes, always$/)
+  assert.match(Model.settingProblem("settings.min_percent", "5"), /^there is no setting called settings\.min_percent\. Settings: settings\.step/)
+})
+
+test("the shell picks the state file by ichi.lua's rule", () => {
+  const missing = Model.readState(null, "missing")
+  const current = Model.readState(null, "text", JSON.stringify({ workspaces: { "3": true } }))
+  const previous = Model.readState(null, "text", JSON.stringify({ workspaces: { "7": true } }))
+  const keys = (choice) => Object.keys(choice.config.workspaces)
+  assert.equal(Model.chooseState(current, previous).previous, false)
+  assert.deepEqual(keys(Model.chooseState(current, previous)), ["3"])
+  assert.equal(Model.chooseState(missing, previous).previous, true)
+  assert.deepEqual(keys(Model.chooseState(missing, previous)), ["7"])
+  assert.equal(Model.chooseState(missing, missing).previous, false)
+  assert.deepEqual(Model.chooseState(missing, missing).config, Model.defaultConfig())
+  // Something at the new path that cannot be read is still there, so it wins,
+  // keeping the last config its watch had and saying why saving is blocked.
+  const locked = Model.readState(current, "unreadable")
+  assert.equal(Model.chooseState(locked, previous).previous, false)
+  assert.equal(Model.chooseState(locked, previous).problem, "cannot be read")
+  assert.deepEqual(keys(Model.chooseState(locked, previous)), ["3"])
+  const broken = Model.readState(current, "text", '{ "workspaces": ')
+  assert.equal(Model.chooseState(broken, missing).problem, "does not parse")
+  assert.deepEqual(keys(Model.chooseState(broken, missing)), ["3"])
+  assert.equal(Model.chooseState(current, previous).problem, null)
+})
+
+test("statusText says when saving is blocked", () => {
+  const text = Model.statusText(Model.status(Model.defaultConfig(), "1", null, "~/.config/ichi/ichi.json does not parse"))
+  assert.match(text, /^Workspace {3}1\nSaving {6}blocked: ~\/\.config\/ichi\/ichi\.json does not parse\n/)
+  assert.doesNotMatch(Model.statusText(Model.status(Model.defaultConfig(), "1", null, null)), /Saving/)
 })
 
 test("LIMITS matches ichi.lua's", () => {
@@ -119,7 +164,7 @@ test("hyprctlEvalArgs wraps the payload in a block", () => {
 test("status reports the active workspace", () => {
   const config = Model.normalizeConfig({ workspaces: { "2": { width: 70, height: 80 }, "5": { mode: "aspect", ratio: [1, 1] } } })
   assert.deepEqual(Model.status(config, 2), {
-    workspace: "2", enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
+    workspace: "2", problem: null, enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
     resolved: { mode: "size", width: 70, height: 80 },
     settings: { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, paused: false }, paused: false, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: ["2", "5"],
   })

@@ -437,64 +437,100 @@ end
 
 -- ----------------------------------------------------------------- files --
 
+local ENOENT = 2
+
+-- A file's text, or nil and why: "missing" when nothing is there, or
+-- "unreadable" when something is but cannot be read, such as a file whose
+-- permissions changed or a directory in its place. Only "missing" means
+-- there is nothing to lose.
 local function read_file(path)
-  local file = io.open(path, "r")
+  local file, _, code = io.open(path, "r")
   if not file then
-    return nil
+    return nil, code == ENOENT and "missing" or "unreadable"
   end
   local text = file:read("*a")
   file:close()
+  if text == nil then
+    return nil, "unreadable"
+  end
   return text
+end
+
+-- Whether anything is at a path, readable or not.
+local function present(path)
+  local file, _, code = io.open(path, "r")
+  if file then
+    file:close()
+    return true
+  end
+  return code ~= ENOENT
 end
 
 local function shell_quote(value)
   return "'" .. (tostring(value):gsub("'", "'\\''")) .. "'"
 end
 
-local function exists(path)
-  local file = io.open(path, "r")
-  if file then
-    file:close()
+local function shown(path)
+  if HOME ~= "" and path:sub(1, #HOME + 1) == HOME .. "/" then
+    return "~" .. path:sub(#HOME + 1)
   end
-  return file ~= nil
+  return path
 end
 
--- Where a path really points once every link is followed, or the path itself
--- when that cannot be worked out, as for a file not written yet.
+-- Where a path really points once every link is followed, even to a file or
+-- directory that does not exist yet. Nil when that cannot be worked out, and
+-- then a save must not rename over the path, which may be a link.
 local function real_path(path)
-  local pipe = io.popen("readlink -f -- " .. shell_quote(path) .. " 2>/dev/null")
-  local out = pipe and pipe:read("*l")
-  if pipe then
-    pipe:close()
+  local pipe = io.popen and io.popen("readlink -m -- " .. shell_quote(path) .. " 2>/dev/null")
+  if not pipe then
+    return nil
   end
+  local out = pipe:read("*l")
+  pipe:close()
   if out == nil or out == "" then
-    return path
+    return nil
   end
   return out
 end
 
 -- Replace the file whole: write a sibling, then rename it over, so a crash or
--- a full disk mid-write leaves the old file rather than half of the new one.
--- `path` is already resolved, so a link into a dotfiles repo is kept and the
--- file it points to is replaced. Anything that stops the sibling being
--- written falls back to writing in place.
-local function write_file(path, text)
+-- a full disk mid-write leaves the previous file. `path` has its links
+-- resolved already, so a link into a dotfiles repo survives. When the sibling
+-- cannot be written or moved, the file is left exactly as it was.
+local function replace_file(path, text)
   local tmp = path .. ".tmp"
   local file = io.open(tmp, "w")
-  if file then
-    local written = file:write(text)
-    local closed = file:close()
-    if written and closed and os.rename(tmp, path) then
-      return true
-    end
-    os.remove(tmp)
-  end
-  file = io.open(path, "w")
   if not file then
     return false
   end
   local written = file:write(text)
-  return file:close() and written ~= nil
+  local closed = file:close()
+  if written and closed and os.rename(tmp, path) then
+    return true
+  end
+  os.remove(tmp)
+  return false
+end
+
+-- Write through the path, following any link. Only for a path whose links
+-- could not be resolved, where a rename might turn a link into a file.
+local function write_in_place(path, text)
+  local file = io.open(path, "w")
+  if not file then
+    return false
+  end
+  local written = file:write(text)
+  local closed = file:close()
+  return written ~= nil and closed == true
+end
+
+-- For a change that did not reach the file. Shown whatever settings.notify
+-- says, and from the panel too: a change that only looks saved is worse than
+-- a notification.
+local function alert(message)
+  if hl and hl.exec_cmd then
+    hl.exec_cmd(M.notify_command(message))
+  end
 end
 
 -- Whether text is shaped like a whole JSON object: it opens with a brace, and
@@ -538,75 +574,107 @@ function M.well_formed(text)
   end
 end
 
--- Defined with the rest of the Hyprland side below; load() reports through it.
-local notify
+-- Why saving is blocked, or nil while it is not: "does not parse" or "cannot
+-- be read". Ichi keeps running on the last good settings and writes nothing
+-- while that lasts, so what is in the file, a hand-edit in progress or a
+-- write cut short, is still there to fix.
+M.blocked = nil
 
--- Set while the state file does not parse. Ichi keeps running on the last
--- good settings and writes nothing, so whatever is in the file, a hand-edit
--- in progress or a write cut short, is still there to fix.
-M.unreadable = false
+-- What has been said about the current trouble: at load, when a refused save
+-- first happens, and when a save first fails. Each is said once until the
+-- trouble clears, so a held arrow key does not raise a notification a step.
+local told = { load = false, refused = false, failed = false }
 
 -- The file in use: config_path, unless nothing is there and a file from
 -- before 0.7 is.
 function M.state_path()
-  if M.previous_config_path and not exists(M.config_path) and exists(M.previous_config_path) then
+  if M.previous_config_path and not present(M.config_path) and present(M.previous_config_path) then
     return M.previous_config_path
   end
   return M.config_path
 end
 
--- The file load() and save() last agreed on: its path, where that path really
--- points, and the text it holds. The shell asks for a load after every save,
--- so an unchanged file costs a comparison rather than a parse, and links are
--- only followed again when something other than Ichi changed the file.
-local in_use = { path = nil, target = nil, text = nil }
+-- The file load() and save() last agreed on: its path, the text it holds, and
+-- where the path really points, which save() works out when it first needs it
+-- (false when it cannot). The shell asks for a load after every save, so an
+-- unchanged file costs a comparison rather than a parse.
+local in_use = { path = nil, text = nil, target = nil }
 
 function M.save()
-  if M.unreadable then
-    return
-  end
   if in_use.path == nil then
     in_use.path = M.state_path()
-    in_use.target = real_path(in_use.path)
   end
-  if not exists(in_use.target) then
-    -- The first save, or the file was deleted: make sure its directory exists.
-    local dir = in_use.target:match("^(.*)/")
-    if dir then
-      os.execute("mkdir -p " .. shell_quote(dir))
+  if M.blocked then
+    if not told.refused then
+      told.refused = true
+      alert(string.format("Ichi: not saved, because %s %s. Fix it, or delete it to start over.", shown(in_use.path), M.blocked))
     end
+    return false
   end
+  if in_use.target == nil then
+    in_use.target = real_path(in_use.path) or false
+  end
+
   local text = M.encode_config(M.config)
-  if write_file(in_use.target, text) then
-    in_use.text = text
+  local saved
+  if in_use.target then
+    if not present(in_use.target) then
+      -- The first save, or the file was deleted: make sure its directory exists.
+      local dir = in_use.target:match("^(.*)/")
+      if dir then
+        os.execute("mkdir -p " .. shell_quote(dir))
+      end
+    end
+    saved = replace_file(in_use.target, text)
+  else
+    saved = write_in_place(in_use.path, text)
   end
+
+  if saved then
+    in_use.text = text
+    told.failed = false
+  elseif not told.failed then
+    told.failed = true
+    alert(string.format("Ichi: could not save %s, so this change lasts only until Hyprland reloads", shown(in_use.path)))
+  end
+  return saved
 end
 
 function M.load()
   local path = M.state_path()
-  local text = read_file(path)
-  if text ~= nil and text == in_use.text and path == in_use.path and not M.unreadable then
+  local text, why = read_file(path)
+  if text ~= nil and text == in_use.text and path == in_use.path and not M.blocked then
     return
   end
-  in_use.path, in_use.target, in_use.text = path, real_path(path), nil
+  in_use.path, in_use.text, in_use.target = path, nil, nil
 
-  if text == nil then
-    M.unreadable = false
-    M.config = M.parse_config("")
-    return
+  local problem = nil
+  if why == "unreadable" then
+    problem = "cannot be read"
+  elseif text ~= nil and not M.well_formed(text) then
+    problem = "does not parse"
   end
-  if not M.well_formed(text) then
-    if not M.unreadable then
-      M.unreadable = true
-      local shown = path
-      if HOME ~= "" and shown:sub(1, #HOME + 1) == HOME .. "/" then
-        shown = "~" .. shown:sub(#HOME + 1)
-      end
-      notify(string.format("Ichi: %s does not parse, so nothing is saved until it does. Fix it, or delete it to start over.", shown))
+  if problem then
+    if M.blocked ~= problem then
+      told.load, told.refused = false, false
+    end
+    M.blocked = problem
+    -- An empty file is most often an editor between emptying it and writing
+    -- it again, so that says nothing unless a save is refused meanwhile.
+    local emptied = text ~= nil and text:match("^%s*$") ~= nil
+    if not told.load and not emptied then
+      told.load = true
+      alert(string.format("Ichi: %s %s, so nothing is saved until that changes. Fix it, or delete it to start over.", shown(path), problem))
     end
     return
   end
-  M.unreadable = false
+
+  M.blocked = nil
+  told.load, told.refused = false, false
+  if text == nil then
+    M.config = M.parse_config("")
+    return
+  end
   in_use.text = text
   M.config = M.parse_config(text)
 end
@@ -624,7 +692,7 @@ function M.notify_command(message)
 end
 
 -- `level` is the least chatty setting that still shows this message.
-function notify(message, level)
+local function notify(message, level)
   if not (hl and hl.exec_cmd) or M.quiet then
     return
   end
@@ -970,6 +1038,8 @@ local function parse_int(lo, hi)
   end
 end
 
+local percent = string.format("a percentage from %d to %d", M.limits.min, M.limits.max)
+
 -- Everything `ichi set` can change, keyed by its place in the file. `about`
 -- is what a bad value is told; `apply` marks the ones that move a window.
 M.settable = {
@@ -984,8 +1054,8 @@ M.settable = {
   ["settings.all_workspaces"] = { parse = parse_bool, about = "on or off", apply = true },
   ["settings.max_windows"] = { parse = parse_int(1, 10), about = "a number of windows from 1 to 10", apply = true },
   ["settings.paused"] = { parse = parse_bool, about = "on or off", apply = true },
-  ["defaults.width"] = { parse = parse_int(M.limits.min, M.limits.max), about = "a percentage from 10 to 100", apply = true },
-  ["defaults.height"] = { parse = parse_int(M.limits.min, M.limits.max), about = "a percentage from 10 to 100", apply = true },
+  ["defaults.width"] = { parse = parse_int(M.limits.min, M.limits.max), about = percent, apply = true },
+  ["defaults.height"] = { parse = parse_int(M.limits.min, M.limits.max), about = percent, apply = true },
   ["defaults.max_width"] = { parse = parse_int(0, 100000), about = "a number of pixels, 0 for no cap", apply = true },
   ["defaults.max_height"] = { parse = parse_int(0, 100000), about = "a number of pixels, 0 for no cap", apply = true },
   ["defaults.align_x"] = { parse = parse_int(0, 100), about = "0 to 100, with 50 the centre", apply = true },
@@ -1035,6 +1105,11 @@ local function settle(message)
   notify(message)
 end
 
+-- Save and announce new default sizes, which adopt_defaults makes too.
+local function settle_defaults()
+  settle(string.format("Ichi: defaults %d%% x %d%%", M.config.defaults.width, M.config.defaults.height))
+end
+
 local function positive(value)
   return (tonumber(value) or 0) > 0
 end
@@ -1049,7 +1124,7 @@ function M.set_defaults(width, height, step)
   if positive(step) then
     assign("settings.step", step)
   end
-  settle(string.format("Ichi: defaults %d%% x %d%%", M.config.defaults.width, M.config.defaults.height))
+  settle_defaults()
 end
 
 function M.set_max(width, height)
@@ -1265,7 +1340,7 @@ function M.adopt_defaults(id, scope)
   M.config.workspaces[id] = { mode = "default" }
   assign("defaults.width", entry.width)
   assign("defaults.height", entry.height)
-  settle(string.format("Ichi: defaults %d%% x %d%%", M.config.defaults.width, M.config.defaults.height))
+  settle_defaults()
 end
 
 -- Tests load this file with a fake `hl`; only wire events into a real one.
