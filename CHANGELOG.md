@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **`ichi help`** prints the commands, grouped by what they act on. Deprecated
+  commands are left out; the reference still lists them.
+
 ### Fixed
 
 - **Scaled and rotated monitors get the size you asked for.** On a monitor at
