@@ -29,9 +29,9 @@ with a bar widget, a command line and optional menu entries.
   it and the inset comes back.
 - **Plain state.** One JSON file you can read, edit and keep in your dotfiles.
 
-Needs Hyprland 0.55 or newer, configured in Lua. The bar widget, the menu entries and the
-`omarchy-shell ichi` commands need Omarchy 4.x; everything else is the Lua
-file. No compiled component, no daemon, no network access. Built and tested
+Needs Hyprland 0.55 or newer, configured in Lua. The bar widget, the menu
+entries and the `omarchy-shell ichi` commands need Omarchy 4.x; everything
+else is the Lua file. No compiled component, no daemon, no network access. Built and tested
 against Hyprland 0.56.2 on Omarchy 4.0.2.
 
 ## Install
