@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "Model.js"), "utf8")
   .replace(/^\.pragma library\s*$/m, "")
 const Model = new Function(source + `
-  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, SETTING_KINDS, LIMITS, settingProblem, readState, chooseState, wellFormed }
+  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, HELP_TEXT, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, SETTING_KINDS, LIMITS, settingProblem, readState, chooseState, wellFormed }
 `)()
 
 let passed = 0
@@ -23,6 +23,44 @@ function test(name, fn) {
     process.exitCode = 1
   }
 }
+
+const repo = join(dirname(fileURLToPath(import.meta.url)), "..")
+
+// Every IPC function, with whether the comment above it says Deprecated.
+function ipcCommands() {
+  const qml = readFileSync(join(repo, "IchiIpc.qml"), "utf8")
+  return [...qml.matchAll(/(\/\/ Deprecated[^\n]*\n\s*)?function (\w+)\(/g)]
+    .map((m) => ({ name: m[2], deprecated: m[1] !== undefined }))
+}
+
+// The commands help lists: the first word of each indented row.
+function helpCommands() {
+  return Model.HELP_TEXT.split("\n")
+    .filter((line) => line.startsWith("  "))
+    .map((line) => line.trim().split(" ")[0])
+}
+
+function referenceCommands() {
+  const reference = readFileSync(join(repo, "docs", "reference.md"), "utf8")
+  const block = reference.slice(reference.indexOf("## Commands"), reference.indexOf("### set"))
+  return [...block.matchAll(/omarchy-shell ichi (\w+)/g)].map((m) => m[1])
+}
+
+test("help lists every current command and nothing that is not one", () => {
+  const commands = ipcCommands()
+  const listed = helpCommands()
+  const current = commands.filter((c) => !c.deprecated).map((c) => c.name)
+  assert.deepEqual(current.filter((name) => !listed.includes(name)), [], "missing from help")
+  const deprecated = commands.filter((c) => c.deprecated).map((c) => c.name)
+  assert.deepEqual(listed.filter((name) => !current.includes(name)), [], "in help but not a current command")
+  assert.ok(deprecated.length > 0, "found no deprecated commands; has the comment style changed?")
+})
+
+test("docs/reference.md lists every current command", () => {
+  const listed = referenceCommands()
+  const missing = ipcCommands().filter((c) => !c.deprecated && !listed.includes(c.name)).map((c) => c.name)
+  assert.deepEqual(missing, [])
+})
 
 test("parseConfig normalizes and drops bad entries", () => {
   const config = Model.parseConfig(JSON.stringify({

@@ -11,6 +11,7 @@ id. They are the same surface. Use the id in anything that outlives the
 session, such as the menu entries below, where a short name could collide.
 
 ```bash
+omarchy-shell ichi help                           # the commands, grouped
 omarchy-shell ichi status                         # this workspace and the settings, as text
 omarchy-shell ichi status_json                    # the same, as JSON
 omarchy-shell ichi enabled                        # true | false
@@ -229,12 +230,13 @@ From 1.0, Ichi follows semantic versioning, and a breaking change to any of
 these waits for a major release:
 
 - the commands on this page, their arguments, and what they print, except
-  `status`
+  `status` and `help`
 - the Lua functions listed under [From Lua](#from-lua)
 - the keys of the config file and what they mean
 - the document `status_json` prints
 
-`status` is written for a person to read and may change in any release.
+`status` and `help` are written for a person to read and may change in any
+release.
 Anything else on the `ichi` table is internal. Before 1.0 a minor release may
 still change the list above, and says so in the changelog.
 

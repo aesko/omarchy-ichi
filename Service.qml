@@ -241,6 +241,10 @@ Item {
       : "if ichi then " + body + " end")
   }
 
+  function cmdHelp() {
+    return Model.HELP_TEXT
+  }
+
   function cmdStatus() {
     return Model.statusText(root.status)
   }

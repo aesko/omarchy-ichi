@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`ichi help`** prints the commands, grouped by what they act on. Deprecated
+  commands are left out; the reference still lists them.
+
 ## 0.7.0 — 2026-09-14
 
 The release before 1.0. Nothing new to do; fewer ways to do it, one place

@@ -189,6 +189,7 @@ omarchy plugin enable io.github.aesko.ichi --section right
 ## Command line
 
 ```bash
+omarchy-shell ichi help           # every command, grouped
 omarchy-shell ichi status         # this workspace and the settings, as text
 omarchy-shell ichi toggle
 omarchy-shell ichi nudge -1 0     # one step narrower

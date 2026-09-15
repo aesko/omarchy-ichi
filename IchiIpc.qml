@@ -28,6 +28,10 @@ Item {
   IpcHandler {
     id: handler
 
+    function help(): string {
+      return wrapper.api.cmdHelp()
+    }
+
     function status(): string {
       return wrapper.api.cmdStatus()
     }

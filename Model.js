@@ -40,6 +40,47 @@ function settingProblem(key, value) {
   return ""
 }
 
+// What `ichi help` prints. Deprecated commands are left out; a test holds
+// this, IchiIpc.qml and the commands in docs/reference.md together.
+var HELP_TEXT = [
+  "Usage: omarchy-shell ichi <command> [args]",
+  "",
+  "This workspace:",
+  "  toggle                    turn Ichi on or off here",
+  "  reset                     back to the defaults",
+  "  size <w> <h>              an absolute size, in percent",
+  "  aspect <w> <h>            a ratio instead, e.g. 4 3",
+  "  nudge <dw> <dh>           steps wider or taller, e.g. -1 0",
+  "  nudge_fine <dw> <dh>      the same, in fine steps",
+  "",
+  "Presets:",
+  "  preset <name>             give this workspace a preset",
+  "  cycle                     the next preset",
+  "  cycle_back                the previous preset",
+  "  save_preset <name>        keep this workspace's size as a preset",
+  "  remove_preset <name>      delete a preset",
+  "",
+  "Defaults and settings:",
+  "  adopt                     this workspace's size becomes the default",
+  "  adopt_monitor             the same, for this monitor only",
+  "  set <key> <value>         any setting, e.g. set settings.step 10",
+  "  pause on|off              suspend every inset",
+  "  pause_toggle              pause or resume",
+  "",
+  "State:",
+  "  status                    this workspace and the settings, as text",
+  "  status_json               the same, as JSON",
+  "  enabled                   whether Ichi is on here: true | false",
+  "  paused                    whether Ichi is paused: true | false",
+  "  refresh                   re-read the config and re-apply",
+  "  sync                      re-check the loader line in hyprland.lua",
+  "  help                      show this help",
+  "",
+  "The panel is its own target: omarchy-shell ichi.panel toggle",
+  "Keys for set, deprecated commands and the Lua API:",
+  "https://github.com/aesko/omarchy-ichi/blob/master/docs/reference.md",
+].join("\n")
+
 function defaultConfig() {
   return {
     settings: { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, paused: false },
