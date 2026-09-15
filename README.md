@@ -29,8 +29,7 @@ with a bar widget, a command line and optional menu entries.
   it and the inset comes back.
 - **Plain state.** One JSON file you can read, edit and keep in your dotfiles.
 
-Needs Hyprland 0.55 or newer, configured in Lua (`hyprland.lua`, not
-`hyprland.conf`). The bar widget, the menu entries and the
+Needs Hyprland 0.55 or newer, configured in Lua. The bar widget, the menu entries and the
 `omarchy-shell ichi` commands need Omarchy 4.x; everything else is the Lua
 file. No compiled component, no daemon, no network access. Built and tested
 against Hyprland 0.56.2 on Omarchy 4.0.2.
@@ -75,13 +74,9 @@ until each is reloaded. Your settings file is read as it is; see
 
 ### Without Omarchy
 
-`ichi.lua` is the whole behaviour and needs nothing but Hyprland with a Lua
-config. If you still have a `hyprland.conf` and no `hyprland.lua`, Hyprland
-is reading the old format and there is nowhere to load Ichi from; move to
-Lua first, starting from `example/hyprland.lua` in Hyprland's repository.
-
-Clone the repository and load the file yourself — the line the plugin would
-have written for you:
+`ichi.lua` is the whole behaviour and needs nothing but Hyprland. Clone the
+repository and load the file from your `hyprland.lua` — the line the plugin
+would have written for you:
 
 ```bash
 git clone https://github.com/aesko/omarchy-ichi ~/.local/share/ichi
@@ -114,6 +109,10 @@ nothing back, so the status queries stay behind on Omarchy. To update:
 git -C ~/.local/share/ichi pull
 hyprctl reload
 ```
+
+A config still on `hyprland.conf` has nowhere to load the file from; moving
+to Lua is the way in, and `example/hyprland.lua` in Hyprland's repository is
+a starting point.
 
 The bar widget, the menu entries and the `omarchy-shell ichi` commands stay
 behind on Omarchy; notifications go through `notify-send`. State lives in
