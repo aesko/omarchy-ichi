@@ -156,6 +156,21 @@ function M.resolve(entry, mon)
   return out
 end
 
+-- A monitor's size in the units gaps are laid out in. Hyprland reports width
+-- and height as the mode's pixels, before the scale divides them and before a
+-- quarter turn swaps them; the reserved area and gaps are already scaled.
+function M.logical_size(mon)
+  local scale = tonumber(mon.scale) or 1
+  if scale <= 0 then
+    scale = 1
+  end
+  local w, h = mon.width / scale, mon.height / scale
+  if (tonumber(mon.transform) or 0) % 2 == 1 then
+    w, h = h, w
+  end
+  return w, h
+end
+
 -- Outer gaps that leave a box of the requested shape in a usable area, centred
 -- unless align_x or align_y on the entry say otherwise (0 is the left or top
 -- edge, 100 the right or bottom). Never smaller than the base gaps, so an
@@ -898,8 +913,9 @@ function M.apply(id)
   -- push the window off-centre and the proportion holds on any monitor.
   local mon = tiled.monitor
   local reserved = mon.reserved or {}
-  local usable_w = mon.width - (reserved.left or 0) - (reserved.right or 0)
-  local usable_h = mon.height - (reserved.top or 0) - (reserved.bottom or 0)
+  local logical_w, logical_h = M.logical_size(mon)
+  local usable_w = logical_w - (reserved.left or 0) - (reserved.right or 0)
+  local usable_h = logical_h - (reserved.top or 0) - (reserved.bottom or 0)
 
   -- Named keys are mandatory here: a positional array is silently misparsed.
   hl.workspace_rule({ workspace = selector, gaps_out = M.gaps_for(usable_w, usable_h, M.resolve(entry, mon), base) })

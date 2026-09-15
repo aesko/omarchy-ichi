@@ -181,7 +181,8 @@ arrow-key nudge replaces that with a fixed `size` entry, and `reset` puts
 `true` back.
 
 - `max_width` and `max_height` cap the window in pixels, whatever the
-  percentage works out to. Omit or set to `0` for no cap.
+  percentage works out to. On a scaled monitor these are scaled pixels, as
+  `hyprctl clients` reports them. Omit or set to `0` for no cap.
 - `align_x` and `align_y` say where the box sits in the space around it: `0`
   is the left or top edge, `50` the centre, `100` the right or bottom. Normal
   gaps are always kept.

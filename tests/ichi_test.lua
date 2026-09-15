@@ -318,6 +318,21 @@ M.enable(4)
 check("enable without an entry follows the defaults", M.config.workspaces["4"].mode == "default")
 check("enable says so", fake.notes[1] and fake.notes[1]:find("70% x 80% (default)", 1, true) ~= nil, fake.notes[1])
 check("a default entry is applied at the defaults' size", fake.rules["4"] and fake.rules["4"].left == 384, fake.rules["4"] and fake.rules["4"].left)
+-- The same screen as a 5K panel at scale 2: gaps are in scaled units, so the
+-- rule must match the scale-1 one rather than doubling.
+local hidpi = { name = "DP-2", width = 5120, height = 2880, scale = 2, reserved = { top = 26 } }
+fake.windows[4] = { { floating = false, monitor = hidpi } }
+M.refresh()
+check("a scaled monitor is inset by its scaled size", fake.rules["4"].left == 384 and fake.rules["4"].top == 141,
+  fake.rules["4"].left .. " " .. fake.rules["4"].top)
+fake.windows[4] = { { floating = false, monitor = screen } }
+M.refresh()
+local lw, lh = M.logical_size({ width = 2880, height = 1800, scale = 1.5 })
+check("logical_size divides by a fractional scale", lw == 1920 and lh == 1200, lw .. "x" .. lh)
+lw, lh = M.logical_size({ width = 2560, height = 1440, scale = 2, transform = 1 })
+check("logical_size swaps a monitor turned a quarter", lw == 720 and lh == 1280, lw .. "x" .. lh)
+lw, lh = M.logical_size({ width = 2560, height = 1440, transform = 2 })
+check("logical_size keeps a half turn and a missing scale as they are", lw == 2560 and lh == 1440, lw .. "x" .. lh)
 M.set_defaults(50, 100)
 check("changing the defaults reaches a default entry", fake.rules["4"].left == 640 and fake.rules["4"].top == 10)
 check("the file keeps the entry as true", io.open(M.config_path):read("*a"):find('"4": true', 1, true) ~= nil)

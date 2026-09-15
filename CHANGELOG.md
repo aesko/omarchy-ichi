@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Scaled and rotated monitors get the size you asked for.** On a monitor at
+  scale 2 a 70% × 80% inset came out near 40% × 60%, and a monitor turned on
+  its side was sized as if it were not. `max_width` and `max_height` count
+  scaled pixels, the ones `hyprctl clients` reports.
+
 ## 0.7.0 — 2026-09-14
 
 The release before 1.0. Nothing new to do; fewer ways to do it, one place
