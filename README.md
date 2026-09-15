@@ -29,7 +29,8 @@ with a bar widget, a command line and optional menu entries.
   it and the inset comes back.
 - **Plain state.** One JSON file you can read, edit and keep in your dotfiles.
 
-Needs Hyprland 0.55 or newer. The bar widget, the menu entries and the
+Needs Hyprland 0.55 or newer, configured in Lua (`hyprland.lua`, not
+`hyprland.conf`). The bar widget, the menu entries and the
 `omarchy-shell ichi` commands need Omarchy 4.x; everything else is the Lua
 file. No compiled component, no daemon, no network access. Built and tested
 against Hyprland 0.56.2 on Omarchy 4.0.2.
@@ -74,9 +75,13 @@ until each is reloaded. Your settings file is read as it is; see
 
 ### Without Omarchy
 
-`ichi.lua` is the whole behaviour and needs nothing but Hyprland. Clone the
-repository and load the file yourself — the line the plugin would have written
-for you:
+`ichi.lua` is the whole behaviour and needs nothing but Hyprland with a Lua
+config. If you still have a `hyprland.conf` and no `hyprland.lua`, Hyprland
+is reading the old format and there is nowhere to load Ichi from; move to
+Lua first, starting from `example/hyprland.lua` in Hyprland's repository.
+
+Clone the repository and load the file yourself — the line the plugin would
+have written for you:
 
 ```bash
 git clone https://github.com/aesko/omarchy-ichi ~/.local/share/ichi
@@ -91,12 +96,23 @@ end
 ```
 
 `hyprctl reload` picks it up. Write the keybindings below with Hyprland's own
-`hl.bind` in place of Omarchy's `o.bind` helper:
+`hl.bind` in place of Omarchy's `o.bind` helper. The description moves into
+the options table, next to `repeating` where a binding has it:
 
 ```lua
 hl.bind("SUPER + CTRL + ALT + I", function()
   if ichi then ichi.toggle() end
 end, { description = "Ichi: toggle" })
+```
+
+The actions — toggle, nudge, presets, `set` and the rest — are Lua functions
+you can call from a shell with `hyprctl eval 'ichi.toggle()'`; the list is in
+[docs/reference.md](docs/reference.md#from-lua). `hyprctl eval` prints
+nothing back, so the status queries stay behind on Omarchy. To update:
+
+```bash
+git -C ~/.local/share/ichi pull
+hyprctl reload
 ```
 
 The bar widget, the menu entries and the `omarchy-shell ichi` commands stay
