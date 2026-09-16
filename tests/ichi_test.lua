@@ -366,6 +366,74 @@ M.adjust(10, 0, 4)
 M.adopt_defaults(4, "monitor")
 check("adopt monitor updates an existing block", #M.config.monitors == 1 and M.config.monitors[1].width == 40)
 M.config.monitors = {}
+
+-- Switching a whole display off. A second monitor, with a workspace of its
+-- own on it, is what proves the veto stops at the display it names.
+local other_screen = { name = "eDP-1", description = "Acme Laptop", width = 2560, height = 1440, reserved = { top = 26 } }
+fake.workspaces[7] = { id = 7, name = "7", config_name = "7", tiled_layout = "dwindle", monitor = other_screen }
+fake.windows[7] = { { floating = false, monitor = other_screen } }
+M.enable(7)
+local inset = fake.rules["7"].left
+check("the second display insets too", inset > 10 and fake.rules["4"].left == inset,
+  inset .. "/" .. fake.rules["4"].left)
+
+fake.notes = {}
+M.set_monitor_enabled(false, 4)
+check("a display switched off goes back to plain gaps", fake.rules["4"].left == 10, fake.rules["4"].left)
+check("switching a display off leaves the other alone", fake.rules["7"].left == inset, fake.rules["7"].left)
+check("switching a display off keeps the workspace's entry", M.config.workspaces["4"] ~= nil)
+check("switching a display off writes a block keyed by description",
+  #M.config.monitors == 1 and M.config.monitors[1].key == "desc:LG ULTRAGEAR"
+  and M.config.monitors[1].enabled == false)
+check("switching a display off says which one", fake.notes[1] and fake.notes[1]:find("off on desc:LG ULTRAGEAR", 1, true) ~= nil, fake.notes[1])
+check("monitor_enabled reports the veto", M.monitor_enabled(screen) == false and M.monitor_enabled(other_screen) == true)
+
+local off_text = M.encode_config(M.config)
+check("encode writes the veto", off_text:find('"desc:LG ULTRAGEAR": { "enabled": false }', 1, true) ~= nil, off_text:match('"monitors".-\n'))
+check("encode/parse round-trips the veto", M.parse_config(off_text).monitors[1].enabled == false)
+check("a non-boolean enabled leaves the display on",
+  M.parse_config('{ "monitors": { "eDP-1": { "enabled": "no" } } }').monitors[1].enabled == nil)
+check("enabled true is not stored as a veto",
+  M.parse_config('{ "monitors": { "eDP-1": { "enabled": true } } }').monitors[1].enabled == nil)
+
+-- Nudging a workspace on a display that is off still records the size; the
+-- display decides whether Ichi runs there, not what the workspace wants.
+M.adjust(5, 0, 4)
+check("a workspace on a display that is off keeps taking sizes", M.config.workspaces["4"].mode == "size")
+check("but is still not inset", fake.rules["4"].left == 10, fake.rules["4"].left)
+
+M.set_monitor_enabled(true, 4)
+check("switching a display back on restores the inset", fake.rules["4"].left ~= 10, fake.rules["4"].left)
+check("switching back on drops a block that held nothing else", #M.config.monitors == 0)
+
+M.adopt_defaults(4, "monitor")
+M.set_monitor_enabled(false, 4)
+check("switching off keeps a block that carries a size",
+  #M.config.monitors == 1 and M.config.monitors[1].width ~= nil and M.config.monitors[1].enabled == false)
+local kept_text = M.encode_config(M.config)
+check("encode keeps the size alongside the veto", kept_text:find('"enabled": false', 1, true) ~= nil
+  and kept_text:find('"width"', 1, true) ~= nil)
+M.set_monitor_enabled(true, 4)
+check("switching on keeps a block that carries a size", #M.config.monitors == 1 and M.config.monitors[1].enabled == nil)
+
+M.toggle_monitor(4)
+check("toggle_monitor switches a display off", M.monitor_enabled(screen) == false)
+M.toggle_monitor(4)
+check("toggle_monitor switches it back on", M.monitor_enabled(screen) == true)
+
+-- Pause is the wider veto, so it wins wherever the two meet.
+M.set_monitor_enabled(false, 4)
+M.set_paused(true)
+check("pause covers a display that is already off", fake.rules["4"].left == 10 and fake.rules["7"].left == 10)
+M.set_paused(false)
+check("unpausing leaves the display off", fake.rules["4"].left == 10 and fake.rules["7"].left == inset,
+  fake.rules["4"].left .. "/" .. fake.rules["7"].left)
+M.set_monitor_enabled(true, 4)
+
+M.disable(7)
+fake.workspaces[7] = nil
+fake.windows[7] = nil
+M.config.monitors = {}
 M.reset(4)
 M.disable(4)
 check("disable resets the gaps", fake.rules["4"].left == 10)

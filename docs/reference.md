@@ -27,6 +27,9 @@ omarchy-shell ichi cycle_back                     # the previous one
 omarchy-shell ichi save_preset wide               # keep this workspace's size as a preset
 omarchy-shell ichi remove_preset wide
 omarchy-shell ichi set defaults.width 65          # any setting, by its place in the file
+omarchy-shell ichi monitor off                    # stop insetting on this workspace's monitor
+omarchy-shell ichi monitor_toggle                 # the same, as one command
+omarchy-shell ichi monitor_enabled                # true | false
 omarchy-shell ichi pause on                       # suspend every inset; pause off to resume
 omarchy-shell ichi pause_toggle                   # the same, as one command
 omarchy-shell ichi paused                         # true | false
@@ -198,6 +201,24 @@ matching block wins. Fixed `size` and `aspect` entries keep their own size but
 take the monitor's caps and alignment. `adopt_monitor` writes a block for the
 current display from the workspace you have tuned.
 
+`enabled` is the one key in a block that is not about size. Set it to `false`
+and Ichi insets nothing on that display, whatever its workspaces say; there is
+no `true` to write, because a monitor with no block, or a block that says
+nothing about it, is on. `monitor off` writes it and `monitor on` takes it
+away, dropping the block if it held nothing else. Only a literal `false`
+counts, so a typo leaves the display on.
+
+Two monitors of the same model report the same description, so a `desc:` key
+matches both and switching one off switches both. Key them by connector name
+to tell them apart, at the cost of a key that changes when they are replugged.
+
+There are three vetoes, and the widest wins. `pause` stops every inset
+everywhere; `enabled: false` stops them on one display; a workspace's own
+entry says whether Ichi runs there. Each leaves everything below it written
+down, so lifting one restores exactly what was there: unpausing brings back
+the displays that are on, and switching a display on brings back the
+workspaces that are on.
+
 ### presets
 
 Named entries in any of the three forms below. `cycle` steps a workspace
@@ -292,6 +313,13 @@ workspace only appear while that workspace is on:
   "description": "Follow the defaults again",
   "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi reset"
+},
+"ichi.monitor": {
+  "icon": "",
+  "label": "Run on this monitor",
+  "description": "Whether Ichi insets anything on this display at all",
+  "checked": "[ \"$(omarchy-shell io.github.aesko.ichi monitor_enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi monitor_toggle"
 },
 "ichi.pause": {
   "icon": "",

@@ -229,7 +229,7 @@ test("status reports the active workspace", () => {
   assert.deepEqual(Model.status(config, 2), {
     workspace: "2", problem: null, enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
     resolved: { mode: "size", width: 70, height: 80 },
-    settings: { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, paused: false }, paused: false, defaults: { width: 70, height: 80 }, monitor: null, preset: null, presets: [], workspaces: ["2", "5"],
+    settings: { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, paused: false }, paused: false, defaults: { width: 70, height: 80 }, monitor: null, monitorEnabled: true, preset: null, presets: [], workspaces: ["2", "5"],
   })
   assert.equal(Model.status(config, 5).summary, "1:1")
   assert.equal(Model.status(config, 3).enabled, false)
@@ -454,6 +454,48 @@ test("ichiBinds is empty rather than throwing on nothing", () => {
 })
 
 
+// --- switching a whole monitor off ----------------------------------------
+
+const OFF = { name: "DP-1", description: "LG ULTRAGEAR" }
+
+test("normalizeConfig reads enabled, and only a literal false", () => {
+  const off = Model.normalizeConfig({ monitors: { "DP-1": { enabled: false } } })
+  assert.equal(off.monitors[0].enabled, false)
+  for (const value of [true, "false", "no", 0, null]) {
+    const config = Model.normalizeConfig({ monitors: { "DP-1": { enabled: value } } })
+    assert.equal(config.monitors[0].enabled, undefined, "enabled: " + JSON.stringify(value) + " switched it off")
+  }
+})
+
+test("status says when the workspace's monitor is off", () => {
+  const config = Model.normalizeConfig({ monitors: { "DP-1": { enabled: false } }, workspaces: { "2": true } })
+  const status = Model.status(config, 2, OFF)
+  assert.equal(status.monitorEnabled, false)
+  // The workspace is still on; the monitor is what is stopping it.
+  assert.equal(status.enabled, true)
+  assert.deepEqual(status.resolved, { mode: "size", width: 70, height: 80 })
+  assert.equal(Model.status(config, 2, { name: "eDP-1", description: "Other" }).monitorEnabled, true)
+  assert.equal(Model.status(Model.normalizeConfig({}), 2, OFF).monitorEnabled, true)
+})
+
+test("statusText marks the monitor off, and pause still wins", () => {
+  const off = Model.normalizeConfig({ monitors: { "DP-1": { enabled: false } }, workspaces: { "2": true } })
+  const text = Model.statusText(Model.status(off, 2, OFF))
+  assert.match(text, /^Inset .*\(this monitor is off\)$/m)
+  assert.match(text, /^Monitor .*Ichi off/m)
+  const paused = Model.normalizeConfig({
+    settings: { paused: true }, monitors: { "DP-1": { enabled: false } }, workspaces: { "2": true },
+  })
+  assert.match(Model.statusText(Model.status(paused, 2, OFF)), /^Inset .*\(paused\)$/m)
+})
+
+test("a monitor block that only switches Ichi off still reads as prose", () => {
+  const config = Model.normalizeConfig({ monitors: { "DP-1": { enabled: false, width: 50 } }, workspaces: { "2": true } })
+  assert.match(Model.statusText(Model.status(config, 2, OFF)), /^Monitor {5}DP-1: Ichi off, width 50%$/m)
+  const bare = Model.normalizeConfig({ monitors: { "DP-1": { enabled: false } }, workspaces: { "2": true } })
+  assert.match(Model.statusText(Model.status(bare, 2, OFF)), /^Monitor {5}DP-1: Ichi off$/m)
+})
+
 // --- the workspace a command is aimed at ----------------------------------
 //
 // The bar is drawn once per monitor, so the widget passes the workspace on
@@ -502,12 +544,16 @@ function serviceCalls() {
     if (end === -1) continue
     const expression = body.slice(start + 4, end)
     const args = m[2].split(",").map((p) => p.trim()).filter(Boolean)
-    const stub = { width: 1, height: 2, name: "p", delta: 1, fine: true, scope: "", quiet: true, workspace: "W" }
+    // Values chosen so no guard in a cmd* body returns before its run() call.
+    const stub = {
+      width: 1, height: 2, name: "p", delta: 1, fine: true, scope: "",
+      quiet: true, workspace: "W", state: "on", key: "settings.step", value: "5",
+    }
     const evaluate = new Function(
-      ...args, "target",
-      // rw/rh are locals cmdAspect computes before it calls run().
-      `const rw = 4, rh = 3; return ${expression}`)
-    calls[m[1]] = evaluate(...args.map((a) => stub[a]), () => "TARGET")
+      ...args, "target", "Model",
+      // The body up to run() first, so locals it computes are in scope.
+      `${body.slice(0, start)}\nreturn ${expression}`)
+    calls[m[1]] = evaluate(...args.map((a) => stub[a]), () => "TARGET", Model)
   }
   return calls
 }
@@ -520,6 +566,9 @@ const PER_WORKSPACE = {
   cmdAspect: "set_aspect", cmdSize: "set_size", cmdNudge: "nudge",
   cmdPreset: "preset", cmdCycle: "cycle", cmdSavePreset: "save_preset",
   cmdAdopt: "adopt_defaults",
+  // Which monitor is decided by the workspace on it, so these are aimed the
+  // same way as the rest.
+  cmdMonitor: "set_monitor_enabled", cmdMonitorToggle: "toggle_monitor",
 }
 
 test("every per-workspace command passes the workspace to ichi.lua", () => {
