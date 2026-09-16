@@ -4,6 +4,30 @@
 
 ### Added
 
+- **Ichi can be switched off for one display.** `omarchy-shell ichi monitor
+  off` stops every inset on the display the current workspace is on, and
+  `monitor on` brings them all back; `monitor_toggle` is the pair as one
+  command, for a key or the new menu entry. The panel carries the same switch,
+  named after the display it is on, and the bar icon dims while Ichi is not
+  running there. A laptop beside an external screen is the case it is for:
+  room to give away on one of them, none on the other.
+
+  It is written as `enabled: false` in that display's `monitors` block, so it
+  keeps across a reboot and travels in your dotfiles. Workspaces keep their
+  entries while a display is off and get their insets back when it comes on,
+  which is what makes this different from turning each of them off. There is
+  now an order to the three vetoes — `pause`, then the display, then the
+  workspace — and `status` names whichever one is in the way.
+
+  Two displays of the same model report the same description, and the block is
+  keyed by description so it survives replugging, so switching one of an
+  identical pair off switches both. Key that block by connector name by hand
+  to tell them apart.
+
+## 0.7.1
+
+### Added
+
 - **`ichi help`** prints the commands, grouped by what they act on. Deprecated
   commands are left out; the reference still lists them.
 

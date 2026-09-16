@@ -115,6 +115,13 @@ function M.monitor_block(mon)
   return nil
 end
 
+-- Whether Ichi runs on a display at all. A monitor Hyprland has not named
+-- yet is not a display anyone has switched off, so it counts as on.
+function M.monitor_enabled(mon)
+  local block = M.monitor_block(mon)
+  return not (block and block.enabled == false)
+end
+
 -- The defaults as seen from one monitor: its block overrides field by field.
 function M.defaults_for(mon)
   local out = {}
@@ -306,6 +313,12 @@ function M.parse_config(text)
           block[field] = clamp(math.floor(v), 0, 100)
         end
       end
+      -- Only a literal false switches a display off. An absent field, and
+      -- anything that is not a boolean, leave it on: a veto should have to be
+      -- asked for, not arrived at by a typo.
+      if body:match('"enabled"%s*:%s*(%a+)') == "false" then
+        block.enabled = false
+      end
       cfg.monitors[#cfg.monitors + 1] = block
     end
   end
@@ -399,7 +412,13 @@ local function encode_monitors(monitors)
   end
   local lines = {}
   for _, block in ipairs(monitors) do
-    lines[#lines + 1] = string.format('    %s: { %s }', M.json_string(block.key), M.encode_size(block))
+    -- encode_size covers the fields defaults and presets share; `enabled` is
+    -- a monitor's alone, and would be dropped on the next save without this.
+    local body = M.encode_size(block)
+    if block.enabled == false then
+      body = body == "" and '"enabled": false' or (body .. ', "enabled": false')
+    end
+    lines[#lines + 1] = string.format('    %s: { %s }', M.json_string(block.key), body)
   end
   return '  "monitors": {\n' .. table.concat(lines, ",\n") .. "\n  },\n"
 end
@@ -864,6 +883,16 @@ function M.apply(id)
   -- Paused is a runtime veto, not a config change: every workspace goes back
   -- to normal gaps and keeps its entry, so resuming restores the lot.
   if M.config.settings.paused then
+    plain()
+    return
+  end
+
+  -- A display switched off is the same kind of veto, narrowed to one monitor.
+  -- Workspaces there keep their entries and get them back when it comes on,
+  -- which is what makes this different from turning each of them off: a
+  -- workspace's entry says how it should look, and the display says whether
+  -- Ichi runs there at all.
+  if not M.monitor_enabled(ws.monitor) then
     plain()
     return
   end
@@ -1366,6 +1395,55 @@ local function monitor_key(mon)
     return "desc:" .. desc
   end
   return mon.name
+end
+
+-- Switch Ichi off, or back on, for a whole display: the monitor the given
+-- workspace is on, or the focused workspace's when none is given. Every
+-- workspace on that display keeps its entry either way.
+function M.set_monitor_enabled(on, id)
+  id = key_of(id)
+  local mon = id and workspace_monitor(id)
+  if mon == nil then
+    notify("Ichi: no display to switch")
+    return
+  end
+  on = on and true or false
+  local block = M.monitor_block(mon)
+  if on then
+    if block == nil then
+      return
+    end
+    block.enabled = nil
+    -- A block that only ever existed to hold the veto is noise once the veto
+    -- is lifted, and the state file is meant to be read.
+    if M.encode_size(block) == "" then
+      for i, b in ipairs(M.config.monitors) do
+        if b == block then
+          table.remove(M.config.monitors, i)
+          break
+        end
+      end
+    end
+  else
+    if block == nil then
+      block = { key = monitor_key(mon) }
+      M.config.monitors[#M.config.monitors + 1] = block
+    end
+    block.enabled = false
+  end
+  M.save()
+  M.refresh()
+  notify(string.format("Ichi: %s on %s", on and "on" or "off", monitor_key(mon)))
+end
+
+function M.toggle_monitor(id)
+  id = key_of(id)
+  local mon = id and workspace_monitor(id)
+  if mon == nil then
+    notify("Ichi: no display to switch")
+    return
+  end
+  M.set_monitor_enabled(not M.monitor_enabled(mon), id)
 end
 
 -- Tune a workspace with the arrows, then make that the default for the rest.

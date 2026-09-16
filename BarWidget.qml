@@ -64,6 +64,13 @@ Panel {
   readonly property string workspaceKey: ready && ichiStatus.workspace ? String(ichiStatus.workspace) : ""
   readonly property bool onHere: !!(ready && ichiStatus.enabled)
   readonly property bool paused: !!(ready && ichiStatus.paused)
+  // Whether Ichi runs on this widget's own monitor at all. Absent means on,
+  // so an older state file and a monitor with no block both read as on.
+  readonly property bool monitorOn: !(ready && ichiStatus.monitorEnabled === false)
+  // What the bar answers at a glance: is Ichi doing anything here, whichever
+  // of the three vetoes is the reason it is not.
+  readonly property bool working: onHere && monitorOn && !paused
+  readonly property string monitorName: barMonitor && barMonitor.name ? String(barMonitor.name) : ""
   readonly property var entry: ready ? ichiStatus.entry : null
   readonly property var resolved: ready ? ichiStatus.resolved : null
   readonly property string presetName: ready && ichiStatus.preset ? String(ichiStatus.preset) : ""
@@ -154,11 +161,13 @@ Panel {
     slotSize: root.vertical || root.display === "Icon only"
       ? Style.bar.iconSlot
       : Style.bar.iconSlot + Math.ceil(Style.font.body * 0.62 * Math.max(0, root.labelText.length - 1))
-    // Dimmed when this workspace is not inset, or while everything is paused,
+    // Dimmed when this workspace is not inset, whichever veto is the reason,
     // so the bar answers "is Ichi doing anything right now" at a glance.
-    opacity: root.onHere && !root.paused ? 1.0 : 0.45
+    opacity: root.working ? 1.0 : 0.45
+    // Widest veto first, so the tooltip names the one actually in the way.
     tooltipText: root.ready
       ? (root.paused ? "Ichi: paused everywhere"
+        : !root.monitorOn ? "Ichi: off on " + (root.monitorName === "" ? "this monitor" : root.monitorName)
         : root.onHere ? "Ichi: " + root.ichiStatus.summary
         : "Ichi: off on this workspace")
       : "Ichi"
@@ -421,6 +430,28 @@ Panel {
         }
 
         PanelSeparator { Layout.fillWidth: true }
+
+        // The two vetoes wider than a workspace, narrowest first. Both leave
+        // every entry written down, so switching either back on restores what
+        // was there rather than needing the workspaces turned on again.
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(8)
+
+          Text {
+            Layout.fillWidth: true
+            text: root.monitorName === "" ? "Run on this monitor" : "Run on " + root.monitorName
+            color: root.bar ? root.bar.foreground : Color.foreground
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+
+          ToggleSwitch {
+            checked: root.monitorOn
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onToggled: root.call("cmdMonitorToggle")
+          }
+        }
 
         RowLayout {
           Layout.fillWidth: true

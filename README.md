@@ -140,6 +140,9 @@ end)
 o.bind("SUPER + CTRL + ALT + A", "Ichi: adopt as default", function()
   if ichi then ichi.adopt_defaults() end
 end)
+o.bind("SUPER + CTRL + ALT + M", "Ichi: run on this monitor", function()
+  if ichi then ichi.toggle_monitor() end
+end)
 for key, dw, dh, word in ("LEFT,-1,0,narrower RIGHT,1,0,wider UP,0,1,taller DOWN,0,-1,shorter"):gmatch("(%a+),(-?%d),(-?%d),(%a+)") do
   o.bind("SUPER + CTRL + ALT + " .. key, "Ichi: " .. word, function()
     if ichi then ichi.nudge(tonumber(dw), tonumber(dh)) end
@@ -150,9 +153,10 @@ for key, dw, dh, word in ("LEFT,-1,0,narrower RIGHT,1,0,wider UP,0,1,taller DOWN
 end
 ```
 
-Every binding acts on the workspace you are on. Nudging a workspace that is
-off turns it on. The plain arrows move by `step` (5 points) and the shifted
-ones by `fine_step` (1 point). The quickest way to a default you like: turn a
+Every binding acts on the workspace you are on, except the monitor one, which
+acts on the display that workspace is on. Nudging a workspace that is off
+turns it on. The plain arrows move by `step` (5 points) and the shifted ones
+by `fine_step` (1 point). The quickest way to a default you like: turn a
 workspace on, tune it with the arrows, then press adopt.
 
 Keep the `Ichi:` prefix on the descriptions. The panel's shortcut list matches
@@ -160,6 +164,34 @@ on it, and a Lua bind gives Hyprland nothing else to match — it reports an
 opaque `__lua` dispatcher, so your description is the only link between a key
 and what it does. Four arrows under the same modifiers, described alike but for
 the direction, show there as a single *resize* row.
+
+## One monitor at a time
+
+A laptop next to an external screen usually wants Ichi on one of them and not
+the other — the big display has room to give away, the small one does not.
+Switching a display off stops every inset on it, whatever its workspaces say:
+
+```bash
+omarchy-shell ichi monitor off        # this workspace's display
+omarchy-shell ichi monitor on
+omarchy-shell ichi monitor_toggle     # what the key above is bound to
+```
+
+Nothing is forgotten while a display is off. Every workspace keeps its entry
+and gets its inset back the moment you switch the display on again, which is
+what makes this different from turning each of those workspaces off one by
+one. The panel carries the same switch, named after the display it is on, and
+the bar icon dims while Ichi is not running there.
+
+It is written down as `enabled: false` in the display's `monitors` block, so
+it keeps across a reboot and travels in your dotfiles. There is no `true` to
+write: a display with no block is on, and switching one back on takes the key
+away again, dropping the block if it held nothing else.
+
+Two monitors of the same model report the same description to Hyprland, and
+`monitor off` keys the block by description so it survives replugging — so
+switching one of an identical pair off switches both. Key that block by
+connector name (`DP-1`) by hand if you need to tell them apart.
 
 ## Bar widget
 

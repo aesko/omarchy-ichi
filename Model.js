@@ -53,6 +53,10 @@ var HELP_TEXT = [
   "  nudge <dw> <dh>           steps wider or taller, e.g. -1 0",
   "  nudge_fine <dw> <dh>      the same, in fine steps",
   "",
+  "This monitor:",
+  "  monitor on|off            whether Ichi runs on this monitor at all",
+  "  monitor_toggle            switch this monitor on or off",
+  "",
   "Presets:",
   "  preset <name>             give this workspace a preset",
   "  cycle                     the next preset",
@@ -72,6 +76,7 @@ var HELP_TEXT = [
   "  status_json               the same, as JSON",
   "  enabled                   whether Ichi is on here: true | false",
   "  paused                    whether Ichi is paused: true | false",
+  "  monitor_enabled           whether Ichi runs on this monitor: true | false",
   "  refresh                   re-read the config and re-apply",
   "  sync                      re-check the loader line in hyprland.lua",
   "  help                      show this help",
@@ -148,6 +153,9 @@ function normalizeConfig(document) {
     if (isFinite(Number(raw.max_height))) block.max_height = Math.max(0, Math.floor(Number(raw.max_height)))
     if (isFinite(Number(raw.align_x))) block.align_x = clamp(Math.floor(Number(raw.align_x)), 0, 100)
     if (isFinite(Number(raw.align_y))) block.align_y = clamp(Math.floor(Number(raw.align_y)), 0, 100)
+    // Only a literal false switches a monitor off, as in ichi.lua: a veto
+    // should have to be asked for rather than arrived at by a typo.
+    if (raw.enabled === false) block.enabled = false
     config.monitors.push(block)
   }
 
@@ -260,6 +268,13 @@ function monitorBlock(config, monitor) {
     }
   }
   return null
+}
+
+// Whether Ichi runs on a monitor at all. A monitor with no block, and one
+// whose block says nothing about it, is on.
+function monitorEnabled(config, monitor) {
+  var block = monitorBlock(config, monitor)
+  return !(block && block.enabled === false)
 }
 
 function defaultsFor(config, monitor) {
@@ -464,6 +479,8 @@ function monitorLine(block) {
   if (block.align_x !== undefined || block.align_y !== undefined) {
     parts.push("align " + (block.align_x === undefined ? 50 : block.align_x) + "/" + (block.align_y === undefined ? 50 : block.align_y))
   }
+  // First, because it decides whether the rest of the block does anything.
+  if (block.enabled === false) parts.unshift("Ichi off")
   return parts.length > 0 ? block.key + ": " + parts.join(", ") : block.key
 }
 
@@ -473,7 +490,9 @@ function monitorLine(block) {
 function statusText(s) {
   var rows = [["Workspace", s.workspace === null ? "none focused" : s.workspace]]
   if (s.problem) rows.push(["Saving", "blocked: " + s.problem])
-  rows.push(["Inset", s.paused ? s.summary + " (paused)" : s.summary])
+  rows.push(["Inset", s.paused ? s.summary + " (paused)"
+    : s.monitorEnabled === false ? s.summary + " (this monitor is off)"
+    : s.summary])
   if (s.preset) rows.push(["Preset", s.preset])
   rows.push(["Default", sizeText(s.defaults.width, s.defaults.height)])
   if (s.defaults.max_width > 0 || s.defaults.max_height > 0) {
@@ -516,6 +535,10 @@ function status(config, activeWorkspaceId, monitor, problem) {
     defaults: config.defaults,
     paused: config.settings.paused,
     monitor: monitorBlock(config, monitor),
+    // Whether Ichi runs on this workspace's monitor. Separate from `enabled`,
+    // which is about the workspace: a workspace can be on while the monitor
+    // it sits on is off, and gets its inset back when the monitor comes on.
+    monitorEnabled: monitorEnabled(config, monitor),
     preset: presetName(config, entry),
     presets: config.presets.map(function (p) { return p.name }),
     workspaces: Object.keys(config.workspaces).filter(function (k) { return config.workspaces[k] !== false })
