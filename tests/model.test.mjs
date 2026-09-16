@@ -453,4 +453,101 @@ test("ichiBinds is empty rather than throwing on nothing", () => {
   assert.deepEqual(Model.ichiBinds(null), [])
 })
 
+
+// --- the workspace a command is aimed at ----------------------------------
+//
+// The bar is drawn once per monitor, so the widget passes the workspace on
+// its own screen to every per-workspace command and Service.qml has to place
+// that argument where ichi.lua expects it. Getting it wrong is invisible on
+// one monitor — the argument goes missing, ichi.lua falls back to the focused
+// workspace, and on a single screen that is the same workspace. So check the
+// two sides against each other rather than trusting either alone.
+
+// The position of the workspace argument in each `function M.name(...)` in
+// ichi.lua, by the parameter conventionally called `id`.
+function luaTargetPositions() {
+  const lua = readFileSync(join(repo, "ichi.lua"), "utf8")
+  const positions = {}
+  for (const m of lua.matchAll(/^function M\.(\w+)\(([^)]*)\)/gm)) {
+    const params = m[2].split(",").map((p) => p.trim()).filter(Boolean)
+    const at = params.indexOf("id")
+    if (at !== -1) positions[m[1]] = { at, arity: params.length }
+  }
+  return positions
+}
+
+// The Lua each cmd* in Service.qml builds, with the workspace argument shown
+// as TARGET. The call is evaluated rather than pattern-matched so that string
+// concatenation, JSON.stringify and the numeric coercions all run for real.
+function serviceCalls() {
+  const qml = readFileSync(join(repo, "Service.qml"), "utf8")
+  const calls = {}
+  for (const m of qml.matchAll(/\n  function (cmd\w+)\(([^)]*)\) \{\n([\s\S]*?)\n  \}\n/g)) {
+    const body = m[3]
+    const start = body.indexOf("run(")
+    if (start === -1) continue
+    // Scan to the top-level comma that ends run()'s first argument, stepping
+    // over nested parens and string literals.
+    let depth = 0, quote = null, end = -1
+    for (let i = start + 4; i < body.length; i++) {
+      const c = body[i]
+      if (quote) {
+        if (c === "\\") i++
+        else if (c === quote) quote = null
+      } else if (c === '"' || c === "'") quote = c
+      else if (c === "(") depth++
+      else if (c === ")") depth--
+      else if (c === "," && depth === 0) { end = i; break }
+    }
+    if (end === -1) continue
+    const expression = body.slice(start + 4, end)
+    const args = m[2].split(",").map((p) => p.trim()).filter(Boolean)
+    const stub = { width: 1, height: 2, name: "p", delta: 1, fine: true, scope: "", quiet: true, workspace: "W" }
+    const evaluate = new Function(
+      ...args, "target",
+      // rw/rh are locals cmdAspect computes before it calls run().
+      `const rw = 4, rh = 3; return ${expression}`)
+    calls[m[1]] = evaluate(...args.map((a) => stub[a]), () => "TARGET")
+  }
+  return calls
+}
+
+// cmd* name -> the ichi.lua function it calls, for every command that is
+// about one workspace. Everything else (pause, presets by name, settings) is
+// global and correctly takes no workspace.
+const PER_WORKSPACE = {
+  cmdToggle: "toggle", cmdUseDefaults: "enable", cmdReset: "reset",
+  cmdAspect: "set_aspect", cmdSize: "set_size", cmdNudge: "nudge",
+  cmdPreset: "preset", cmdCycle: "cycle", cmdSavePreset: "save_preset",
+  cmdAdopt: "adopt_defaults",
+}
+
+test("every per-workspace command passes the workspace to ichi.lua", () => {
+  const calls = serviceCalls()
+  for (const cmd of Object.keys(PER_WORKSPACE)) {
+    assert.ok(calls[cmd], cmd + " builds no run() call")
+    assert.match(calls[cmd], /TARGET/, cmd + " drops the workspace: " + calls[cmd])
+  }
+})
+
+test("the workspace lands in the argument ichi.lua reads it from", () => {
+  const calls = serviceCalls()
+  const positions = luaTargetPositions()
+  for (const [cmd, fn] of Object.entries(PER_WORKSPACE)) {
+    const expected = positions[fn]
+    assert.ok(expected, "ichi.lua has no M." + fn + " taking an id")
+    const inner = calls[cmd].replace(/^ichi\.\w+\(/, "").replace(/\)$/, "")
+    const at = inner.split(",").map((a) => a.trim()).indexOf("TARGET")
+    assert.equal(at, expected.at,
+      `${cmd} puts the workspace at argument ${at}, M.${fn} reads it at ${expected.at}: ${calls[cmd]}`)
+  }
+})
+
+test("global commands take no workspace", () => {
+  const calls = serviceCalls()
+  for (const cmd of ["cmdPauseToggle", "cmdRemovePreset"]) {
+    if (calls[cmd]) assert.doesNotMatch(calls[cmd], /TARGET/, cmd + " is global but aims at a workspace")
+  }
+})
+
 console.log(passed + " passed")

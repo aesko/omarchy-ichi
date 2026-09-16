@@ -241,6 +241,26 @@ Item {
       : "if ichi then " + body + " end")
   }
 
+  // Which workspace a command is about, as the argument every per-workspace
+  // action in ichi.lua takes last or first: a quoted name, or nil for
+  // "whatever is focused". The command line, the menu and the keybindings
+  // all mean the focused one. The bar widget means the workspace on its own
+  // monitor, because the bar is drawn once per screen and each copy is about
+  // the screen it is on.
+  function target(workspace) {
+    return workspace === undefined || workspace === null || workspace === ""
+      ? "nil"
+      : JSON.stringify(String(workspace))
+  }
+
+  // Whether Ichi is on for one workspace, defaulting to the focused one.
+  function enabledOn(workspace) {
+    var key = workspace === undefined || workspace === null || workspace === ""
+      ? root.activeWorkspaceId
+      : String(workspace)
+    return key !== null && Model.entryFor(root.config, key) !== null
+  }
+
   function cmdHelp() {
     return Model.HELP_TEXT
   }
@@ -258,19 +278,19 @@ Item {
     return root.enabled ? "true" : "false"
   }
 
-  function cmdToggle(quiet) {
-    run("ichi.toggle()", quiet)
-    return root.enabled ? "disabling" : "enabling"
+  function cmdToggle(quiet, workspace) {
+    run("ichi.toggle(" + target(workspace) + ")", quiet)
+    return enabledOn(workspace) ? "disabling" : "enabling"
   }
 
   // "Follow the defaults", which on a workspace that is off means turning it
   // on that way. enable() with no entry writes exactly that.
-  function cmdUseDefaults(quiet) {
-    run("ichi.enable()", quiet)
+  function cmdUseDefaults(quiet, workspace) {
+    run("ichi.enable(" + target(workspace) + ")", quiet)
   }
 
-  function cmdReset() {
-    root.evaluate("if ichi then ichi.reset() end")
+  function cmdReset(quiet, workspace) {
+    run("ichi.reset(" + target(workspace) + ")", quiet)
   }
 
   // What a deprecated command prints. They keep working through 0.7 and go
@@ -295,12 +315,12 @@ Item {
     return deprecated("adjust", "nudge or ichi size")
   }
 
-  // Switch the focused workspace to aspect mode, e.g. aspect 4 3.
-  function cmdAspect(width, height, quiet) {
+  // Switch a workspace to aspect mode, e.g. aspect 4 3.
+  function cmdAspect(width, height, quiet, workspace) {
     var rw = Number(width) || 0
     var rh = Number(height) || 0
     if (rw <= 0 || rh <= 0) return
-    run("ichi.set_aspect(" + rw + ", " + rh + ")", quiet)
+    run("ichi.set_aspect(" + rw + ", " + rh + ", " + target(workspace) + ")", quiet)
   }
 
   // Deprecated: set defaults.width and defaults.height.
@@ -333,14 +353,16 @@ Item {
     return deprecated("fine_step", "set settings.fine_step")
   }
 
-  // An absolute size for the focused workspace, which is what a slider has.
-  function cmdSize(width, height, quiet) {
-    run("ichi.set_size(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ")", quiet)
+  // An absolute size for a workspace, which is what a slider has.
+  function cmdSize(width, height, quiet, workspace) {
+    run("ichi.set_size(" + (Number(width) || 0) + ", " + (Number(height) || 0)
+      + ", " + target(workspace) + ")", quiet)
   }
 
   // Directions as -1, 0 or 1, scaled by the step or the fine step.
-  function cmdNudge(width, height, fine, quiet) {
-    run("ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", " + (fine === true) + ")", quiet)
+  function cmdNudge(width, height, fine, quiet, workspace) {
+    run("ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0)
+      + ", " + (fine === true) + ", " + target(workspace) + ")", quiet)
   }
 
   // Deprecated, and does nothing: the smallest size is fixed since 0.7.
@@ -379,29 +401,30 @@ Item {
     return deprecated("notify", "set settings.notify")
   }
 
-  // Give the focused workspace a preset by name.
-  function cmdPreset(name, quiet) {
-    run("ichi.preset(" + JSON.stringify(String(name)) + ")", quiet)
+  // Give a workspace a preset by name.
+  function cmdPreset(name, quiet, workspace) {
+    run("ichi.preset(" + JSON.stringify(String(name)) + ", " + target(workspace) + ")", quiet)
   }
 
   // Step through the presets; delta is 1 forwards, -1 back.
-  function cmdCycle(delta, quiet) {
-    run("ichi.cycle(" + delta + ")", quiet)
+  function cmdCycle(delta, quiet, workspace) {
+    run("ichi.cycle(" + delta + ", " + target(workspace) + ")", quiet)
   }
 
-  // Keep the focused workspace's current size as a named preset.
-  function cmdSavePreset(name, quiet) {
-    run("ichi.save_preset(" + JSON.stringify(String(name)) + ")", quiet)
+  // Keep a workspace's current size as a named preset.
+  function cmdSavePreset(name, quiet, workspace) {
+    run("ichi.save_preset(" + JSON.stringify(String(name)) + ", " + target(workspace) + ")", quiet)
   }
 
   function cmdRemovePreset(name, quiet) {
     run("ichi.remove_preset(" + JSON.stringify(String(name)) + ")", quiet)
   }
 
-  // Adopt the focused workspace's current size as the default, or with
-  // scope "monitor", as the default for its monitor only.
-  function cmdAdopt(scope, quiet) {
-    run(scope === "monitor" ? 'ichi.adopt_defaults(nil, "monitor")' : "ichi.adopt_defaults()", quiet)
+  // Adopt a workspace's current size as the default, or with scope
+  // "monitor", as the default for its monitor only.
+  function cmdAdopt(scope, quiet, workspace) {
+    run("ichi.adopt_defaults(" + target(workspace)
+      + (scope === "monitor" ? ', "monitor")' : ")"), quiet)
   }
 
   function cmdRefresh() {

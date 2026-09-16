@@ -1,14 +1,16 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
 // Ichi's bar widget. Left click opens the panel, right click toggles the
-// focused workspace, matching what Omarchy's own audio, bluetooth and power
-// widgets do with each button.
+// workspace on this widget's own screen, matching what Omarchy's own audio,
+// bluetooth and power widgets do with each button.
 //
 // State comes straight off the plugin's own service rather than a second
 // FileView, and actions call the same cmd* functions the two IPC targets
@@ -23,7 +25,40 @@ Panel {
   readonly property var ichiService: bar && bar.shell && typeof bar.shell.serviceFor === "function"
     ? bar.shell.serviceFor("io.github.aesko.ichi")
     : null
-  readonly property var ichiStatus: ichiService ? ichiService.status : null
+  // The bar is drawn once per monitor, so this copy of the widget is about
+  // the workspace on *its* screen. The service's own `status` is about the
+  // focused workspace, which is right for the command line and the menu —
+  // they are asked from nowhere in particular — but taking it here would make
+  // every copy show the focused monitor's workspace and act on it, so the
+  // widget on the other screen would describe, and toggle, a workspace nobody
+  // is looking at.
+  readonly property var barScreen: root.QsWindow.window ? root.QsWindow.window.screen : null
+  // Found by walking the monitor list rather than with Hyprland.monitorFor,
+  // so the binding depends on the list and re-runs when a display is plugged
+  // in or unplugged. monitorFor takes only the screen, and a lookup that
+  // answered null once — which it does for a monitor Hyprland has not
+  // reported yet — would never be asked again.
+  readonly property var barMonitor: {
+    if (!barScreen) return null
+    var monitors = Hyprland.monitors.values
+    for (var i = 0; i < monitors.length; i++) {
+      if (monitors[i].name === barScreen.name) return monitors[i]
+    }
+    return null
+  }
+  readonly property var barWorkspace: barMonitor ? barMonitor.activeWorkspace : null
+  // The config keys workspaces by name, and a numeric workspace is named by
+  // its number; a named one has no useful id. The same pick as Service.qml.
+  readonly property var screenWorkspaceId: barWorkspace
+    ? String(barWorkspace.name !== undefined && barWorkspace.name !== null
+      ? barWorkspace.name : barWorkspace.id)
+    : null
+  readonly property var screenMonitor: barMonitor
+    ? ({ name: barMonitor.name, description: barMonitor.description })
+    : null
+  readonly property var ichiStatus: ichiService && ichiService.config
+    ? Model.status(ichiService.config, screenWorkspaceId, screenMonitor, ichiService.stateProblem)
+    : null
   readonly property bool ready: !!ichiStatus
 
   readonly property string workspaceKey: ready && ichiStatus.workspace ? String(ichiStatus.workspace) : ""
@@ -101,7 +136,9 @@ Panel {
   // Panel actions pass quiet: the panel shows its own result, and a
   // notification would land on top of the panel that caused it.
   function call(name) {
-    if (ichiService && typeof ichiService[name] === "function") ichiService[name](true)
+    if (ichiService && typeof ichiService[name] === "function") {
+      ichiService[name](true, root.screenWorkspaceId)
+    }
   }
 
   // ------------------------------------------------------------- the bar --
@@ -268,7 +305,7 @@ Panel {
               selected: modelData === root.presetName
               tooltipText: "Right click to remove"
               foreground: root.bar ? root.bar.foreground : Color.foreground
-              onClicked: if (root.ichiService) root.ichiService.cmdPreset(modelData, true)
+              onClicked: if (root.ichiService) root.ichiService.cmdPreset(modelData, true, root.screenWorkspaceId)
               onRightClicked: if (root.ichiService) root.ichiService.cmdRemovePreset(modelData, true)
             }
           }
@@ -302,7 +339,7 @@ Panel {
               text: modelData[0] + ":" + modelData[1]
               selected: root.isAspect(modelData[0], modelData[1])
               foreground: root.bar ? root.bar.foreground : Color.foreground
-              onClicked: if (root.ichiService) root.ichiService.cmdAspect(modelData[0], modelData[1], true)
+              onClicked: if (root.ichiService) root.ichiService.cmdAspect(modelData[0], modelData[1], true, root.screenWorkspaceId)
             }
           }
         }
@@ -371,7 +408,7 @@ Panel {
             enabled: root.canAdopt
             opacity: root.canAdopt ? 1 : 0.4
             foreground: root.bar ? root.bar.foreground : Color.foreground
-            onClicked: if (root.ichiService) root.ichiService.cmdAdopt("", true)
+            onClicked: if (root.ichiService) root.ichiService.cmdAdopt("", true, root.screenWorkspaceId)
           }
 
           Button {
@@ -379,7 +416,7 @@ Panel {
             enabled: root.canAdopt
             opacity: root.canAdopt ? 1 : 0.4
             foreground: root.bar ? root.bar.foreground : Color.foreground
-            onClicked: if (root.ichiService) root.ichiService.cmdAdopt("monitor", true)
+            onClicked: if (root.ichiService) root.ichiService.cmdAdopt("monitor", true, root.screenWorkspaceId)
           }
         }
 
@@ -664,11 +701,11 @@ Panel {
   function commitName() {
     var name = nameField.text.trim()
     naming = false
-    if (name !== "" && ichiService) ichiService.cmdSavePreset(name, true)
+    if (name !== "" && ichiService) ichiService.cmdSavePreset(name, true, root.screenWorkspaceId)
   }
 
   function applySizeOf(w, h) {
-    if (ichiService) ichiService.cmdSize(w, h, true)
+    if (ichiService) ichiService.cmdSize(w, h, true, root.screenWorkspaceId)
   }
 
   function applySize() {

@@ -165,11 +165,14 @@ the direction, show there as a single *resize* row.
 
 One glyph, dimmed on a workspace where Ichi is off. **Left click opens the
 panel, right click toggles this workspace**, matching Omarchy's audio,
-bluetooth and power widgets. The panel holds the on/off switch, a row of
-sizes — the defaults first, then your presets — width and height as a typed
-field and a slider, adopt, and the global pause. `+` saves the current size as
-a preset; right-clicking one removes it. The controls stay live on a workspace
-that is off, showing what it would get; touching one turns it on.
+bluetooth and power widgets. Omarchy draws the bar on every monitor, and each
+copy of the widget is about the workspace on its own screen: what it shows,
+what it toggles and what its panel changes all follow the monitor it sits on,
+not wherever the focus happens to be. The panel holds the on/off switch, a
+row of sizes — the defaults first, then your presets — width and height as a
+typed field and a slider, adopt, and the global pause. `+` saves the current
+size as a preset; right-clicking one removes it. The controls stay live on a
+workspace that is off, showing what it would get; touching one turns it on.
 
 Under the sizes is a row of aspect ratios — 16:9, 16:10, 3:2, 4:3 and 1:1.
 Picking one switches this workspace to that shape, which is why the sliders
