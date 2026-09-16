@@ -13,6 +13,14 @@
   scale 2 a 70% × 80% inset came out near 40% × 60%, and a monitor turned on
   its side was sized as if it were not. `max_width` and `max_height` count
   scaled pixels, the ones `hyprctl clients` reports.
+- **The bar widget is about the screen it is on.** Omarchy draws the bar once
+  per monitor, and every copy of the widget read the *focused* workspace. On
+  more than one monitor that meant the widget on the unfocused screen showed
+  a workspace nobody was looking at, its right click toggled that workspace
+  instead of the one below it, and the panel it opened was headed with the
+  wrong number. Each copy now reads, and acts on, the workspace on its own
+  monitor. Nothing changes on a single monitor, where the two were always the
+  same workspace.
 
 ## 0.7.0 — 2026-09-14
 
