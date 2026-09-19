@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 — 2026-09-19
+
+Ichi can be switched off for one display, and the menu entries are reworked
+around it. Both need you to act: a key or a menu row for the first, a new
+snippet for the second.
 
 ### Added
 
