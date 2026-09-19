@@ -7,7 +7,7 @@
 - **Ichi can be switched off for one display.** `omarchy-shell ichi monitor
   off` stops every inset on the display the current workspace is on, and
   `monitor on` brings them all back; `monitor_toggle` is the pair as one
-  command, for a key or the new menu entry. The panel carries the same switch,
+  command, for a key or the new menu entries. The panel carries the same switch,
   named after the display it is on, and the bar icon dims while Ichi is not
   running there. A laptop beside an external screen is the case it is for:
   room to give away on one of them, none on the other.
@@ -23,6 +23,21 @@
   keyed by description so it survives replugging, so switching one of an
   identical pair off switches both. Key that block by connector name by hand
   to tell them apart.
+
+### Changed
+
+- **The menu entries in the reference are reworked**, and the Ichi submenu now
+  has the switch it was missing: **On this workspace**, first. Its rows run
+  from the narrowest reach to the widest, the order the menu shows them in,
+  and with the workspace off it is three switches rather than two stray rows.
+  Toggle gains **Ichi on this monitor** beside **Ichi**, so searching the
+  menu for "ichi" finds exactly those two and the submenu. Nothing changes
+  until you copy the new snippet into `omarchy-menu.jsonc`.
+
+### Fixed
+
+- The menu snippet's icons were empty strings again after it moved from the
+  README to the reference in 0.5.0. They are the Ichi glyph once more.
 
 ## 0.7.1
 

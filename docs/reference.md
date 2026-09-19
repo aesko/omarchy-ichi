@@ -264,70 +264,93 @@ still change the list above, and says so in the changelog.
 
 ## Omarchy menu
 
-Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` for an entry under
-**Toggle** with a checkmark when the current workspace is on:
+Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` for two switches under
+**Toggle**, each with a checkmark while it is on: one for the current
+workspace, one for the display it is on.
 
 ```jsonc
 "trigger.toggle.ichi": {
-  "icon": "",
+  "icon": "",
   "label": "Ichi",
   "description": "Inset the lone window on this workspace",
   "checked": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi toggle"
 },
+"trigger.toggle.ichi-monitor": {
+  "icon": "",
+  "label": "Ichi on this monitor",
+  "description": "Inset lone windows on this display at all",
+  "checked": "[ \"$(omarchy-shell io.github.aesko.ichi monitor_enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi monitor_toggle"
+},
 ```
 
-For the rest, a submenu of its own on the root menu. The rows that act on a
-workspace only appear while that workspace is on:
+For everything else, a submenu of its own on the root menu. The menu lists
+rows in the order the file gives them, so these run from the narrowest reach
+to the widest: this workspace, the defaults, this display, everywhere. The
+rows that change a workspace's size only appear while that workspace is on,
+so with it off the submenu is the three switches.
 
 ```jsonc
 "ichi": {
-  "icon": "",
+  "icon": "",
   "label": "Ichi",
   "description": "Size the lone window on this workspace"
 },
+"ichi.workspace": {
+  "icon": "",
+  "label": "On this workspace",
+  "description": "Inset the lone window on this workspace",
+  "checked": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi toggle"
+},
 "ichi.cycle": {
-  "icon": "",
+  "icon": "",
   "label": "Next preset",
   "description": "Step through your saved sizes",
   "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi cycle"
 },
-"ichi.adopt": {
-  "icon": "",
-  "label": "Adopt as default",
-  "description": "Make this workspace's size the default everywhere",
-  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi adopt"
-},
-"ichi.adopt-monitor": {
-  "icon": "",
-  "label": "Adopt on monitor",
-  "description": "Make this workspace's size the default on this display only",
-  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi adopt_monitor"
-},
 "ichi.reset": {
-  "icon": "",
+  "icon": "",
   "label": "Reset to default",
   "description": "Follow the defaults again",
   "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi reset"
 },
+"ichi.adopt-monitor": {
+  "icon": "",
+  "label": "Adopt on monitor",
+  "description": "Make this workspace's size the default on this display only",
+  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi adopt_monitor"
+},
+"ichi.adopt": {
+  "icon": "",
+  "label": "Adopt as default",
+  "description": "Make this workspace's size the default everywhere",
+  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi adopt"
+},
 "ichi.monitor": {
-  "icon": "",
-  "label": "Run on this monitor",
-  "description": "Whether Ichi insets anything on this display at all",
+  "icon": "",
+  "label": "On this monitor",
+  "description": "Inset lone windows on this display at all",
   "checked": "[ \"$(omarchy-shell io.github.aesko.ichi monitor_enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi monitor_toggle"
 },
 "ichi.pause": {
-  "icon": "",
+  "icon": "",
   "label": "Pause everywhere",
   "description": "Suspend every inset without changing a single workspace",
   "checked": "[ \"$(omarchy-shell io.github.aesko.ichi paused)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi pause_toggle"
 },
 ```
+
+Searching the menu for "ichi" finds three rows: the submenu and the two
+switches. The rows inside the submenu leave the word out of their labels, ids
+and descriptions so they stay behind it, and are found by what they do, such
+as "preset" or "pause".
 
 The icons are Nerd Font glyphs; change them to taste.
