@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.7.1 — 2026-09-19
+
+Fixes for scaled and rotated monitors and for the bar on a second screen,
+`ichi help`, and install steps for Hyprland without Omarchy.
 
 ### Added
 
