@@ -59,7 +59,7 @@ of range are clamped, as they are when the file is read.
 
 ### Deprecated
 
-These still work in 0.7 and print what replaces them. They go in 1.0.
+These still work and print what replaces them. They go in 1.0.
 
 | Command | Instead |
 |---|---|
