@@ -134,18 +134,25 @@ Panel {
   function label() {
     if (!ready || display === "Icon only") return glyph
     if (paused) return glyph + "  paused"
-    if (!onHere) return glyph
+    if (!monitorOn || !onHere) return glyph
     if (display === "Icon and preset") return presetName === "" ? glyph : glyph + "  " + presetName
     if (!sizeMode) return glyph + "  " + ichiStatus.summary
     return glyph + "  " + sizeWidth + "×" + sizeHeight
   }
 
-  // Panel actions pass quiet: the panel shows its own result, and a
-  // notification would land on top of the panel that caused it.
+  // Every action on this screen's workspace goes through here, with the
+  // command's own arguments first and quiet and the workspace appended. Panel
+  // actions pass quiet: the panel shows its own result, and a notification
+  // would land on top of the panel that caused it. Until this copy has found
+  // its monitor there is no workspace to name, and ichi.lua would read the
+  // missing one as the focused workspace, which may be on another screen, so
+  // the action is dropped instead.
   function call(name) {
-    if (ichiService && typeof ichiService[name] === "function") {
-      ichiService[name](true, root.screenWorkspaceId)
-    }
+    if (!ichiService || typeof ichiService[name] !== "function") return
+    if (root.screenWorkspaceId === null) return
+    var args = Array.prototype.slice.call(arguments, 1)
+    args.push(true, root.screenWorkspaceId)
+    ichiService[name].apply(ichiService, args)
   }
 
   // ------------------------------------------------------------- the bar --
@@ -314,7 +321,7 @@ Panel {
               selected: modelData === root.presetName
               tooltipText: "Right click to remove"
               foreground: root.bar ? root.bar.foreground : Color.foreground
-              onClicked: if (root.ichiService) root.ichiService.cmdPreset(modelData, true, root.screenWorkspaceId)
+              onClicked: root.call("cmdPreset", modelData)
               onRightClicked: if (root.ichiService) root.ichiService.cmdRemovePreset(modelData, true)
             }
           }
@@ -348,7 +355,7 @@ Panel {
               text: modelData[0] + ":" + modelData[1]
               selected: root.isAspect(modelData[0], modelData[1])
               foreground: root.bar ? root.bar.foreground : Color.foreground
-              onClicked: if (root.ichiService) root.ichiService.cmdAspect(modelData[0], modelData[1], true, root.screenWorkspaceId)
+              onClicked: root.call("cmdAspect", modelData[0], modelData[1])
             }
           }
         }
@@ -417,7 +424,7 @@ Panel {
             enabled: root.canAdopt
             opacity: root.canAdopt ? 1 : 0.4
             foreground: root.bar ? root.bar.foreground : Color.foreground
-            onClicked: if (root.ichiService) root.ichiService.cmdAdopt("", true, root.screenWorkspaceId)
+            onClicked: root.call("cmdAdopt", "")
           }
 
           Button {
@@ -425,7 +432,7 @@ Panel {
             enabled: root.canAdopt
             opacity: root.canAdopt ? 1 : 0.4
             foreground: root.bar ? root.bar.foreground : Color.foreground
-            onClicked: if (root.ichiService) root.ichiService.cmdAdopt("monitor", true, root.screenWorkspaceId)
+            onClicked: root.call("cmdAdopt", "monitor")
           }
         }
 
@@ -468,7 +475,9 @@ Panel {
           ToggleSwitch {
             checked: root.paused
             foreground: root.bar ? root.bar.foreground : Color.foreground
-            onToggled: root.call("cmdPauseToggle")
+            // Pause is not about any workspace, so it works before this
+            // copy has found its monitor.
+            onToggled: if (root.ichiService) root.ichiService.cmdPauseToggle(true)
           }
         }
       }
@@ -732,11 +741,11 @@ Panel {
   function commitName() {
     var name = nameField.text.trim()
     naming = false
-    if (name !== "" && ichiService) ichiService.cmdSavePreset(name, true, root.screenWorkspaceId)
+    if (name !== "") call("cmdSavePreset", name)
   }
 
   function applySizeOf(w, h) {
-    if (ichiService) ichiService.cmdSize(w, h, true, root.screenWorkspaceId)
+    call("cmdSize", w, h)
   }
 
   function applySize() {
