@@ -26,13 +26,13 @@
 
 ### Changed
 
-- **The menu entries in the reference are reworked**, and the Ichi submenu now
-  has the switch it was missing: **On this workspace**, first. Its rows run
-  from the narrowest reach to the widest, the order the menu shows them in,
-  and with the workspace off it is three switches rather than two stray rows.
-  Toggle gains **Ichi on this monitor** beside **Ichi**, so searching the
-  menu for "ichi" finds exactly those two and the submenu. Nothing changes
-  until you copy the new snippet into `omarchy-menu.jsonc`.
+- **The menu entries in the reference are reworked.** Toggle's **Ichi** row
+  is now **Ichi workspace**, since plain "Ichi" read as switching the whole
+  plugin, and **Ichi monitor** joins it. Searching the menu for "ichi" finds
+  those two and the Ichi submenu, whose rows now run from the narrowest reach
+  to the widest, the order the menu shows them in. Nothing changes until you
+  copy the new snippet into `omarchy-menu.jsonc`; keep the row ids as they
+  are so it replaces your old rows rather than adding beside them.
 
 ### Fixed
 
