@@ -430,6 +430,29 @@ check("unpausing leaves the display off", fake.rules["4"].left == 10 and fake.ru
   fake.rules["4"].left .. "/" .. fake.rules["7"].left)
 M.set_monitor_enabled(true, 4)
 
+-- A description with a quote in it cannot be a key: the reader does not
+-- unescape keys, and with the quote taken out it is no longer part of the
+-- description. The connector name is what still finds the display.
+local quoted_desc = other_screen.description
+other_screen.description = 'Acme "27" Laptop'
+M.config.monitors = {}
+M.set_monitor_enabled(false, 7)
+check("a quoted description keys the block by connector name",
+  #M.config.monitors == 1 and M.config.monitors[1].key == "eDP-1", M.config.monitors[1] and M.config.monitors[1].key)
+check("and the block it wrote switches that display off", M.monitor_enabled(other_screen) == false
+  and fake.rules["7"].left == 10, fake.rules["7"].left)
+M.toggle_monitor(7)
+M.toggle_monitor(7)
+check("toggling it does not pile up blocks", #M.config.monitors == 1, #M.config.monitors)
+M.set_monitor_enabled(true, 7)
+check("and switching it on drops the block again", #M.config.monitors == 0)
+M.adjust(5, 0, 7)
+M.adopt_defaults(7, "monitor")
+check("adopt monitor keys a quoted description by connector name too",
+  #M.config.monitors == 1 and M.config.monitors[1].key == "eDP-1" and M.monitor_block(other_screen) == M.config.monitors[1])
+M.config.monitors = {}
+other_screen.description = quoted_desc
+
 M.disable(7)
 fake.workspaces[7] = nil
 fake.windows[7] = nil

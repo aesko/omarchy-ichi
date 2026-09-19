@@ -1388,10 +1388,13 @@ function M.remove_preset(name)
 end
 
 -- The key a monitor gets in the monitors block: its description when it has
--- one, since that survives replugging, else its connector name.
+-- one, since that survives replugging, else its connector name. So does a
+-- description with a quote or backslash in it: parse_config cannot read an
+-- escaped key back, and a key with them taken out is no longer part of the
+-- description, so monitor_block would never match it.
 local function monitor_key(mon)
-  local desc = (mon.description or ""):gsub('[\\"]', "")
-  if desc ~= "" then
+  local desc = mon.description or ""
+  if desc ~= "" and not desc:find('[\\"]') then
     return "desc:" .. desc
   end
   return mon.name

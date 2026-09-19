@@ -38,6 +38,11 @@
 
 - The menu snippet's icons were empty strings again after it moved from the
   README to the reference in 0.5.0. They are the Ichi glyph once more.
+- **Adopt on monitor works on a display whose description has a quote or a
+  backslash in it.** Since 0.2.0 it wrote a block that never matched that
+  display, and adopting again added another. Such a display is now keyed by
+  its connector name, as one with no description already was; blocks written
+  before stay in `ichi.json` doing nothing, and can be deleted.
 
 ## 0.7.1
 
