@@ -271,14 +271,14 @@ workspace, one for the display it is on.
 ```jsonc
 "trigger.toggle.ichi": {
   "icon": "",
-  "label": "Ichi",
+  "label": "Ichi workspace",
   "description": "Inset the lone window on this workspace",
   "checked": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi toggle"
 },
 "trigger.toggle.ichi-monitor": {
   "icon": "",
-  "label": "Ichi on this monitor",
+  "label": "Ichi monitor",
   "description": "Inset lone windows on this display at all",
   "checked": "[ \"$(omarchy-shell io.github.aesko.ichi monitor_enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi monitor_toggle"
@@ -287,22 +287,15 @@ workspace, one for the display it is on.
 
 For everything else, a submenu of its own on the root menu. The menu lists
 rows in the order the file gives them, so these run from the narrowest reach
-to the widest: this workspace, the defaults, this display, everywhere. The
-rows that change a workspace's size only appear while that workspace is on,
-so with it off the submenu is the three switches.
+to the widest: this workspace, the defaults, everywhere. The rows that change
+a workspace's size only appear while that workspace is on; with it off, only
+the pause is left.
 
 ```jsonc
 "ichi": {
   "icon": "",
   "label": "Ichi",
   "description": "Size the lone window on this workspace"
-},
-"ichi.workspace": {
-  "icon": "",
-  "label": "On this workspace",
-  "description": "Inset the lone window on this workspace",
-  "checked": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi toggle"
 },
 "ichi.cycle": {
   "icon": "",
@@ -331,13 +324,6 @@ so with it off the submenu is the three switches.
   "description": "Make this workspace's size the default everywhere",
   "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi adopt"
-},
-"ichi.monitor": {
-  "icon": "",
-  "label": "On this monitor",
-  "description": "Inset lone windows on this display at all",
-  "checked": "[ \"$(omarchy-shell io.github.aesko.ichi monitor_enabled)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi monitor_toggle"
 },
 "ichi.pause": {
   "icon": "",
