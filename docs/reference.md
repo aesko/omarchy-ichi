@@ -27,6 +27,9 @@ omarchy-shell ichi cycle_back                     # the previous one
 omarchy-shell ichi save_preset wide               # keep this workspace's size as a preset
 omarchy-shell ichi remove_preset wide
 omarchy-shell ichi set defaults.width 65          # any setting, by its place in the file
+omarchy-shell ichi monitor off                    # stop insetting on this workspace's monitor
+omarchy-shell ichi monitor_toggle                 # the same, as one command
+omarchy-shell ichi monitor_enabled                # true | false
 omarchy-shell ichi pause on                       # suspend every inset; pause off to resume
 omarchy-shell ichi pause_toggle                   # the same, as one command
 omarchy-shell ichi paused                         # true | false
@@ -56,7 +59,7 @@ of range are clamped, as they are when the file is read.
 
 ### Deprecated
 
-These still work in 0.7 and print what replaces them. They go in 1.0.
+These still work and print what replaces them. They go in 1.0.
 
 | Command | Instead |
 |---|---|
@@ -198,6 +201,24 @@ matching block wins. Fixed `size` and `aspect` entries keep their own size but
 take the monitor's caps and alignment. `adopt_monitor` writes a block for the
 current display from the workspace you have tuned.
 
+`enabled` is the one key in a block that is not about size. Set it to `false`
+and Ichi insets nothing on that display, whatever its workspaces say; there is
+no `true` to write, because a monitor with no block, or a block that says
+nothing about it, is on. `monitor off` writes it and `monitor on` takes it
+away, dropping the block if it held nothing else. Only a literal `false`
+counts, so a typo leaves the display on.
+
+Two monitors of the same model report the same description, so a `desc:` key
+matches both and switching one off switches both. Key them by connector name
+to tell them apart, at the cost of a key that changes when they are replugged.
+
+There are three vetoes, and the widest wins. `pause` stops every inset
+everywhere; `enabled: false` stops them on one display; a workspace's own
+entry says whether Ichi runs there. Each leaves everything below it written
+down, so lifting one restores exactly what was there: unpausing brings back
+the displays that are on, and switching a display on brings back the
+workspaces that are on.
+
 ### presets
 
 Named entries in any of the three forms below. `cycle` steps a workspace
@@ -243,63 +264,79 @@ still change the list above, and says so in the changelog.
 
 ## Omarchy menu
 
-Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` for an entry under
-**Toggle** with a checkmark when the current workspace is on:
+Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` for two switches under
+**Toggle**, each with a checkmark while it is on: one for the current
+workspace, one for the display it is on.
 
 ```jsonc
 "trigger.toggle.ichi": {
-  "icon": "",
-  "label": "Ichi",
+  "icon": "",
+  "label": "Ichi workspace",
   "description": "Inset the lone window on this workspace",
   "checked": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi toggle"
 },
+"trigger.toggle.ichi-monitor": {
+  "icon": "",
+  "label": "Ichi monitor",
+  "description": "Inset lone windows on this display at all",
+  "checked": "[ \"$(omarchy-shell io.github.aesko.ichi monitor_enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi monitor_toggle"
+},
 ```
 
-For the rest, a submenu of its own on the root menu. The rows that act on a
-workspace only appear while that workspace is on:
+For everything else, a submenu of its own on the root menu. The menu lists
+rows in the order the file gives them, so these run from the narrowest reach
+to the widest: this workspace, the defaults, everywhere. The rows that change
+a workspace's size only appear while that workspace is on; with it off, only
+the pause is left.
 
 ```jsonc
 "ichi": {
-  "icon": "",
+  "icon": "",
   "label": "Ichi",
   "description": "Size the lone window on this workspace"
 },
 "ichi.cycle": {
-  "icon": "",
+  "icon": "",
   "label": "Next preset",
   "description": "Step through your saved sizes",
   "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi cycle"
 },
-"ichi.adopt": {
-  "icon": "",
-  "label": "Adopt as default",
-  "description": "Make this workspace's size the default everywhere",
-  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi adopt"
-},
-"ichi.adopt-monitor": {
-  "icon": "",
-  "label": "Adopt on monitor",
-  "description": "Make this workspace's size the default on this display only",
-  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
-  "action": "omarchy-shell io.github.aesko.ichi adopt_monitor"
-},
 "ichi.reset": {
-  "icon": "",
+  "icon": "",
   "label": "Reset to default",
   "description": "Follow the defaults again",
   "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi reset"
 },
+"ichi.adopt-monitor": {
+  "icon": "",
+  "label": "Adopt on monitor",
+  "description": "Make this workspace's size the default on this display only",
+  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi adopt_monitor"
+},
+"ichi.adopt": {
+  "icon": "",
+  "label": "Adopt as default",
+  "description": "Make this workspace's size the default everywhere",
+  "when": "[ \"$(omarchy-shell io.github.aesko.ichi enabled)\" = true ]",
+  "action": "omarchy-shell io.github.aesko.ichi adopt"
+},
 "ichi.pause": {
-  "icon": "",
+  "icon": "",
   "label": "Pause everywhere",
   "description": "Suspend every inset without changing a single workspace",
   "checked": "[ \"$(omarchy-shell io.github.aesko.ichi paused)\" = true ]",
   "action": "omarchy-shell io.github.aesko.ichi pause_toggle"
 },
 ```
+
+Searching the menu for "ichi" finds three rows: the submenu and the two
+switches. The rows inside the submenu leave the word out of their labels, ids
+and descriptions so they stay behind it, and are found by what they do, such
+as "preset" or "pause".
 
 The icons are Nerd Font glyphs; change them to taste.

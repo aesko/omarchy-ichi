@@ -120,6 +120,23 @@ Item {
       return wrapper.api.cmdWindows(count)
     }
 
+    // Whether Ichi runs on this workspace's monitor at all: monitor on | off.
+    // Entries are left alone, so switching it back on restores every inset
+    // the monitor had.
+    function monitor(state: string): void {
+      wrapper.api.cmdMonitor(state)
+    }
+
+    function monitor_toggle(): void {
+      wrapper.api.cmdMonitorToggle()
+    }
+
+    // "true" or "false" for the focused workspace's monitor; drives the menu
+    // checkmark.
+    function monitor_enabled(): string {
+      return wrapper.api.cmdMonitorEnabled()
+    }
+
     // Suspend Ichi everywhere: pause on | off. Entries are left alone, so
     // resuming restores every inset.
     function pause(state: string): void {

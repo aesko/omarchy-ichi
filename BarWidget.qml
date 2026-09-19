@@ -64,6 +64,13 @@ Panel {
   readonly property string workspaceKey: ready && ichiStatus.workspace ? String(ichiStatus.workspace) : ""
   readonly property bool onHere: !!(ready && ichiStatus.enabled)
   readonly property bool paused: !!(ready && ichiStatus.paused)
+  // Whether Ichi runs on this widget's own monitor at all. Absent means on,
+  // so an older state file and a monitor with no block both read as on.
+  readonly property bool monitorOn: !(ready && ichiStatus.monitorEnabled === false)
+  // What the bar answers at a glance: is Ichi doing anything here, whichever
+  // of the three vetoes is the reason it is not.
+  readonly property bool working: onHere && monitorOn && !paused
+  readonly property string monitorName: barMonitor && barMonitor.name ? String(barMonitor.name) : ""
   readonly property var entry: ready ? ichiStatus.entry : null
   readonly property var resolved: ready ? ichiStatus.resolved : null
   readonly property string presetName: ready && ichiStatus.preset ? String(ichiStatus.preset) : ""
@@ -127,18 +134,25 @@ Panel {
   function label() {
     if (!ready || display === "Icon only") return glyph
     if (paused) return glyph + "  paused"
-    if (!onHere) return glyph
+    if (!monitorOn || !onHere) return glyph
     if (display === "Icon and preset") return presetName === "" ? glyph : glyph + "  " + presetName
     if (!sizeMode) return glyph + "  " + ichiStatus.summary
     return glyph + "  " + sizeWidth + "×" + sizeHeight
   }
 
-  // Panel actions pass quiet: the panel shows its own result, and a
-  // notification would land on top of the panel that caused it.
+  // Every action on this screen's workspace goes through here, with the
+  // command's own arguments first and quiet and the workspace appended. Panel
+  // actions pass quiet: the panel shows its own result, and a notification
+  // would land on top of the panel that caused it. Until this copy has found
+  // its monitor there is no workspace to name, and ichi.lua would read the
+  // missing one as the focused workspace, which may be on another screen, so
+  // the action is dropped instead.
   function call(name) {
-    if (ichiService && typeof ichiService[name] === "function") {
-      ichiService[name](true, root.screenWorkspaceId)
-    }
+    if (!ichiService || typeof ichiService[name] !== "function") return
+    if (root.screenWorkspaceId === null) return
+    var args = Array.prototype.slice.call(arguments, 1)
+    args.push(true, root.screenWorkspaceId)
+    ichiService[name].apply(ichiService, args)
   }
 
   // ------------------------------------------------------------- the bar --
@@ -154,11 +168,13 @@ Panel {
     slotSize: root.vertical || root.display === "Icon only"
       ? Style.bar.iconSlot
       : Style.bar.iconSlot + Math.ceil(Style.font.body * 0.62 * Math.max(0, root.labelText.length - 1))
-    // Dimmed when this workspace is not inset, or while everything is paused,
+    // Dimmed when this workspace is not inset, whichever veto is the reason,
     // so the bar answers "is Ichi doing anything right now" at a glance.
-    opacity: root.onHere && !root.paused ? 1.0 : 0.45
+    opacity: root.working ? 1.0 : 0.45
+    // Widest veto first, so the tooltip names the one actually in the way.
     tooltipText: root.ready
       ? (root.paused ? "Ichi: paused everywhere"
+        : !root.monitorOn ? "Ichi: off on " + (root.monitorName === "" ? "this monitor" : root.monitorName)
         : root.onHere ? "Ichi: " + root.ichiStatus.summary
         : "Ichi: off on this workspace")
       : "Ichi"
@@ -305,7 +321,7 @@ Panel {
               selected: modelData === root.presetName
               tooltipText: "Right click to remove"
               foreground: root.bar ? root.bar.foreground : Color.foreground
-              onClicked: if (root.ichiService) root.ichiService.cmdPreset(modelData, true, root.screenWorkspaceId)
+              onClicked: root.call("cmdPreset", modelData)
               onRightClicked: if (root.ichiService) root.ichiService.cmdRemovePreset(modelData, true)
             }
           }
@@ -339,7 +355,7 @@ Panel {
               text: modelData[0] + ":" + modelData[1]
               selected: root.isAspect(modelData[0], modelData[1])
               foreground: root.bar ? root.bar.foreground : Color.foreground
-              onClicked: if (root.ichiService) root.ichiService.cmdAspect(modelData[0], modelData[1], true, root.screenWorkspaceId)
+              onClicked: root.call("cmdAspect", modelData[0], modelData[1])
             }
           }
         }
@@ -408,7 +424,7 @@ Panel {
             enabled: root.canAdopt
             opacity: root.canAdopt ? 1 : 0.4
             foreground: root.bar ? root.bar.foreground : Color.foreground
-            onClicked: if (root.ichiService) root.ichiService.cmdAdopt("", true, root.screenWorkspaceId)
+            onClicked: root.call("cmdAdopt", "")
           }
 
           Button {
@@ -416,11 +432,33 @@ Panel {
             enabled: root.canAdopt
             opacity: root.canAdopt ? 1 : 0.4
             foreground: root.bar ? root.bar.foreground : Color.foreground
-            onClicked: if (root.ichiService) root.ichiService.cmdAdopt("monitor", true, root.screenWorkspaceId)
+            onClicked: root.call("cmdAdopt", "monitor")
           }
         }
 
         PanelSeparator { Layout.fillWidth: true }
+
+        // The two vetoes wider than a workspace, narrowest first. Both leave
+        // every entry written down, so switching either back on restores what
+        // was there rather than needing the workspaces turned on again.
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(8)
+
+          Text {
+            Layout.fillWidth: true
+            text: root.monitorName === "" ? "Run on this monitor" : "Run on " + root.monitorName
+            color: root.bar ? root.bar.foreground : Color.foreground
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+
+          ToggleSwitch {
+            checked: root.monitorOn
+            foreground: root.bar ? root.bar.foreground : Color.foreground
+            onToggled: root.call("cmdMonitorToggle")
+          }
+        }
 
         RowLayout {
           Layout.fillWidth: true
@@ -437,7 +475,9 @@ Panel {
           ToggleSwitch {
             checked: root.paused
             foreground: root.bar ? root.bar.foreground : Color.foreground
-            onToggled: root.call("cmdPauseToggle")
+            // Pause is not about any workspace, so it works before this
+            // copy has found its monitor.
+            onToggled: if (root.ichiService) root.ichiService.cmdPauseToggle(true)
           }
         }
       }
@@ -701,11 +741,11 @@ Panel {
   function commitName() {
     var name = nameField.text.trim()
     naming = false
-    if (name !== "" && ichiService) ichiService.cmdSavePreset(name, true, root.screenWorkspaceId)
+    if (name !== "") call("cmdSavePreset", name)
   }
 
   function applySizeOf(w, h) {
-    if (ichiService) ichiService.cmdSize(w, h, true, root.screenWorkspaceId)
+    call("cmdSize", w, h)
   }
 
   function applySize() {

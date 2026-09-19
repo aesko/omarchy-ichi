@@ -376,6 +376,23 @@ Item {
     return deprecated("windows", "set settings.max_windows")
   }
 
+  // Whether Ichi runs on a workspace's monitor at all: the narrower veto
+  // between pause and a workspace's own entry. Entries are left alone, so a
+  // monitor switched back on gets every inset on it back.
+  function cmdMonitor(state, quiet, workspace) {
+    var on = state === "on" || state === "true"
+    run("ichi.set_monitor_enabled(" + on + ", " + target(workspace) + ")", quiet)
+  }
+
+  function cmdMonitorToggle(quiet, workspace) {
+    run("ichi.toggle_monitor(" + target(workspace) + ")", quiet)
+  }
+
+  // "true" or "false"; drives the menu checkmark and the panel's switch.
+  function cmdMonitorEnabled() {
+    return root.status.monitorEnabled === false ? "false" : "true"
+  }
+
   // Suspend Ichi everywhere without changing any workspace entry.
   function cmdPause(state) {
     root.evaluate("if ichi then ichi.set_paused(" + (state === "on" || state === "true") + ") end")

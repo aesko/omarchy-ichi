@@ -1,5 +1,49 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Ichi can be switched off for one display.** `omarchy-shell ichi monitor
+  off` stops every inset on the display the current workspace is on, and
+  `monitor on` brings them all back; `monitor_toggle` is the pair as one
+  command, for a key or the new menu entries. The panel carries the same switch,
+  named after the display it is on, and the bar icon dims while Ichi is not
+  running there. A laptop beside an external screen is the case it is for:
+  room to give away on one of them, none on the other.
+
+  It is written as `enabled: false` in that display's `monitors` block, so it
+  keeps across a reboot and travels in your dotfiles. Workspaces keep their
+  entries while a display is off and get their insets back when it comes on,
+  which is what makes this different from turning each of them off. There is
+  now an order to the three vetoes — `pause`, then the display, then the
+  workspace — and `status` names whichever one is in the way.
+
+  Two displays of the same model report the same description, and the block is
+  keyed by description so it survives replugging, so switching one of an
+  identical pair off switches both. Key that block by connector name by hand
+  to tell them apart.
+
+### Changed
+
+- **The menu entries in the reference are reworked.** Toggle's **Ichi** row
+  is now **Ichi workspace**, since plain "Ichi" read as switching the whole
+  plugin, and **Ichi monitor** joins it. Searching the menu for "ichi" finds
+  those two and the Ichi submenu, whose rows now run from the narrowest reach
+  to the widest, the order the menu shows them in. Nothing changes until you
+  copy the new snippet into `omarchy-menu.jsonc`; keep the row ids as they
+  are so it replaces your old rows rather than adding beside them.
+
+### Fixed
+
+- The menu snippet's icons were empty strings again after it moved from the
+  README to the reference in 0.5.0. They are the Ichi glyph once more.
+- **Adopt on monitor works on a display whose description has a quote or a
+  backslash in it.** Since 0.2.0 it wrote a block that never matched that
+  display, and adopting again added another. Such a display is now keyed by
+  its connector name, as one with no description already was; blocks written
+  before stay in `ichi.json` doing nothing, and can be deleted.
+
 ## 0.7.1 — 2026-09-19
 
 Fixes for scaled and rotated monitors and for the bar on a second screen,
