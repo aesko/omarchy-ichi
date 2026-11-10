@@ -329,6 +329,17 @@ function entryFor(config, key) {
   return entry || null
 }
 
+// Mirrors ichi.lua's workspace_label: with Omarchy numbering workspaces per
+// monitor, in blocks of ten, a workspace is shown by its place in its block,
+// as Omarchy's bar shows it. `perMonitor` says whether Omarchy's file that
+// records the blocks exists. The key itself is never changed.
+function workspaceLabel(key, perMonitor) {
+  if (key === null || key === undefined) return null
+  key = String(key)
+  if (!perMonitor || !/^\d+$/.test(key) || Number(key) < 1) return key
+  return String((Number(key) - 1) % 10 + 1)
+}
+
 // Hyprland's modifier bitmask. Rendered in the order Omarchy's own
 // keybindings menu uses, so a shortcut reads the same in both places.
 var MOD_BITS = [[64, "SUPER"], [1, "SHIFT"], [4, "CTRL"], [8, "ALT"],
@@ -488,7 +499,9 @@ function monitorLine(block) {
 // statusJson() instead. Rows that carry nothing are left out rather than
 // printed empty, so a stock setup stays short.
 function statusText(s) {
-  var rows = [["Workspace", s.workspace === null ? "none focused" : s.workspace]]
+  var rows = [["Workspace", s.workspace === null ? "none focused"
+    : s.label && s.label !== s.workspace ? s.label + " (Hyprland's " + s.workspace + ")"
+    : s.workspace]]
   if (s.problem) rows.push(["Saving", "blocked: " + s.problem])
   rows.push(["Inset", s.paused ? s.summary + " (paused)"
     : s.monitorEnabled === false ? s.summary + " (this monitor is off)"
@@ -517,11 +530,15 @@ function statusText(s) {
 
 // `activeWorkspace` is the focused workspace's name, which is its number on a
 // numeric workspace. `problem` says why saving is blocked, if it is.
-function status(config, activeWorkspaceId, monitor, problem) {
+// `perMonitor` is workspaceLabel's.
+function status(config, activeWorkspaceId, monitor, problem, perMonitor) {
   var key = activeWorkspaceId === null || activeWorkspaceId === undefined ? null : String(activeWorkspaceId)
   var entry = key !== null ? entryFor(config, key) : null
   return {
     workspace: key,
+    // How the workspace is shown: the bar's number for it. Commands and the
+    // config take `workspace`.
+    label: workspaceLabel(key, perMonitor),
     problem: problem || null,
     enabled: entry !== null,
     entry: entry,

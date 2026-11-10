@@ -28,6 +28,16 @@ M.config_path = CONFIG_DIR .. "/ichi/ichi.json"
 -- so a link into a dotfiles repo keeps working.
 M.previous_config_path = CONFIG_DIR .. "/omarchy/ichi.json"
 
+-- Omarchy's own workspace state, read and never written, so Ichi can talk
+-- about a workspace the way Omarchy's bar does. Without Omarchy neither path
+-- exists and nothing changes.
+local STATE_HOME = os.getenv("XDG_STATE_HOME")
+if STATE_HOME == nil or STATE_HOME == "" then
+  STATE_HOME = HOME .. "/.local/state"
+end
+M.monitor_workspaces_path = STATE_HOME .. "/omarchy/monitor-workspaces"
+M.workspace_layouts_dir = STATE_HOME .. "/omarchy/workspace-layouts"
+
 -- Every size is clamped between these, in percent of the usable area. The
 -- floor was a setting, min_percent, until 0.7; lowering it later breaks
 -- nothing, raising it would clamp sizes people have stored.
@@ -835,13 +845,65 @@ local function workspace_monitor(key)
   return ws and ws.monitor or nil
 end
 
+local function read_file(path)
+  local file = io.open(path, "r")
+  if not file then
+    return nil
+  end
+  local text = file:read("a")
+  file:close()
+  return text
+end
+
+local function numbered(key)
+  return key:match("^%d+$") ~= nil and tonumber(key) >= 1
+end
+
+-- How a workspace is named to the person using it. Omarchy can give every
+-- monitor workspaces 1-10 of its own, which Hyprland numbers in blocks of ten,
+-- so the second monitor's 3 is workspace 13. While Omarchy keeps the file that
+-- records the blocks, its bar shows a workspace's place in its block, and so
+-- does every message here. Config keys and commands keep Hyprland's number.
+function M.workspace_label(key)
+  key = tostring(key)
+  if not numbered(key) then
+    return key
+  end
+  local file = io.open(M.monitor_workspaces_path, "r")
+  if not file then
+    return key
+  end
+  file:close()
+  return tostring((tonumber(key) - 1) % 10 + 1)
+end
+
+-- Whether Omarchy's floating mode is on for a workspace. The mode floats every
+-- window there, which leaves Ichi no tiled window to inset. Omarchy saves a
+-- workspace's mode in a file of its own and otherwise falls back to a saved
+-- default; this is the same lookup omarchy-hyprland-workspace-layout-current
+-- makes.
+function M.floating_workspace(key)
+  key = tostring(key)
+  if not numbered(key) then
+    return false
+  end
+  local own = read_file(M.workspace_layouts_dir .. "/" .. key .. ".lua")
+  local mode = own and own:match('mode = "(%l+)"')
+  if mode then
+    return mode == "floating"
+  end
+  local fallback = read_file(M.workspace_layouts_dir .. "/default.lua")
+  return (fallback and fallback:match('default = "(%l+)"')) == "floating"
+end
+
 local function describe(id, entry)
   local suffix = entry.mode == "default" and " (default)" or ""
   entry = M.resolve(entry, workspace_monitor(id))
+  local label = M.workspace_label(id)
   if entry.mode == "aspect" then
-    return string.format("Ichi: workspace %s at %g:%g%s", id, entry.ratio_w, entry.ratio_h, suffix)
+    return string.format("Ichi: workspace %s at %g:%g%s", label, entry.ratio_w, entry.ratio_h, suffix)
   end
-  return string.format("Ichi: workspace %s at %d%% x %d%%%s", id, entry.width, entry.height, suffix)
+  return string.format("Ichi: workspace %s at %d%% x %d%%%s", label, entry.width, entry.height, suffix)
 end
 
 -- A tabbed group occupies one tile however many windows it holds, so Ichi
@@ -906,7 +968,7 @@ function M.apply(id)
   if not M.builtin_layouts[layout] then
     if not warned.layouts[id] then
       warned.layouts[id] = true
-      notify(string.format("Ichi: yielding to the '%s' layout on workspace %s", layout, id))
+      notify(string.format("Ichi: yielding to the '%s' layout on workspace %s", layout, M.workspace_label(id)))
     end
     plain()
     return
@@ -998,6 +1060,11 @@ local function commit(id, entry, message, level)
   M.config.workspaces[id] = entry
   M.save()
   M.refresh()
+  -- On but with nothing tiled to inset, which would otherwise look like the
+  -- change did not take.
+  if M.entry_for(id) and M.floating_workspace(id) then
+    message = message .. ", once it stops floating"
+  end
   notify(message, level)
   if not survives_reload(id) and not warned.names[id] then
     warned.names[id] = true
@@ -1032,7 +1099,7 @@ function M.disable(id)
   if M.config.settings.all_workspaces then
     entry = false
   end
-  commit(id, entry, string.format("Ichi: workspace %s off", id))
+  commit(id, entry, string.format("Ichi: workspace %s off", M.workspace_label(id)))
 end
 
 function M.toggle(id)
@@ -1463,13 +1530,13 @@ function M.adopt_defaults(id, scope)
   -- Reachable from a key and a menu row now, where silence reads as broken.
   local entry = M.entry_for(id)
   if entry == nil then
-    notify(string.format("Ichi: workspace %s is off, so there is no size to adopt", id))
+    notify(string.format("Ichi: workspace %s is off, so there is no size to adopt", M.workspace_label(id)))
     return
   elseif entry.mode == "default" then
-    notify(string.format("Ichi: workspace %s already follows the defaults; nudge it first", id))
+    notify(string.format("Ichi: workspace %s already follows the defaults; nudge it first", M.workspace_label(id)))
     return
   elseif entry.mode ~= "size" then
-    notify(string.format("Ichi: workspace %s is an aspect ratio, and adopt takes a size", id))
+    notify(string.format("Ichi: workspace %s is an aspect ratio, and adopt takes a size", M.workspace_label(id)))
     return
   end
   if scope == "monitor" then

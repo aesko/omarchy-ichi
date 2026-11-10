@@ -57,11 +57,14 @@ Panel {
     ? ({ name: barMonitor.name, description: barMonitor.description })
     : null
   readonly property var ichiStatus: ichiService && ichiService.config
-    ? Model.status(ichiService.config, screenWorkspaceId, screenMonitor, ichiService.stateProblem)
+    ? Model.status(ichiService.config, screenWorkspaceId, screenMonitor, ichiService.stateProblem,
+      ichiService.perMonitorWorkspaces)
     : null
   readonly property bool ready: !!ichiStatus
 
   readonly property string workspaceKey: ready && ichiStatus.workspace ? String(ichiStatus.workspace) : ""
+  // The bar's number for it, which the title shows; commands take the key.
+  readonly property string workspaceLabel: ready && ichiStatus.label ? String(ichiStatus.label) : workspaceKey
   readonly property bool onHere: !!(ready && ichiStatus.enabled)
   readonly property bool paused: !!(ready && ichiStatus.paused)
   // Whether Ichi runs on this widget's own monitor at all. Absent means on,
@@ -246,7 +249,7 @@ Panel {
 
           Text {
             Layout.fillWidth: true
-            text: root.workspaceKey === "" ? "Ichi" : "Workspace " + root.workspaceKey
+            text: root.workspaceKey === "" ? "Ichi" : "Workspace " + root.workspaceLabel
             color: root.bar ? root.bar.foreground : Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.body

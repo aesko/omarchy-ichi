@@ -12,6 +12,9 @@ M.config_path = tmp .. ".json"
 -- The pre-0.7 path too: with nothing at config_path, load and save would
 -- otherwise reach the real ~/.config/omarchy/ichi.json of whoever runs this.
 M.previous_config_path = tmp .. ".previous.json"
+-- And Omarchy's workspace state, which whoever runs this may well have.
+M.monitor_workspaces_path = tmp .. ".monitor-workspaces"
+M.workspace_layouts_dir = tmp .. ".workspace-layouts"
 
 -- A fake compositor for the paths that apply rules and notify. Installed after
 -- loading so the file's own event wiring stays off.
@@ -1005,6 +1008,58 @@ if snippet then
   hl.on = nil
   fake.workspaces[-1400], fake.workspaces[-1401] = nil, nil
 end
+
+-- Omarchy's per-monitor workspaces: messages use the number its bar shows,
+-- and the config keeps Hyprland's.
+check("a workspace keeps its own number without Omarchy's blocks", M.workspace_label("13") == "13")
+local blocks = io.open(M.monitor_workspaces_path, "w")
+blocks:write("0\tDP-1\tLG ULTRAGEAR\n1\tHDMI-A-1\tDell\n")
+blocks:close()
+check("with Omarchy's blocks the second monitor's 13 is shown as 3", M.workspace_label("13") == "3")
+check("and its 20 as 10", M.workspace_label(20) == "10")
+check("the first monitor's numbers are unchanged", M.workspace_label("4") == "4")
+check("a named workspace keeps its name", M.workspace_label("code") == "code")
+local side = { name = "HDMI-A-1", description = "Dell", width = 1920, height = 1080, reserved = { top = 26 } }
+fake.workspaces[13] = { id = 13, name = "13", config_name = "13", tiled_layout = "dwindle", monitor = side }
+fake.windows[13] = { { floating = false, monitor = side } }
+fake.notes = {}
+M.enable(13)
+check("enabling the second monitor's 3 says workspace 3", fake.notes[1] and fake.notes[1]:find("workspace 3 at", 1, true) ~= nil, fake.notes[1])
+check("the entry is keyed by Hyprland's number", M.entry_for("13") ~= nil and M.entry_for("3") == nil)
+fake.notes = {}
+M.disable(13)
+check("turning it off says workspace 3 too", fake.notes[1] and fake.notes[1]:find("workspace 3 off", 1, true) ~= nil, fake.notes[1])
+os.remove(M.monitor_workspaces_path)
+fake.workspaces[13], fake.windows[13] = nil, nil
+
+-- Omarchy's floating mode leaves nothing tiled, so the message says the inset
+-- waits for it.
+os.execute("mkdir -p '" .. M.workspace_layouts_dir .. "'")
+local function save_mode(name, text)
+  local file = io.open(M.workspace_layouts_dir .. "/" .. name .. ".lua", "w")
+  file:write(text)
+  file:close()
+end
+check("no saved mode is not floating", M.floating_workspace("4") == false)
+save_mode("4", 'o.workspace_mode({ workspace = "4", mode = "floating" })\n')
+check("a saved floating mode is floating", M.floating_workspace("4"))
+save_mode("4", 'o.workspace_mode({ workspace = "4", mode = "scrolling" })\n')
+save_mode("default", 'o.workspace_mode({ default = "floating" })\n')
+check("a workspace's own mode wins over a floating default", M.floating_workspace("4") == false)
+check("without one, a floating default applies", M.floating_workspace("6"))
+check("a named workspace is never floating this way", M.floating_workspace("code") == false)
+os.remove(M.workspace_layouts_dir .. "/default.lua")
+save_mode("4", 'o.workspace_mode({ workspace = "4", mode = "floating" })\n')
+fake.windows[4] = { { floating = true, monitor = screen } }
+M.disable(4)
+fake.notes = {}
+M.enable(4)
+check("turning Ichi on in a floating workspace says it waits", fake.notes[1] and fake.notes[1]:find("once it stops floating", 1, true) ~= nil, fake.notes[1])
+fake.notes = {}
+M.disable(4)
+check("turning it off there says nothing about floating", fake.notes[1] and fake.notes[1]:find("floating", 1, true) == nil, fake.notes[1])
+os.execute("rm -rf '" .. M.workspace_layouts_dir .. "'")
+fake.windows[4] = { { floating = false, monitor = screen } }
 
 os.remove(M.config_path)
 os.remove(M.previous_config_path)

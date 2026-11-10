@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "Model.js"), "utf8")
   .replace(/^\.pragma library\s*$/m, "")
 const Model = new Function(source + `
-  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, HELP_TEXT, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, SETTING_KINDS, LIMITS, settingProblem, readState, chooseState, wellFormed }
+  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, HELP_TEXT, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, SETTING_KINDS, LIMITS, settingProblem, readState, chooseState, wellFormed, workspaceLabel }
 `)()
 
 let passed = 0
@@ -227,7 +227,7 @@ test("hyprctlEvalArgs wraps the payload in a block", () => {
 test("status reports the active workspace", () => {
   const config = Model.normalizeConfig({ workspaces: { "2": { width: 70, height: 80 }, "5": { mode: "aspect", ratio: [1, 1] } } })
   assert.deepEqual(Model.status(config, 2), {
-    workspace: "2", problem: null, enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
+    workspace: "2", label: "2", problem: null, enabled: true, entry: { mode: "size", width: 70, height: 80 }, summary: "70% x 80%",
     resolved: { mode: "size", width: 70, height: 80 },
     settings: { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, paused: false }, paused: false, defaults: { width: 70, height: 80 }, monitor: null, monitorEnabled: true, preset: null, presets: [], workspaces: ["2", "5"],
   })
@@ -597,6 +597,23 @@ test("global commands take no workspace", () => {
   for (const cmd of ["cmdPauseToggle", "cmdRemovePreset"]) {
     if (calls[cmd]) assert.doesNotMatch(calls[cmd], /TARGET/, cmd + " is global but aims at a workspace")
   }
+})
+
+test("workspaceLabel shows the bar's number only with Omarchy's blocks", () => {
+  assert.equal(Model.workspaceLabel("13", false), "13")
+  assert.equal(Model.workspaceLabel("13", true), "3")
+  assert.equal(Model.workspaceLabel("20", true), "10")
+  assert.equal(Model.workspaceLabel("4", true), "4")
+  assert.equal(Model.workspaceLabel("code", true), "code")
+  assert.equal(Model.workspaceLabel(null, true), null)
+})
+
+test("status shows the bar's number and keeps Hyprland's as the key", () => {
+  const s = Model.status(Model.defaultConfig(), "13", null, null, true)
+  assert.equal(s.workspace, "13")
+  assert.equal(s.label, "3")
+  assert.match(Model.statusText(s), /^Workspace\s+3 \(Hyprland's 13\)$/m)
+  assert.match(Model.statusText(Model.status(Model.defaultConfig(), "3", null, null, true)), /^Workspace\s+3$/m)
 })
 
 console.log(passed + " passed")

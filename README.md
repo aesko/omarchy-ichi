@@ -299,7 +299,8 @@ window is never floated, so hibernate, an unplugged monitor or a resolution
 change cannot leave it stranded off-screen.
 
 A tabbed group counts as one window, however many it holds. Floating windows
-are neither counted nor touched, and special workspaces are ignored. Sizes are
+are neither counted nor touched, so a workspace in Omarchy's floating layout
+keeps its normal gaps, and special workspaces are ignored. Sizes are
 recomputed whenever the monitor arrangement changes.
 
 On a workspace running a layout from a plugin such as

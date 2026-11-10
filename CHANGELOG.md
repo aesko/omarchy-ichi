@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+Two fixes for Omarchy 4.5. Nothing to do unless you use more than one monitor.
+
+### Fixed
+
+- **Workspace numbers match the bar on every monitor.** Omarchy 4.5 gives each
+  monitor workspaces 1–10 of its own, and Hyprland numbers them in blocks of
+  ten, so the second monitor's 3 is workspace 13. Ichi's panel, notifications
+  and `status` now say 3, as the bar does. The config and commands keep
+  Hyprland's number, so that workspace's entry is `"13"`.
+
+  A setting saved before 4.5 for a workspace on another monitor stays under
+  its old number, which 4.5 gives to the first monitor. Turn Ichi on again on
+  that workspace, and remove the old entry from `ichi.json` if the first
+  monitor should not have it.
+
+- **A floating workspace says why nothing moved.** Omarchy 4.5's floating
+  layout floats every window, which leaves Ichi nothing to inset. Turning Ichi
+  on or resizing there now ends the notification with "once it stops
+  floating", and the inset comes back when the workspace tiles again.
+
 ## 0.8.0 — 2026-09-19
 
 Ichi can be switched off for one display, and the menu entries are reworked

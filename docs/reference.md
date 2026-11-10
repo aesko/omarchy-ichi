@@ -246,6 +246,11 @@ workspace it is, so the name is the only stable way to refer to one.
 Renaming a workspace therefore leaves its entry under the old name, where it
 applies again if a workspace of that name comes back.
 
+Omarchy 4.5 gives each monitor workspaces 1–10 of its own, and Hyprland
+numbers them in blocks of ten: the second monitor's 3 is workspace 13, keyed
+`"13"`. The panel, notifications and `status` show the number the bar shows;
+the config and commands take Hyprland's.
+
 ## Stability
 
 From 1.0, Ichi follows semantic versioning, and a breaking change to any of

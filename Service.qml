@@ -55,7 +55,23 @@ Item {
   readonly property var activeMonitor: Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.monitor
     ? { name: Hyprland.focusedWorkspace.monitor.name, description: Hyprland.focusedWorkspace.monitor.description }
     : null
-  readonly property var status: Model.status(config, activeWorkspaceId, activeMonitor, stateProblem)
+  readonly property var status: Model.status(config, activeWorkspaceId, activeMonitor, stateProblem, perMonitorWorkspaces)
+
+  // Omarchy writes this file once it numbers workspaces per monitor, and its
+  // bar labels them from it. Only whether it exists matters here; see
+  // Model.workspaceLabel.
+  readonly property string monitorWorkspacesPath:
+    (Quickshell.env("XDG_STATE_HOME") || (home + "/.local/state")) + "/omarchy/monitor-workspaces"
+  property bool perMonitorWorkspaces: false
+
+  FileView {
+    path: root.monitorWorkspacesPath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.perMonitorWorkspaces = true
+    onLoadFailed: root.perMonitorWorkspaces = false
+  }
   readonly property bool enabled: status.enabled
 
   // ------------------------------------------------------------- eval --
