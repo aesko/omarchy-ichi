@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 — 2026-11-10
 
 The panel no longer reads the clipboard, and every program Ichi runs now has a
 deadline and a limit on what it reads back. Nothing to do.
