@@ -26,11 +26,10 @@ function test(name, fn) {
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..")
 
-// Every IPC function, with whether the comment above it says Deprecated.
+// Every IPC function.
 function ipcCommands() {
   const qml = readFileSync(join(repo, "IchiIpc.qml"), "utf8")
-  return [...qml.matchAll(/(\/\/ Deprecated[^\n]*\n\s*)?function (\w+)\(/g)]
-    .map((m) => ({ name: m[2], deprecated: m[1] !== undefined }))
+  return [...qml.matchAll(/function (\w+)\(/g)].map((m) => m[1])
 }
 
 // The commands help lists: the first word of each indented row.
@@ -47,18 +46,25 @@ function referenceCommands() {
 }
 
 test("help lists every current command and nothing that is not one", () => {
-  const commands = ipcCommands()
+  const current = ipcCommands()
   const listed = helpCommands()
-  const current = commands.filter((c) => !c.deprecated).map((c) => c.name)
+  assert.ok(current.length > 20, "found too few commands; has IchiIpc.qml's layout changed?")
   assert.deepEqual(current.filter((name) => !listed.includes(name)), [], "missing from help")
-  const deprecated = commands.filter((c) => c.deprecated).map((c) => c.name)
   assert.deepEqual(listed.filter((name) => !current.includes(name)), [], "in help but not a current command")
-  assert.ok(deprecated.length > 0, "found no deprecated commands; has the comment style changed?")
+})
+
+test("1.0 removed every deprecated command", () => {
+  for (const file of ["IchiIpc.qml", "Service.qml", "ichi.lua", join("docs", "reference.md")]) {
+    assert.doesNotMatch(readFileSync(join(repo, file), "utf8"), /[Dd]eprecated/, file)
+  }
+  for (const gone of ["adjust", "defaults", "max", "align", "step", "fine_step", "min", "windows", "all", "notify"]) {
+    assert.ok(!ipcCommands().includes(gone), gone + " is still a command")
+  }
 })
 
 test("docs/reference.md lists every current command", () => {
   const listed = referenceCommands()
-  const missing = ipcCommands().filter((c) => !c.deprecated && !listed.includes(c.name)).map((c) => c.name)
+  const missing = ipcCommands().filter((name) => !listed.includes(name))
   assert.deepEqual(missing, [])
 })
 

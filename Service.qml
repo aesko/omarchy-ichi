@@ -309,12 +309,6 @@ Item {
     run("ichi.reset(" + target(workspace) + ")", quiet)
   }
 
-  // What a deprecated command prints. They keep working through 0.7 and go
-  // in 1.0.
-  function deprecated(command, instead) {
-    return "ichi: `" + command + "` is deprecated and goes in 1.0; use `ichi " + instead + "`"
-  }
-
   // One setting by its place in the file, e.g. set settings.step 10. An
   // unknown key or a value of the wrong kind is refused here, so the command
   // line hears why; ichi.lua clamps numbers to their range.
@@ -325,48 +319,12 @@ Item {
     return ""
   }
 
-  // Deprecated: nudge or size.
-  function cmdAdjust(width, height) {
-    root.evaluate("if ichi then ichi.adjust(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ") end")
-    return deprecated("adjust", "nudge or ichi size")
-  }
-
   // Switch a workspace to aspect mode, e.g. aspect 4 3.
   function cmdAspect(width, height, quiet, workspace) {
     var rw = Number(width) || 0
     var rh = Number(height) || 0
     if (rw <= 0 || rh <= 0) return
     run("ichi.set_aspect(" + rw + ", " + rh + ", " + target(workspace) + ")", quiet)
-  }
-
-  // Deprecated: set defaults.width and defaults.height.
-  function cmdDefaults(width, height) {
-    root.evaluate("if ichi then ichi.set_defaults(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ", 0) end")
-    return deprecated("defaults", "set defaults.width and ichi set defaults.height")
-  }
-
-  // Deprecated: set defaults.max_width and defaults.max_height.
-  function cmdMax(width, height) {
-    root.evaluate("if ichi then ichi.set_max(" + (Number(width) || 0) + ", " + (Number(height) || 0) + ") end")
-    return deprecated("max", "set defaults.max_width and ichi set defaults.max_height")
-  }
-
-  // Deprecated: set defaults.align_x and defaults.align_y.
-  function cmdAlign(x, y) {
-    root.evaluate("if ichi then ichi.set_align(" + (Number(x) || 0) + ", " + (Number(y) || 0) + ") end")
-    return deprecated("align", "set defaults.align_x and ichi set defaults.align_y")
-  }
-
-  // Deprecated: set settings.step.
-  function cmdStep(points) {
-    root.evaluate("if ichi then ichi.set_step(" + (Number(points) || 0) + ", 0) end")
-    return deprecated("step", "set settings.step")
-  }
-
-  // Deprecated: set settings.fine_step.
-  function cmdFineStep(points) {
-    root.evaluate("if ichi then ichi.set_step(0, " + (Number(points) || 0) + ") end")
-    return deprecated("fine_step", "set settings.fine_step")
   }
 
   // An absolute size for a workspace, which is what a slider has.
@@ -379,17 +337,6 @@ Item {
   function cmdNudge(width, height, fine, quiet, workspace) {
     run("ichi.nudge(" + (Number(width) || 0) + ", " + (Number(height) || 0)
       + ", " + (fine === true) + ", " + target(workspace) + ")", quiet)
-  }
-
-  // Deprecated, and does nothing: the smallest size is fixed since 0.7.
-  function cmdMin(percent) {
-    return "ichi: the smallest size is fixed at " + Model.LIMITS.min + "% since 0.7, so `min` does nothing and goes in 1.0"
-  }
-
-  // Deprecated: set settings.max_windows.
-  function cmdWindows(count) {
-    root.evaluate("if ichi then ichi.set_max_windows(" + (Number(count) || 1) + ") end")
-    return deprecated("windows", "set settings.max_windows")
   }
 
   // Whether Ichi runs on a workspace's monitor at all: the narrower veto
@@ -420,18 +367,6 @@ Item {
 
   function cmdPaused() {
     return root.status.paused ? "true" : "false"
-  }
-
-  // Deprecated: set settings.all_workspaces.
-  function cmdAll(state) {
-    root.evaluate("if ichi then ichi.set_all_workspaces(" + (state === "on" || state === "true") + ") end")
-    return deprecated("all", "set settings.all_workspaces")
-  }
-
-  // Deprecated: set settings.notify.
-  function cmdNotify(level) {
-    if (Model.NOTIFY_LEVELS.indexOf(level) !== -1) root.evaluate("if ichi then ichi.set_notify(\"" + level + "\") end")
-    return deprecated("notify", "set settings.notify")
   }
 
   // Give a workspace a preset by name.

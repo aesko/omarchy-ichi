@@ -57,23 +57,6 @@ of range are clamped, as they are when the file is read.
 | `defaults.max_width`, `defaults.max_height` | pixels, `0` for no cap |
 | `defaults.align_x`, `defaults.align_y` | 0 to 100, `50` the centre |
 
-### Deprecated
-
-These still work and print what replaces them. They go in 1.0.
-
-| Command | Instead |
-|---|---|
-| `adjust 5 0` | `nudge 1 0`, or `size` |
-| `defaults 65 85` | `set defaults.width 65`, `set defaults.height 85` |
-| `max 1800 0` | `set defaults.max_width 1800`, `set defaults.max_height 0` |
-| `align 50 40` | `set defaults.align_x 50`, `set defaults.align_y 40` |
-| `step 10` | `set settings.step 10` |
-| `fine_step 2` | `set settings.fine_step 2` |
-| `windows 2` | `set settings.max_windows 2` |
-| `all on` | `set settings.all_workspaces on` |
-| `notify never` | `set settings.notify never` |
-| `min 10` | nothing: the smallest size is fixed at 10%, and `min` does nothing |
-
 ## From Lua
 
 The same functions, which is how the keybindings reach them and the only way
@@ -91,10 +74,7 @@ ichi.enable(id, entry)         ichi.disable(id)
 ichi.load()                    ichi.refresh()
 ```
 
-`ichi.set` returns true when the setting took the value. `ichi.adjust`, and
-the functions `set` replaces — `set_defaults`, `set_max`, `set_align`,
-`set_step`, `set_notify`, `set_max_windows`, `set_all_workspaces` and
-`set_min_percent` — are deprecated with their commands and go in 1.0.
+`ichi.set` returns true when the setting took the value.
 
 From a shell: `hyprctl eval 'ichi.toggle()'`.
 

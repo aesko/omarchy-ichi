@@ -1114,9 +1114,10 @@ function M.toggle(id)
   end
 end
 
--- Nudging an aspect-mode or disabled workspace turns it into size mode from
--- the defaults, so the arrow keys always do something visible.
-function M.adjust(delta_width, delta_height, id)
+-- What nudge does, in points. Nudging an aspect-mode or disabled workspace
+-- turns it into size mode from the defaults, so the arrow keys always do
+-- something visible.
+local function adjust(delta_width, delta_height, id)
   id = key_of(id)
   if id == nil then
     return
@@ -1152,7 +1153,7 @@ end
 -- step, or by the fine step when `fine` is set.
 function M.nudge(dir_width, dir_height, fine, id)
   local step = fine and M.config.settings.fine_step or M.config.settings.step
-  M.adjust((dir_width or 0) * step, (dir_height or 0) * step, id)
+  adjust((dir_width or 0) * step, (dir_height or 0) * step, id)
 end
 
 function M.set_aspect(ratio_w, ratio_h, id)
@@ -1264,8 +1265,7 @@ function M.set(key, value)
   return true
 end
 
--- The setters set() replaces. Deprecated in 0.7 and gone in 1.0; each still
--- does what it did, including zero or nil leaving a value alone.
+-- Save, re-apply and say what changed.
 local function settle(message)
   M.save()
   M.refresh()
@@ -1275,56 +1275,6 @@ end
 -- Save and announce new default sizes, which adopt_defaults makes too.
 local function settle_defaults()
   settle(string.format("Ichi: defaults %d%% x %d%%", M.config.defaults.width, M.config.defaults.height))
-end
-
-local function positive(value)
-  return (tonumber(value) or 0) > 0
-end
-
-function M.set_defaults(width, height, step)
-  if positive(width) then
-    assign("defaults.width", width)
-  end
-  if positive(height) then
-    assign("defaults.height", height)
-  end
-  if positive(step) then
-    assign("settings.step", step)
-  end
-  settle_defaults()
-end
-
-function M.set_max(width, height)
-  assign("defaults.max_width", tonumber(width) or 0)
-  assign("defaults.max_height", tonumber(height) or 0)
-  settle(string.format("Ichi: max width %dpx, max height %dpx (0 is no cap)", M.config.defaults.max_width, M.config.defaults.max_height))
-end
-
-function M.set_align(x, y)
-  assign("defaults.align_x", x)
-  assign("defaults.align_y", y)
-  settle(string.format("Ichi: aligned at %d%% across, %d%% down", M.config.defaults.align_x, M.config.defaults.align_y))
-end
-
-function M.set_step(step, fine)
-  if positive(step) then
-    assign("settings.step", step)
-  end
-  if positive(fine) then
-    assign("settings.fine_step", fine)
-  end
-  settle(string.format("Ichi: step %d, fine step %d", M.config.settings.step, M.config.settings.fine_step))
-end
-
--- The floor is fixed now, so there is nothing left to set.
-function M.set_min_percent()
-  notify(string.format("Ichi: the smallest size is fixed at %d%%", M.limits.min))
-end
-
-function M.set_max_windows(n)
-  assign("settings.max_windows", tonumber(n) or 1)
-  settle(string.format("Ichi: inset holds up to %d window%s", M.config.settings.max_windows,
-    M.config.settings.max_windows == 1 and "" or "s"))
 end
 
 -- Run something without notifying, whatever the configured level. For a
@@ -1351,19 +1301,6 @@ end
 
 function M.toggle_pause()
   M.set_paused(not M.config.settings.paused)
-end
-
--- Deprecated in 0.7 for set("settings.all_workspaces", ...); gone in 1.0.
-function M.set_all_workspaces(on)
-  assign("settings.all_workspaces", parse_bool(on) == true)
-  settle("Ichi: all workspaces " .. (M.config.settings.all_workspaces and "on" or "off"))
-end
-
--- Deprecated in 0.7 for set("settings.notify", ...); gone in 1.0.
-function M.set_notify(level)
-  if assign("settings.notify", level) then
-    settle("Ichi: notifications " .. level)
-  end
 end
 
 -- ---------------------------------------------------------------- presets --

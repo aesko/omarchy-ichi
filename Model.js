@@ -40,7 +40,7 @@ function settingProblem(key, value) {
   return ""
 }
 
-// What `ichi help` prints. Deprecated commands are left out; a test holds
+// What `ichi help` prints. A test holds
 // this, IchiIpc.qml and the commands in docs/reference.md together.
 var HELP_TEXT = [
   "Usage: omarchy-shell ichi <command> [args]",
@@ -82,7 +82,7 @@ var HELP_TEXT = [
   "  help                      show this help",
   "",
   "The panel is its own target: omarchy-shell ichi.panel toggle",
-  "Keys for set, deprecated commands and the Lua API:",
+  "Keys for set and the Lua API:",
   "https://github.com/aesko/omarchy-ichi/blob/master/docs/reference.md",
 ].join("\n")
 

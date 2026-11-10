@@ -60,40 +60,16 @@ Item {
       return wrapper.api.cmdSet(key, value)
     }
 
-    // Deprecated: nudge or size. Goes in 1.0.
-    function adjust(width: string, height: string): string {
-      return wrapper.api.cmdAdjust(width, height)
-    }
 
     // Switch the focused workspace to aspect mode, e.g. aspect 4 3.
     function aspect(width: string, height: string): void {
       wrapper.api.cmdAspect(width, height)
     }
 
-    // Deprecated: set defaults.width and defaults.height. Goes in 1.0.
-    function defaults(width: string, height: string): string {
-      return wrapper.api.cmdDefaults(width, height)
-    }
 
-    // Deprecated: set defaults.max_width and defaults.max_height. Goes in 1.0.
-    function max(width: string, height: string): string {
-      return wrapper.api.cmdMax(width, height)
-    }
 
-    // Deprecated: set defaults.align_x and defaults.align_y. Goes in 1.0.
-    function align(x: string, y: string): string {
-      return wrapper.api.cmdAlign(x, y)
-    }
 
-    // Deprecated: set settings.step. Goes in 1.0.
-    function step(points: string): string {
-      return wrapper.api.cmdStep(points)
-    }
 
-    // Deprecated: set settings.fine_step. Goes in 1.0.
-    function fine_step(points: string): string {
-      return wrapper.api.cmdFineStep(points)
-    }
 
     // An absolute size for the focused workspace, e.g. size 65 85.
     function size(width: string, height: string): void {
@@ -110,15 +86,7 @@ Item {
       wrapper.api.cmdNudge(width, height, true)
     }
 
-    // Deprecated, and does nothing: the smallest size is fixed. Goes in 1.0.
-    function min(percent: string): string {
-      return wrapper.api.cmdMin(percent)
-    }
 
-    // Deprecated: set settings.max_windows. Goes in 1.0.
-    function windows(count: string): string {
-      return wrapper.api.cmdWindows(count)
-    }
 
     // Whether Ichi runs on this workspace's monitor at all: monitor on | off.
     // Entries are left alone, so switching it back on restores every inset
@@ -152,15 +120,7 @@ Item {
       return wrapper.api.cmdPaused()
     }
 
-    // Deprecated: set settings.all_workspaces. Goes in 1.0.
-    function all(state: string): string {
-      return wrapper.api.cmdAll(state)
-    }
 
-    // Deprecated: set settings.notify. Goes in 1.0.
-    function notify(level: string): string {
-      return wrapper.api.cmdNotify(level)
-    }
 
     // Give the focused workspace a preset by name.
     function preset(name: string): void {

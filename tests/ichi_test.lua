@@ -34,6 +34,20 @@ hl = {
 }
 
 local failures = 0
+-- Grow or shrink a workspace by percentage points, as nudge does in steps.
+local function adjust(dw, dh, id)
+  local key = tostring(id)
+  local mon
+  for _, ws in pairs(fake.workspaces) do
+    if tostring(ws.name) == key then mon = ws.monitor end
+  end
+  local entry = M.resolve(M.entry_for(key), mon)
+  if entry == nil or entry.mode ~= "size" then
+    entry = M.resolve({ mode = "default" }, mon)
+  end
+  M.set_size(entry.width + dw, entry.height + dh, id)
+end
+
 local function check(name, ok, detail)
   if ok then
     print("ok   " .. name)
@@ -279,15 +293,16 @@ fixture:close()
 M.load()
 check("load reads the file", M.config.workspaces["2"].width == 70 and M.config.workspaces["5"].height == 90)
 
--- Defaults: adjustable, clamped, zero means keep, and adoptable from a workspace.
-M.set_defaults(65, 85, 10)
-check("set_defaults stores all three", M.config.defaults.width == 65 and M.config.defaults.height == 85
+-- Defaults: set, clamped, and adoptable from a workspace.
+M.set("defaults.width", 65)
+M.set("defaults.height", 85)
+M.set("settings.step", 10)
+check("set stores the defaults and the step", M.config.defaults.width == 65 and M.config.defaults.height == 85
   and M.config.settings.step == 10)
-M.set_defaults(0, 400, 0)
-check("set_defaults keeps zeros and clamps", M.config.defaults.width == 65 and M.config.defaults.height == 100
-  and M.config.settings.step == 10)
-check("set_defaults leaves existing workspaces alone", M.config.workspaces["2"].width == 70)
-check("set_defaults persists", M.parse_config(io.open(M.config_path):read("*a")).defaults.width == 65)
+M.set("defaults.height", 400)
+check("set clamps a default size", M.config.defaults.width == 65 and M.config.defaults.height == 100)
+check("setting the defaults leaves existing workspaces alone", M.config.workspaces["2"].width == 70)
+check("set persists the defaults", M.parse_config(io.open(M.config_path):read("*a")).defaults.width == 65)
 M.adopt_defaults(5)
 check("adopt_defaults copies a size entry", M.config.defaults.width == 65 and M.config.defaults.height == 90)
 M.config.workspaces["5"] = { mode = "aspect", ratio_w = 4, ratio_h = 3 }
@@ -315,7 +330,8 @@ fake.config["general.gaps_out"] = base
 local screen = { name = "DP-1", description = "LG ULTRAGEAR", width = 2560, height = 1440, reserved = { top = 26 } }
 fake.workspaces[4] = { id = 4, name = "4", config_name = "4", tiled_layout = "dwindle", monitor = screen }
 fake.windows[4] = { { floating = false, monitor = screen } }
-M.set_defaults(70, 80)
+M.set("defaults.width", 70)
+M.set("defaults.height", 80)
 fake.notes = {}
 M.enable(4)
 check("enable without an entry follows the defaults", M.config.workspaces["4"].mode == "default")
@@ -336,36 +352,38 @@ lw, lh = M.logical_size({ width = 2560, height = 1440, scale = 2, transform = 1 
 check("logical_size swaps a monitor turned a quarter", lw == 720 and lh == 1280, lw .. "x" .. lh)
 lw, lh = M.logical_size({ width = 2560, height = 1440, transform = 2 })
 check("logical_size keeps a half turn and a missing scale as they are", lw == 2560 and lh == 1440, lw .. "x" .. lh)
-M.set_defaults(50, 100)
+M.set("defaults.width", 50)
+M.set("defaults.height", 100)
 check("changing the defaults reaches a default entry", fake.rules["4"].left == 640 and fake.rules["4"].top == 10)
 check("the file keeps the entry as true", io.open(M.config_path):read("*a"):find('"4": true', 1, true) ~= nil)
-M.adjust(10, 0, 4)
+adjust(10, 0, 4)
 check("nudging a default entry fixes it from the defaults", M.config.workspaces["4"].mode == "size"
   and M.config.workspaces["4"].width == 60 and M.config.workspaces["4"].height == 100)
 M.reset(4)
 check("reset goes back to following the defaults", M.config.workspaces["4"].mode == "default")
-M.adjust(-5, -5, 4)
+adjust(-5, -5, 4)
 M.adopt_defaults(4)
 check("adopt copies the size into the defaults", M.config.defaults.width == 45 and M.config.defaults.height == 95)
 check("adopt leaves the workspace following the defaults", M.config.workspaces["4"].mode == "default")
-M.set_max(1000, 0)
-check("set_max caps the applied box", fake.rules["4"].left == 780, fake.rules["4"].left)
-check("set_max persists", M.parse_config(io.open(M.config_path):read("*a")).defaults.max_width == 1000)
-M.set_max(0, 0)
-check("set_max zero removes the cap", fake.rules["4"].left == 704, fake.rules["4"].left)
-M.set_align(nil, 0)
-check("set_align moves the applied box to the top", fake.rules["4"].top == 10 and fake.rules["4"].bottom > 10 and fake.rules["4"].left == 704)
-check("set_align persists", M.parse_config(io.open(M.config_path):read("*a")).defaults.align_y == 0)
-M.set_align(50, 50)
-check("set_align back to centre", fake.rules["4"].top == fake.rules["4"].bottom)
-M.adjust(-15, 0, 4) -- 45 x 95 -> 30 x 95
+M.set("defaults.max_width", 1000)
+check("max_width caps the applied box", fake.rules["4"].left == 780, fake.rules["4"].left)
+check("max_width persists", M.parse_config(io.open(M.config_path):read("*a")).defaults.max_width == 1000)
+M.set("defaults.max_width", 0)
+check("max_width zero removes the cap", fake.rules["4"].left == 704, fake.rules["4"].left)
+M.set("defaults.align_y", 0)
+check("align_y moves the applied box to the top", fake.rules["4"].top == 10 and fake.rules["4"].bottom > 10 and fake.rules["4"].left == 704)
+check("align_y persists", M.parse_config(io.open(M.config_path):read("*a")).defaults.align_y == 0)
+M.set("defaults.align_x", 50)
+M.set("defaults.align_y", 50)
+check("align_y back to centre", fake.rules["4"].top == fake.rules["4"].bottom)
+adjust(-15, 0, 4) -- 45 x 95 -> 30 x 95
 M.adopt_defaults(4, "monitor")
 check("adopt monitor writes a desc: block", #M.config.monitors == 1 and M.config.monitors[1].key == "desc:LG ULTRAGEAR"
   and M.config.monitors[1].width == 30 and M.config.monitors[1].height == 95)
 check("adopt monitor leaves the global defaults alone", M.config.defaults.width == 45)
 check("adopt monitor puts the workspace back on default", M.config.workspaces["4"].mode == "default")
 check("adopt monitor applies the block", fake.rules["4"].left == 896, fake.rules["4"].left)
-M.adjust(10, 0, 4)
+adjust(10, 0, 4)
 M.adopt_defaults(4, "monitor")
 check("adopt monitor updates an existing block", #M.config.monitors == 1 and M.config.monitors[1].width == 40)
 M.config.monitors = {}
@@ -401,7 +419,7 @@ check("enabled true is not stored as a veto",
 
 -- Nudging a workspace on a display that is off still records the size; the
 -- display decides whether Ichi runs there, not what the workspace wants.
-M.adjust(5, 0, 4)
+adjust(5, 0, 4)
 check("a workspace on a display that is off keeps taking sizes", M.config.workspaces["4"].mode == "size")
 check("but is still not inset", fake.rules["4"].left == 10, fake.rules["4"].left)
 
@@ -449,7 +467,7 @@ M.toggle_monitor(7)
 check("toggling it does not pile up blocks", #M.config.monitors == 1, #M.config.monitors)
 M.set_monitor_enabled(true, 7)
 check("and switching it on drops the block again", #M.config.monitors == 0)
-M.adjust(5, 0, 7)
+adjust(5, 0, 7)
 M.adopt_defaults(7, "monitor")
 check("adopt monitor keys a quoted description by connector name too",
   #M.config.monitors == 1 and M.config.monitors[1].key == "eDP-1" and M.monitor_block(other_screen) == M.config.monitors[1])
@@ -463,16 +481,13 @@ M.config.monitors = {}
 M.reset(4)
 M.disable(4)
 check("disable resets the gaps", fake.rules["4"].left == 10)
-M.set_defaults(65, 90)
+M.set("defaults.width", 65)
+M.set("defaults.height", 90)
 
 -- The floor: fixed, so nudging stops there and a stored size never moves.
 M.config.workspaces["4"] = { mode = "size", width = 15, height = 15 }
-M.adjust(-10, 0, 4)
+adjust(-10, 0, 4)
 check("nudging stops at the fixed floor", M.config.workspaces["4"].width == 10)
-fake.notes = {}
-M.set_min_percent(50)
-check("set_min_percent changes nothing", M.config.workspaces["4"].width == 10 and M.config.settings.min_percent == nil)
-check("set_min_percent says the floor is fixed", #fake.notes == 1 and fake.notes[1]:find("fixed at 10%", 1, true) ~= nil, fake.notes[1])
 M.disable(4)
 
 -- max_windows: the inset gives way one window past the limit.
@@ -480,16 +495,16 @@ M.enable(4)
 fake.windows[4] = { { floating = false, monitor = screen }, { floating = false, monitor = screen }, { floating = true, monitor = screen } }
 M.refresh()
 check("two tiled windows restore plain gaps at the default limit", fake.rules["4"].left == 10)
-M.set_max_windows(2)
-check("set_max_windows two keeps the inset for a pair", fake.rules["4"].left ~= 10)
-check("set_max_windows persists", M.parse_config(io.open(M.config_path):read("*a")).settings.max_windows == 2)
+M.set("settings.max_windows", 2)
+check("max_windows two keeps the inset for a pair", fake.rules["4"].left ~= 10)
+check("max_windows persists", M.parse_config(io.open(M.config_path):read("*a")).settings.max_windows == 2)
 fake.windows[4][#fake.windows[4] + 1] = { floating = false, monitor = screen }
 M.refresh()
 check("a third tiled window is one too many", fake.rules["4"].left == 10)
 fake.windows[4] = {}
 M.refresh()
 check("an empty workspace is not inset", fake.rules["4"].left == 10)
-M.set_max_windows(1)
+M.set("settings.max_windows", 1)
 fake.windows[4] = { { floating = false, monitor = screen } }
 M.disable(4)
 
@@ -517,7 +532,7 @@ check("a named workspace can be enabled", M.config.workspaces["code"] ~= nil)
 check("its rule uses the name: selector", fake.rules["name:code"] ~= nil, "no rule under name:code")
 check("and it is inset, not left plain", fake.rules["name:code"].left ~= 10, fake.rules["name:code"].left)
 check("the negative id is never used as a key", M.config.workspaces["-1337"] == nil)
-M.adjust(-10, 0, "code")
+adjust(-10, 0, "code")
 check("a named workspace nudges like any other", M.config.workspaces["code"].mode == "size")
 local named_text = M.encode_config(M.config)
 check("encode writes the name as the key", named_text:find('"code":', 1, true) ~= nil)
@@ -564,7 +579,7 @@ check("encode leaves an ordinary key alone", M.encode_config(plain_cfg):find("\\
 -- Escaping keeps the document valid, but this file's own reader matches keys
 -- with a plain "([^"]+)" and will not find an escaped one, so the setting does
 -- not come back after a reload. That has to be said rather than just happening.
-M.set_notify("changes")
+M.set("settings.notify", "changes")
 local before_notes = #fake.notes
 M.enable('say "hi"')
 local said = false
@@ -576,22 +591,22 @@ M.config.workspaces['say "hi"'] = nil
 
 -- Quiet mode: what the panel uses, because it shows its own result in the
 -- same corner the notifications appear in.
-M.set_notify("always")
+M.set("settings.notify", "always")
 M.enable(4)
 fake.notes = {}
-M.silently(function() M.adjust(-5, 0, 4) end)
+M.silently(function() adjust(-5, 0, 4) end)
 check("silently suppresses the notification", #fake.notes == 0)
 check("silently still does the work", M.config.workspaces["4"].mode == "size")
-M.adjust(-5, 0, 4)
+adjust(-5, 0, 4)
 check("and the next call speaks again", #fake.notes == 1)
 check("quiet does not stay on", M.quiet == false)
 local ok = pcall(function() M.silently(function() error("boom") end) end)
 check("silently restores quiet even when the call errors", ok == false and M.quiet == false)
 fake.notes = {}
-M.adjust(-5, 0, 4)
+adjust(-5, 0, 4)
 check("still speaking after an error", #fake.notes == 1)
 M.disable(4)
-M.set_notify("changes")
+M.set("settings.notify", "changes")
 
 -- Global pause: every workspace back to normal gaps, entries untouched.
 M.enable(4)
@@ -636,10 +651,10 @@ check("a group of two counts as one window and keeps the inset", fake.rules["4"]
 fake.windows[4] = { pair[1], pair[2], { floating = false, monitor = screen, address = "0xfff" } }
 M.refresh()
 check("a group plus a loose window is two, so the inset gives way", fake.rules["4"].left == 10)
-M.set_max_windows(2)
+M.set("settings.max_windows", 2)
 M.refresh()
 check("max_windows 2 admits a group beside a loose window", fake.rules["4"].left ~= 10)
-M.set_max_windows(1)
+M.set("settings.max_windows", 1)
 local trio = grouped(3, screen)
 fake.windows[4] = { trio[1], trio[2], trio[3] }
 M.refresh()
@@ -666,44 +681,43 @@ M.disable(4)
 fake.workspaces[6] = { id = 6, name = "6", config_name = "6", tiled_layout = "dwindle", monitor = screen }
 fake.windows[6] = { { floating = false, monitor = screen } }
 fake.rules = {}
-M.set_all_workspaces(true)
+M.set("settings.all_workspaces", true)
 check("all on applies to a workspace with no entry", fake.rules["6"] and fake.rules["6"].left ~= 10, fake.rules["6"] and fake.rules["6"].left)
 check("all on writes nothing for it", M.config.workspaces["6"] == nil)
 M.toggle(6)
 check("toggle under all on writes false", M.config.workspaces["6"] == false and fake.rules["6"].left == 10)
 M.toggle(6)
 check("toggle again removes the false", M.config.workspaces["6"] == nil and fake.rules["6"].left ~= 10)
-M.adjust(-10, 0, 6)
+adjust(-10, 0, 6)
 check("nudging under all on fixes the size", M.config.workspaces["6"].mode == "size")
 M.reset(6)
 check("reset under all on removes the entry", M.config.workspaces["6"] == nil)
-M.set_all_workspaces(false)
+M.set("settings.all_workspaces", false)
 check("all off resets a workspace it had managed", fake.rules["6"].left == 10 and M.entry_for(6) == nil)
 fake.workspaces[6] = nil
 fake.windows[6] = nil
 
 -- Steps, nudges and notification levels, on a workspace of a known size.
-M.set_step(12, 3)
-check("set_step stores both", M.config.settings.step == 12 and M.config.settings.fine_step == 3)
-M.set_step(0, 0)
-check("set_step keeps zeros", M.config.settings.step == 12 and M.config.settings.fine_step == 3)
+M.set("settings.step", 12)
+M.set("settings.fine_step", 3)
+check("set stores both steps", M.config.settings.step == 12 and M.config.settings.fine_step == 3)
 M.config.workspaces["2"] = { mode = "size", width = 70, height = 80 }
 M.nudge(-1, 0, false, 2)
 check("nudge scales by the step", M.config.workspaces["2"].width == 58)
 M.nudge(0, 1, true, 2)
 check("nudge fine scales by the fine step", M.config.workspaces["2"].height == 83)
-M.set_notify("never")
-check("set_notify stores a known level", M.config.settings.notify == "never")
+M.set("settings.notify", "never")
+check("set stores a known notify level", M.config.settings.notify == "never")
 fake.notes = {}
 M.nudge(1, 0, false, 2)
 check("notify never is silent", #fake.notes == 0)
-M.set_notify("changes")
+M.set("settings.notify", "changes")
 fake.notes = {}
 M.nudge(-1, 0, false, 2)
 check("notify changes skips nudges", #fake.notes == 0)
 M.toggle(2)
 check("notify changes reports a toggle", #fake.notes == 1)
-M.set_notify("always")
+M.set("settings.notify", "always")
 fake.notes = {}
 M.nudge(1, 0, false, 2)
 check("notify always reports a nudge", #fake.notes == 1)
@@ -712,12 +726,12 @@ check("notify falls back to libnotify off Omarchy",
     and fake.notes[1]:find("notify-send -u low -a Ichi 'Ichi:", 1, true) ~= nil, fake.notes[1])
 check("notify quotes a message containing a quote",
   M.notify_command("it's here"):find("'it'\\''s here'", 1, true) ~= nil, M.notify_command("it's here"))
-M.set_notify("loud")
+M.set("settings.notify", "loud")
 -- The level just above set it to "always"; an unknown one must not change it.
-check("set_notify ignores an unknown level", M.config.settings.notify == "always")
-M.set_notify("never")
-check("set_notify persists", M.parse_config(io.open(M.config_path):read("*a")).settings.notify == "never")
-M.set_notify("always")
+check("set ignores an unknown notify level", M.config.settings.notify == "always")
+M.set("settings.notify", "never")
+check("set persists the notify level", M.parse_config(io.open(M.config_path):read("*a")).settings.notify == "never")
+M.set("settings.notify", "always")
 
 -- Adopt on a named workspace: its key is not a number, and each "why not"
 -- message has to say so without failing.
