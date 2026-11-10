@@ -117,7 +117,7 @@ permissions rather than any you set on it.
 
 Before 0.7 the file was `~/.config/omarchy/ichi.json`. One there is still
 read and written where it is, never moved, for as long as nothing exists at
-the new path. To move it, move the file (or your link to it) to the new path,
+the new path, and keeps working through every 1.x release. To move it, move the file (or your link to it) to the new path,
 then run `hyprctl reload` and `omarchy restart shell`.
 
 ```json
@@ -240,12 +240,18 @@ these waits for a major release:
   `status` and `help`
 - the Lua functions listed under [From Lua](#from-lua)
 - the keys of the config file and what they mean
+- where the config file lives: `ichi/ichi.json` under `$XDG_CONFIG_HOME`
+  (`~/.config` when unset), and while nothing is there, `omarchy/ichi.json`
+  beside it from before 0.7
+- what a workspace key names: Hyprland's name for the workspace, which is its
+  number for a numbered one and its name for a named one
 - the document `status_json` prints
 
 `status` and `help` are written for a person to read and may change in any
 release.
-Anything else on the `ichi` table is internal. Before 1.0 a minor release may
-still change the list above, and says so in the changelog.
+Anything else on the `ichi` table is internal. Which Hyprland and Omarchy
+versions Ichi needs is in the README; a release that raises them says so in
+the changelog.
 
 ## Omarchy menu
 
