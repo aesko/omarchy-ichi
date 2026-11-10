@@ -64,7 +64,9 @@ Panel {
 
   readonly property string workspaceKey: ready && ichiStatus.workspace ? String(ichiStatus.workspace) : ""
   // The bar's number for it, which the title shows; commands take the key.
-  readonly property string workspaceLabel: ready && ichiStatus.label ? String(ichiStatus.label) : workspaceKey
+  // Clipped for display like every name the panel draws; see Model.DISPLAY.
+  readonly property string workspaceLabel: Model.clip(ready && ichiStatus.label ? String(ichiStatus.label) : workspaceKey,
+    Model.DISPLAY.label)
   readonly property bool onHere: !!(ready && ichiStatus.enabled)
   readonly property bool paused: !!(ready && ichiStatus.paused)
   // Whether Ichi runs on this widget's own monitor at all. Absent means on,
@@ -73,10 +75,16 @@ Panel {
   // What the bar answers at a glance: is Ichi doing anything here, whichever
   // of the three vetoes is the reason it is not.
   readonly property bool working: onHere && monitorOn && !paused
-  readonly property string monitorName: barMonitor && barMonitor.name ? String(barMonitor.name) : ""
+  readonly property string monitorName: barMonitor && barMonitor.name ? Model.clip(barMonitor.name, Model.DISPLAY.label) : ""
   readonly property var entry: ready ? ichiStatus.entry : null
   readonly property var resolved: ready ? ichiStatus.resolved : null
   readonly property string presetName: ready && ichiStatus.preset ? String(ichiStatus.preset) : ""
+  // The summary names the preset, so it is clipped as a whole.
+  readonly property string summary: ready ? Model.clip(ichiStatus.summary, Model.DISPLAY.action) : ""
+  // The last action that did not reach Hyprland, from the service; empty
+  // once one does.
+  readonly property string lastError: ichiService && ichiService.lastError
+    ? Model.clip(ichiService.lastError, Model.DISPLAY.action) : ""
   readonly property var presetNames: ready && ichiStatus.presets ? ichiStatus.presets : []
   readonly property int minPercent: Model.LIMITS.min
   readonly property string notifyLevel: ready && ichiStatus.settings ? ichiStatus.settings.notify : "changes"
@@ -124,6 +132,9 @@ Panel {
   // False until `hyprctl binds` has answered once, so the empty-list message
   // does not flash while the first read is under way, or show for a failure.
   property bool shortcutsLoaded: false
+  // Set when the last read failed, timed out or printed nothing, so the page
+  // says so instead of showing an empty list as if there were no bindings.
+  property bool shortcutsFailed: false
 
   // The ratios offered as chips: the shapes a window is usually wanted in.
   // Any other ratio is still reachable from the command line, which is where
@@ -138,8 +149,8 @@ Panel {
     if (!ready || display === "Icon only") return glyph
     if (paused) return glyph + "  paused"
     if (!monitorOn || !onHere) return glyph
-    if (display === "Icon and preset") return presetName === "" ? glyph : glyph + "  " + presetName
-    if (!sizeMode) return glyph + "  " + ichiStatus.summary
+    if (display === "Icon and preset") return presetName === "" ? glyph : glyph + "  " + Model.clip(presetName, Model.DISPLAY.name)
+    if (!sizeMode) return glyph + "  " + summary
     return glyph + "  " + sizeWidth + "×" + sizeHeight
   }
 
@@ -178,7 +189,7 @@ Panel {
     tooltipText: root.ready
       ? (root.paused ? "Ichi: paused everywhere"
         : !root.monitorOn ? "Ichi: off on " + (root.monitorName === "" ? "this monitor" : root.monitorName)
-        : root.onHere ? "Ichi: " + root.ichiStatus.summary
+        : root.onHere ? "Ichi: " + root.summary
         : "Ichi: off on this workspace")
       : "Ichi"
     onPressed: function (b) {
@@ -248,6 +259,7 @@ Panel {
           spacing: Style.space(8)
 
           Text {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             text: root.workspaceKey === "" ? "Ichi" : "Workspace " + root.workspaceLabel
             color: root.bar ? root.bar.foreground : Color.foreground
@@ -271,13 +283,25 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
-          text: root.ready ? root.ichiStatus.summary : ""
+          text: root.summary
           color: root.bar ? root.bar.foreground : Color.foreground
           opacity: 0.6
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
           elide: Text.ElideRight
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          Layout.fillWidth: true
+          visible: root.lastError !== ""
+          text: "Not applied: " + root.lastError
+          color: root.bar ? root.bar.foreground : Color.foreground
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.WordWrap
         }
 
         PanelSeparator { Layout.fillWidth: true }
@@ -287,14 +311,17 @@ Panel {
         // same axis as the presets: they all answer "what size is this".
         // Naming replaces the row rather than sitting beside it, so the panel
         // does not jump in height.
-        TextField {
+        //
+        // A KeyField rather than the kit's TextField, so the panel has no
+        // native text input and never reads the clipboard; see KeyField.qml.
+        KeyField {
           id: nameField
           Layout.fillWidth: true
           visible: root.naming
           placeholderText: "name this size, Enter to save"
           foreground: root.bar ? root.bar.foreground : Color.foreground
           onAccepted: root.commitName()
-          Keys.onEscapePressed: root.cancelName()
+          onEscaped: root.cancelName()
           // Typing over an existing name updates that preset, which is what
           // save_preset already does; nothing extra is needed here.
           onActiveFocusChanged: if (!activeFocus && root.naming) root.cancelName()
@@ -320,7 +347,7 @@ Panel {
 
             Button {
               required property string modelData
-              text: modelData
+              text: Model.clip(modelData, Model.DISPLAY.name)
               selected: modelData === root.presetName
               tooltipText: "Right click to remove"
               foreground: root.bar ? root.bar.foreground : Color.foreground
@@ -368,7 +395,10 @@ Panel {
           spacing: Style.space(6)
           visible: root.sizeMode
 
-          NumberField {
+          // Steppers rather than the kit's NumberField, whose editable text
+          // input reads the clipboard on paste; the sliders below them give
+          // the same 1% steps by drag.
+          Stepper {
             label: "Width"
             value: Math.round(widthSlider.liveValue)
             from: root.minPercent
@@ -391,7 +421,7 @@ Panel {
             onReleased: { sizeCommit.stop(); root.applySize() }
           }
 
-          NumberField {
+          Stepper {
             label: "Height"
             value: Math.round(heightSlider.liveValue)
             from: root.minPercent
@@ -449,6 +479,7 @@ Panel {
           spacing: Style.space(8)
 
           Text {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             text: root.monitorName === "" ? "Run on this monitor" : "Run on " + root.monitorName
             color: root.bar ? root.bar.foreground : Color.foreground
@@ -468,6 +499,7 @@ Panel {
           spacing: Style.space(8)
 
           Text {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             text: "Pause everywhere"
             color: root.bar ? root.bar.foreground : Color.foreground
@@ -518,6 +550,7 @@ Panel {
             }
 
             Text {
+              textFormat: Text.PlainText
               Layout.fillWidth: true
               text: "Ichi"
               color: root.bar ? root.bar.foreground : Color.foreground
@@ -588,7 +621,7 @@ Panel {
           }
 
           // The arrow keys' increments, next to the list that shows those keys.
-          NumberField {
+          Stepper {
             label: "Resize step"
             value: root.stepPoints
             from: 1
@@ -598,7 +631,7 @@ Panel {
             onModified: function (v) { if (root.ichiService) root.ichiService.cmdSet("settings.step", v, true) }
           }
 
-          NumberField {
+          Stepper {
             label: "Fine step"
             value: root.fineStepPoints
             from: 1
@@ -620,9 +653,12 @@ Panel {
           // install bindings, so an empty list is the ordinary state for
           // someone who has not written any yet, not a failure.
           Text {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
-            visible: root.shortcutsLoaded && root.shortcuts.length === 0
-            text: "No Ichi keybindings yet. Bindings whose description starts with “Ichi:” show up here; the README has a set to paste."
+            visible: root.shortcutsFailed || (root.shortcutsLoaded && root.shortcuts.length === 0)
+            text: root.shortcutsFailed
+              ? "Couldn't read the keybindings from hyprctl this time; they're listed again the next time this page opens."
+              : "No Ichi keybindings yet. Bindings whose description starts with “Ichi:” show up here; the README has a set to paste."
             color: root.bar ? root.bar.foreground : Color.foreground
             opacity: 0.6
             font.family: Style.font.family
@@ -639,6 +675,7 @@ Panel {
               spacing: Style.space(8)
 
               Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignTop
                 text: modelData.action
@@ -652,6 +689,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 Layout.alignment: Qt.AlignTop
                 text: modelData.keys
                 color: root.bar ? root.bar.foreground : Color.foreground
@@ -678,7 +716,7 @@ Panel {
     // Naming would otherwise still be waiting on the face that is turning away.
     if (next) {
       cancelName()
-      bindsProcess.running = true
+      bindsProcess.start()
     }
     pageFlip.restart()
   }
@@ -706,17 +744,28 @@ Panel {
 
   // The plain text, not `hyprctl binds -j`: Hyprland 0.56.0 emits invalid JSON
   // for binds, which is why Omarchy's own keybindings menu parses this too.
-  Process {
+  //
+  // Read up to Model.BINDS_OUTPUT_LIMIT, within a deadline. Output cut at the
+  // limit is parsed up to its last whole record, and ichiBinds keeps at most
+  // MAX_SHORTCUTS rows, each clipped for display. A read that fails, times
+  // out or prints nothing keeps whatever the last good read found and says
+  // so on the page.
+  BoundedProcess {
     id: bindsProcess
     command: ["hyprctl", "binds"]
-    stdout: StdioCollector {
-      onStreamFinished: {
-        // Hyprland always reports some binds; empty output means the call
-        // failed, which is not the same as having none of Ichi's.
-        if (String(text || "").trim() === "") return
-        root.shortcuts = Model.ichiBinds(text)
-        root.shortcutsLoaded = true
+    deadline: 5000
+    outputLimit: Model.BINDS_OUTPUT_LIMIT
+    errorLimit: 0
+    onFinished: (outcome, exitCode) => {
+      // Hyprland always reports some binds; empty output means the call
+      // failed, which is not the same as having none of Ichi's.
+      if (outcome !== "exited" || exitCode !== 0 || output.trim() === "") {
+        root.shortcutsFailed = true
+        return
       }
+      root.shortcuts = Model.ichiBinds(Model.wholeRecords(output, truncated))
+      root.shortcutsFailed = false
+      root.shortcutsLoaded = true
     }
   }
 

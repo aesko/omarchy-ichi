@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+The panel no longer reads the clipboard, and every program Ichi runs now has a
+deadline and a limit on what it reads back. Nothing to do.
+
+### Changed
+
+- **The panel has no text inputs.** Width, height, the resize step and the
+  fine step are − and + buttons, and scrolling over them steps too; the
+  sliders still set width and height to the percent. A preset name is still
+  typed, and Enter saves it, but the field takes typing only, not paste or an
+  input method, and up to 32 characters. `omarchy-shell ichi save_preset
+  "<name>"` saves any name.
+- **Long names are cut short where they are drawn**, with an ellipsis: preset
+  names at 32 characters, workspace and display names at 24. They are stored,
+  matched and passed to commands whole.
+
+### Fixed
+
+- **A `hyprctl` that stalls or cannot start no longer holds up every action
+  after it.** Each action gets five seconds. One that runs over is stopped and
+  dropped, not retried, and the next one goes ahead; if `hyprctl` cannot be
+  started at all, the actions waiting behind it are dropped too. At most 32
+  wait at once. `status` shows what went wrong as **Last error**, and the
+  panel shows it under the summary, until an action gets through again.
+- The settings page reads at most 512 KB of `hyprctl binds` within five
+  seconds and lists up to 64 keybindings. When the read fails it says so,
+  instead of showing the list as empty.
+- Text in the panel is always drawn as plain text, so a name with markup in it
+  shows as typed.
+- Adding the loader line to `hyprland.lua` is stopped after 10 seconds, and
+  says so in its notification; `ichi sync` tries again.
+
 ## 1.0.0 — 2026-11-10
 
 1.0: the commands, Lua functions, config file and keys listed under Stability

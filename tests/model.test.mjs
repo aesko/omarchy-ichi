@@ -1,5 +1,5 @@
 // Run: node tests/model.test.mjs
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 import assert from "node:assert/strict"
@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "Model.js"), "utf8")
   .replace(/^\.pragma library\s*$/m, "")
 const Model = new Function(source + `
-  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, HELP_TEXT, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, SETTING_KINDS, LIMITS, settingProblem, readState, chooseState, wellFormed, workspaceLabel }
+  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, HELP_TEXT, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, SETTING_KINDS, LIMITS, settingProblem, readState, chooseState, wellFormed, workspaceLabel, clip, nameAfterKey, wholeRecords, DISPLAY, PRESET_NAME, MAX_SHORTCUTS, BINDS_OUTPUT_LIMIT }
 `)()
 
 let passed = 0
@@ -620,6 +620,89 @@ test("status shows the bar's number and keeps Hyprland's as the key", () => {
   assert.equal(s.label, "3")
   assert.match(Model.statusText(s), /^Workspace\s+3 \(Hyprland's 13\)$/m)
   assert.match(Model.statusText(Model.status(Model.defaultConfig(), "3", null, null, true)), /^Workspace\s+3$/m)
+})
+
+// ------------------------------------------- 1.0.1: the marketplace review --
+
+// Every QML file of Ichi's own, read as text.
+function ichiQml() {
+  return readdirSync(repo).filter((f) => f.endsWith(".qml")).map((f) => [f, readFileSync(join(repo, f), "utf8")])
+}
+
+test("no Ichi QML file creates a native text input, which would read the clipboard", () => {
+  // Qt's and the kit's editable inputs. Each one fetches clipboard text on
+  // paste (and a TextInput can read it on clipboard changes), through Qt's
+  // Wayland transfer with no size cap. Comments are ignored.
+  const inputs = /\b(TextInput|TextField|TextEdit|TextArea|SpinBox|NumberField|FilterInput|SearchableDropdown|MultiSelect)\s*\{/
+  for (const [file, text] of ichiQml()) {
+    const code = text.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n")
+    assert.doesNotMatch(code, inputs, file)
+  }
+})
+
+test("every Text in Ichi's QML renders plain text", () => {
+  for (const [file, text] of ichiQml()) {
+    const lines = text.split("\n")
+    lines.forEach((line, i) => {
+      if (/^\s*Text \{$/.test(line)) assert.match(lines[i + 1], /^\s*textFormat: Text\.PlainText$/, `${file}:${i + 1}`)
+    })
+  }
+})
+
+test("every program Ichi runs goes through BoundedProcess", () => {
+  for (const [file, text] of ichiQml()) {
+    if (file === "BoundedProcess.qml") continue
+    assert.doesNotMatch(text, /^\s*Process \{/m, file)
+    assert.doesNotMatch(text, /\.running = true/, file)
+  }
+})
+
+test("clip cuts by character, never through an emoji, and marks the cut", () => {
+  assert.equal(Model.clip("wide", 32), "wide")
+  assert.equal(Model.clip("abcdef", 4), "abc…")
+  assert.equal(Model.clip("👍👍👍", 2), "👍…")
+  assert.equal(Model.clip(null, 4), "")
+  assert.equal(Model.clip("x".repeat(10000), Model.DISPLAY.name).length, Model.DISPLAY.name)
+})
+
+test("the name field takes typed text and nothing a paste or a control key sends", () => {
+  const max = Model.PRESET_NAME
+  assert.equal(Model.nameAfterKey("wid", "e", false, max), "wide")
+  assert.equal(Model.nameAfterKey("", "é", false, max), "é")
+  assert.equal(Model.nameAfterKey("a", "👍", false, max), "a👍")
+  // Ctrl+V and Shift+Insert send a control character and nothing.
+  assert.equal(Model.nameAfterKey("a", "\u0016", false, max), null)
+  assert.equal(Model.nameAfterKey("a", "", false, max), null)
+  for (const bad of ["\n", "\t", "\u001b", "\u007f", "\u0085", '"', "\\"]) {
+    assert.equal(Model.nameAfterKey("a", bad, false, max), null, JSON.stringify(bad))
+  }
+  assert.equal(Model.nameAfterKey("x".repeat(max), "y", false, max), null)
+  assert.equal(Model.nameAfterKey("a👍", "", true, max), "a")
+  assert.equal(Model.nameAfterKey("", "", true, max), null)
+})
+
+test("binds output cut at the limit parses only its whole records", () => {
+  const two = bindText(64, "J", "Ichi: toggle") + "\n" + bindText(64, "K", "Ichi: pause")
+  const cut = two.slice(0, two.length - 8)
+  assert.deepEqual(Model.ichiBinds(Model.wholeRecords(cut, true)), [{ keys: "SUPER + J", action: "toggle" }])
+  assert.equal(Model.wholeRecords(two, false), two)
+  assert.equal(Model.wholeRecords("bind\n\tkey: J", true), "")
+})
+
+test("ichiBinds keeps a bounded number of rows, each clipped", () => {
+  const many = Array.from({ length: 200 }, (_, i) => bindText(64, "F" + i, "Ichi: preset " + i)).join("\n")
+  const rows = Model.ichiBinds(many)
+  assert.equal(rows.length, Model.MAX_SHORTCUTS)
+  const long = Model.ichiBinds(bindText(64, "J", "Ichi: " + "a".repeat(5000)))
+  assert.equal(long[0].action.length, Model.DISPLAY.action)
+  assert.ok(Model.BINDS_OUTPUT_LIMIT >= 10 * 35683, "room for ten times Omarchy's own binds")
+})
+
+test("statusText reports the last action that did not reach Hyprland", () => {
+  const s = Model.status(Model.defaultConfig(), "1", null, null)
+  assert.match(Model.statusText(s, "hyprctl did not answer within 5 seconds"), /^Last error\s+hyprctl did not answer/m)
+  assert.doesNotMatch(Model.statusText(s, ""), /Last error/)
+  assert.doesNotMatch(Model.statusText(s), /Last error/)
 })
 
 console.log(passed + " passed")

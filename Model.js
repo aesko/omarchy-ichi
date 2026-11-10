@@ -12,6 +12,57 @@ var LOADER_LINE = LOADER_MARK + "\n" +
 // Every size is clamped between these; mirrors ichi.lua's M.limits.
 var LIMITS = { min: 10, max: 100 }
 
+// How much of a name the panel and the bar show, in characters. Names are
+// stored whole and commands take them whole; only what is drawn is cut, with
+// an ellipsis. A preset typed into the panel is held to PRESET_NAME, and one
+// saved from the command line or a hand-edit can be any length.
+var DISPLAY = { name: 32, label: 24, action: 80, keys: 48 }
+var PRESET_NAME = 32
+// The most Ichi keybindings the settings page lists, and the most of
+// `hyprctl binds` it reads to find them: about 14 times what Omarchy's own
+// 260 bindings print.
+var MAX_SHORTCUTS = 64
+var BINDS_OUTPUT_LIMIT = 512 * 1024
+
+// Characters, not UTF-16 units, so a name is never cut through an emoji.
+function chars(text) {
+  return Array.from(String(text === undefined || text === null ? "" : text))
+}
+
+function clip(text, max) {
+  var all = chars(text)
+  return all.length <= max ? all.join("") : all.slice(0, Math.max(0, max - 1)).join("") + "\u2026"
+}
+
+// What a keypress does to the preset-name field. The field is drawn from
+// plain Text and key events rather than a native text input, so it never
+// reads the clipboard: typing appends, Backspace removes the last character,
+// and nothing else changes it. `typed` is the key event's text. Control
+// characters are refused, and so are quotes and backslashes, which
+// ichi.save_preset would strip anyway. Returns the new text, or null when
+// the key leaves the field alone.
+function nameAfterKey(current, typed, backspace, max) {
+  var now = chars(current)
+  if (backspace) return now.length === 0 ? null : now.slice(0, -1).join("")
+  var add = chars(typed)
+  if (add.length === 0) return null
+  for (var i = 0; i < add.length; i++) {
+    if (/[\u0000-\u001f\u007f-\u009f"\\]/.test(add[i])) return null
+  }
+  if (now.length + add.length > max) return null
+  return now.concat(add).join("")
+}
+
+// `hyprctl binds` read only up to BINDS_OUTPUT_LIMIT ends partway through a
+// record, which would parse as a binding with half a description. Records
+// are separated by a blank line, so cut back to the last one.
+function wholeRecords(text, truncated) {
+  text = String(text || "")
+  if (!truncated) return text
+  var end = text.lastIndexOf("\n\n")
+  return end === -1 ? "" : text.slice(0, end + 1)
+}
+
 var NOTIFY_LEVELS = ["never", "changes", "always"]
 
 // The keys `ichi set` takes, by their place in the file, and the kind of
@@ -402,8 +453,8 @@ function ichiBinds(text) {
     else flush()
   }
   flush()
-  return collapseArrows(rows).map(function (row) {
-    return { keys: row.keys, action: row.action }
+  return collapseArrows(rows).slice(0, MAX_SHORTCUTS).map(function (row) {
+    return { keys: clip(row.keys, DISPLAY.keys), action: clip(row.action, DISPLAY.action) }
   })
 }
 
@@ -498,11 +549,14 @@ function monitorLine(block) {
 // status() as plain text, which is what `ichi status` prints. Scripts want
 // statusJson() instead. Rows that carry nothing are left out rather than
 // printed empty, so a stock setup stays short.
-function statusText(s) {
+function statusText(s, lastError) {
   var rows = [["Workspace", s.workspace === null ? "none focused"
     : s.label && s.label !== s.workspace ? s.label + " (Hyprland's " + s.workspace + ")"
     : s.workspace]]
   if (s.problem) rows.push(["Saving", "blocked: " + s.problem])
+  // The last action that did not reach Hyprland. Not in status_json, whose
+  // document is promised; cleared by the next one that does.
+  if (lastError) rows.push(["Last error", lastError])
   rows.push(["Inset", s.paused ? s.summary + " (paused)"
     : s.monitorEnabled === false ? s.summary + " (this monitor is off)"
     : s.summary])

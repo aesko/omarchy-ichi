@@ -21,6 +21,13 @@
 # Usage: ICHI_LOADER_CONTENT=<new-content> \
 #          install-hyprland-loader.sh <hyprland-lua-path> <home>
 # Exits 0 only if the write happened.
+#
+# Service.qml stops this with SIGTERM if it runs past its deadline, and with
+# SIGKILL a second later. TERM exits through the EXIT trap set further down,
+# so the temporary file goes with it; the commands it waits on are all
+# finite. Either way hyprland.lua itself is never half-written, because it is
+# only ever replaced by rename.
+trap 'exit 143' TERM
 set -euo pipefail
 
 target=$1

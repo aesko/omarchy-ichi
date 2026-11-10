@@ -78,33 +78,61 @@ Item {
   //
   // Queued in order, not latest-wins: a toggle followed by a nudge are two
   // different user actions and dropping either one would be visible.
+  //
+  // Bounded both ways. The queue holds at most queueLimit actions, and one
+  // that arrives while it is full is refused and reported rather than
+  // queued: by then hyprctl has stopped answering, and an action held for
+  // later would land long after anyone expects it. Each run has evalProcess's
+  // deadline. An action that times out or fails is reported and dropped,
+  // never replayed, since running a toggle twice undoes it; one that fails to
+  // start drops the rest of the queue too, as they would all fail the same
+  // way.
 
+  readonly property int queueLimit: 32
   property var queue: []
+  // Whether an action is with hyprctl right now; tests/shell.sh waits on it.
+  readonly property bool evaluating: evalProcess.busy
 
   function evaluate(lua) {
+    if (queue.length >= queueLimit) {
+      reportEvalError("hyprctl is not keeping up, so an action was dropped")
+      return
+    }
     queue = queue.concat([lua])
-    if (!evalProcess.running) flush()
+    if (!evalProcess.busy) flush()
   }
 
   function flush() {
-    if (queue.length === 0) return
+    if (queue.length === 0 || evalProcess.busy) return
     var next = queue[0]
     queue = queue.slice(1)
     evalProcess.command = Model.hyprctlEvalArgs(next)
-    evalProcess.running = true
+    evalProcess.start()
   }
 
-  Process {
+  function reportEvalError(message) {
+    root.lastError = message
+    console.warn("ichi:", message)
+  }
+
+  BoundedProcess {
     id: evalProcess
-    stderr: StdioCollector {
-      onStreamFinished: {
-        var message = String(text || "").trim()
+    deadline: 5000
+    errorLimit: 2048
+    onFinished: (outcome) => {
+      if (outcome === "failed") {
+        root.queue = []
+        root.reportEvalError("could not run hyprctl")
+      } else if (outcome === "timedout") {
+        root.reportEvalError("hyprctl did not answer within 5 seconds, so an action was stopped")
+      } else {
+        var message = errorOutput.trim()
         // "ok" is hyprctl's success reply; anything else is worth surfacing.
-        root.lastError = (message.length > 0 && message !== "ok") ? message : ""
-        if (root.lastError !== "") console.warn("ichi:", root.lastError)
+        if (message.length > 0 && message !== "ok") root.reportEvalError(message + (truncated ? "…" : ""))
+        else root.lastError = ""
       }
+      root.flush()
     }
-    onExited: root.flush()
   }
 
   // ------------------------------------------------------------ state --
@@ -152,14 +180,21 @@ Item {
     if (!root.stateDirMade && root.stateRead && root.previousStateRead
         && !root.stateRead.present && !root.previousStateRead.present) {
       root.stateDirMade = true
-      stateDirProcess.running = true
+      stateDirProcess.start()
     }
   }
 
-  Process {
+  // Reloaded however mkdir ends: a directory that is still missing just means
+  // the watch keeps waiting, as before.
+  BoundedProcess {
     id: stateDirProcess
     command: ["mkdir", "-p", "--", root.configDir + "/ichi"]
-    onExited: stateFile.reload()
+    deadline: 5000
+    errorLimit: 0
+    onFinished: (outcome, exitCode) => {
+      if (outcome !== "exited" || exitCode !== 0) console.warn("ichi: could not create " + root.configDir + "/ichi")
+      stateFile.reload()
+    }
   }
 
   // ----------------------------------------------------------- loader --
@@ -189,10 +224,12 @@ Item {
         // The content travels in the environment, not in argv: this is the
         // user's whole Hyprland config and /proc/<pid>/cmdline is readable by
         // every local account, while /proc/<pid>/environ is not.
+        // BoundedProcess clears the environment again when the run ends, also
+        // when it never starts.
         installLoaderProcess.environment = ({ "ICHI_LOADER_CONTENT": Model.withLoader(current) })
         installLoaderProcess.command = [root.loaderInstallerPath,
           root.hyprlandLuaPath, root.home]
-        installLoaderProcess.running = true
+        installLoaderProcess.start()
       } else {
         root.loaderInstalled = true
       }
@@ -205,43 +242,46 @@ Item {
     }
   }
 
-  Process {
+  // The script's own fail() writes one "ichi: <reason>" line, which is also
+  // what reaches the notification, so a few hundred characters is plenty.
+  // A run that is stopped at the deadline may or may not have renamed the new
+  // file into place, so it is reported as unfinished rather than retried:
+  // `ichi sync` re-reads hyprland.lua and finds out.
+  BoundedProcess {
     id: installLoaderProcess
-    property string errorText: ""
-    stderr: StdioCollector {
-      // The script's own fail() already writes "ichi: <reason>"; kept as-is
-      // here since this is also what reaches the notification.
-      onStreamFinished: installLoaderProcess.errorText = String(text || "").trim()
-    }
-    onExited: (exitCode) => {
-      root.loaderInstalled = exitCode === 0
-      if (exitCode === 0) {
+    deadline: 10000
+    errorLimit: 512
+    onFinished: (outcome, exitCode) => {
+      root.loaderInstalled = outcome === "exited" && exitCode === 0
+      if (root.loaderInstalled) {
         // The one edit Ichi ever makes to a user file; say so when it happens.
-        notifyProcess.running = true
-      } else {
-        var reason = installLoaderProcess.errorText || "ichi: refused to edit hyprland.lua"
-        console.warn(reason)
-        notifyRefusedProcess.command = ["omarchy-notification-send", "-u", "normal",
-          "Ichi did not edit " + root.hyprlandLuaDisplayPath + ": " +
-          reason.replace(/^ichi:\s*/, "") +
-          ". Add the guarded loader line yourself (see the README), or fix this and run `ichi sync`."]
-        notifyRefusedProcess.running = true
+        notifyProcess.start()
+        return
       }
-      installLoaderProcess.errorText = ""
-      // Not kept around any longer than the one run that needs it.
-      installLoaderProcess.environment = ({})
+      var reason = outcome === "failed" ? "the installer could not be started"
+        : outcome === "timedout" ? "the installer did not finish within 10 seconds"
+        : (errorOutput.trim().split("\n")[0] || "refused to edit hyprland.lua").replace(/^ichi:\s*/, "")
+      console.warn("ichi: " + reason)
+      notifyRefusedProcess.command = ["omarchy-notification-send", "-u", "normal",
+        "Ichi did not edit " + root.hyprlandLuaDisplayPath + ": " + Model.clip(reason, 200) +
+        ". Add the guarded loader line yourself (see the README), or fix this and run `ichi sync`."]
+      notifyRefusedProcess.start()
     }
   }
 
-  Process {
+  BoundedProcess {
     id: notifyProcess
     command: ["omarchy-notification-send", "-u", "low",
       "Ichi added one guarded line to " + root.hyprlandLuaDisplayPath +
       " so Hyprland loads it. Remove it any time; it is harmless without the plugin."]
+    deadline: 10000
+    errorLimit: 0
   }
 
-  Process {
+  BoundedProcess {
     id: notifyRefusedProcess
+    deadline: 10000
+    errorLimit: 0
   }
 
   // --------------------------------------------------------- commands --
@@ -282,7 +322,7 @@ Item {
   }
 
   function cmdStatus() {
-    return Model.statusText(root.status)
+    return Model.statusText(root.status, root.lastError)
   }
 
   function cmdStatusJson() {

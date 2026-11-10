@@ -201,9 +201,11 @@ bluetooth and power widgets. Omarchy draws the bar on every monitor, and each
 copy of the widget is about the workspace on its own screen: what it shows,
 what it toggles and what its panel changes all follow the monitor it sits on,
 not wherever the focus happens to be. The panel holds the on/off switch, a
-row of sizes — the defaults first, then your presets — width and height as a
-typed field and a slider, adopt, and the global pause. `+` saves the current
-size as a preset; right-clicking one removes it. The controls stay live on a
+row of sizes — the defaults first, then your presets — width and height as
+− and + buttons and a slider, adopt, and the global pause. `+` saves the
+current size as a preset under a name you type; right-clicking one removes it.
+The name field takes typing only, not paste or an input method; `omarchy-shell
+ichi save_preset "<name>"` saves any name. The controls stay live on a
 workspace that is off, showing what it would get; touching one turns it on.
 
 Under the sizes is a row of aspect ratios — 16:9, 16:10, 3:2, 4:3 and 1:1.
