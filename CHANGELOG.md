@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 — 2026-11-10
 
 1.0: the commands, Lua functions, config file and keys listed under Stability
 in `docs/reference.md` now only change in a major release. The commands
