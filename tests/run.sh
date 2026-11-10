@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Runs every test suite that has a runtime available. tests/nested.sh is the
-# one left out: it needs a running Hyprland session, so it is run by hand.
+# Runs every test suite that has a runtime available. tests/nested.sh and
+# tests/shell.sh are left out: they need a Hyprland session and Quickshell
+# with Omarchy's shell, so they are run by hand before a release.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
