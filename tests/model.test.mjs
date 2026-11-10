@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "Model.js"), "utf8")
   .replace(/^\.pragma library\s*$/m, "")
 const Model = new Function(source + `
-  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, HELP_TEXT, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, SETTING_KINDS, LIMITS, settingProblem, readState, chooseState, wellFormed, workspaceLabel, clip, nameAfterKey, wholeRecords, DISPLAY, PRESET_NAME, MAX_SHORTCUTS, BINDS_OUTPUT_LIMIT }
+  return { defaultConfig, normalizeConfig, parseConfig, needsLoader, withLoader, hyprctlEvalArgs, status, statusText, ichiBinds, HELP_TEXT, LOADER_LINE, LOADER_MARK, NOTIFY_LEVELS, SETTABLE, SETTING_KINDS, LIMITS, settingProblem, readState, chooseState, wellFormed, workspaceLabel, clip, nameAfterKey, wholeRecords, sliderSize, DISPLAY, PRESET_NAME, MAX_SHORTCUTS, BINDS_OUTPUT_LIMIT }
 `)()
 
 let passed = 0
@@ -703,6 +703,16 @@ test("statusText reports the last action that did not reach Hyprland", () => {
   assert.match(Model.statusText(s, "hyprctl did not answer within 5 seconds"), /^Last error\s+hyprctl did not answer/m)
   assert.doesNotMatch(Model.statusText(s, ""), /Last error/)
   assert.doesNotMatch(Model.statusText(s), /Last error/)
+})
+
+test("the sliders show a size entry's own size, and the defaults on an aspect ratio", () => {
+  const config = Model.normalizeConfig({
+    defaults: { width: 60, height: 80 },
+    monitors: { "DP-1": { width: 70 } },
+  })
+  assert.deepEqual(Model.sliderSize({ mode: "size", width: 40, height: 50 }, config, null), { width: 40, height: 50 })
+  assert.deepEqual(Model.sliderSize({ mode: "aspect", ratio: [16, 9] }, config, null), { width: 60, height: 80 })
+  assert.deepEqual(Model.sliderSize({ mode: "aspect", ratio: [16, 9] }, config, { name: "DP-1", description: "" }), { width: 70, height: 80 })
 })
 
 console.log(passed + " passed")

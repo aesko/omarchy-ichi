@@ -91,14 +91,18 @@ Panel {
   readonly property int stepPoints: ready && ichiStatus.settings ? ichiStatus.settings.step : 5
   readonly property int fineStepPoints: ready && ichiStatus.settings ? ichiStatus.settings.fine_step : 1
 
-  // Aspect entries have no percentage, so the sliders stand down for them.
+  // The bar label shows a ratio as the ratio, not as a size.
   readonly property bool sizeMode: !!(resolved && resolved.mode === "size")
   // Adopt needs a fixed size to copy out; following the defaults or an aspect
   // ratio gives it nothing to do.
   readonly property bool canAdopt: !!(entry && entry.mode === "size")
   readonly property bool aspectMode: !!(resolved && resolved.mode === "aspect")
-  readonly property int sizeWidth: sizeMode ? resolved.width : 0
-  readonly property int sizeHeight: sizeMode ? resolved.height : 0
+  // What the sliders show. On an aspect ratio, which has no percentage, they
+  // stay live at the defaults for this monitor, the way they do on a
+  // workspace that is off: touching one switches it to that size.
+  readonly property var sliderSize: ready ? Model.sliderSize(resolved, ichiService.config, screenMonitor) : null
+  readonly property int sizeWidth: sliderSize ? sliderSize.width : 0
+  readonly property int sizeHeight: sliderSize ? sliderSize.height : 0
 
   readonly property string glyph: ""
   // Mirrors manifest.json's barWidget.defaults.
@@ -368,9 +372,8 @@ Panel {
           }
         }
 
-        // The other way to say what shape this workspace is. A selected chip
-        // here is why the sliders below are absent, which is what the line of
-        // explanation that used to sit here had to say in words.
+        // The other way to say what shape this workspace is. The sliders
+        // below stay; touching one leaves the ratio for that size.
         Flow {
           Layout.fillWidth: true
           Layout.preferredHeight: implicitHeight
@@ -393,7 +396,7 @@ Panel {
         ColumnLayout {
           Layout.fillWidth: true
           spacing: Style.space(6)
-          visible: root.sizeMode
+          visible: !!root.resolved
 
           // Steppers rather than the kit's NumberField, whose editable text
           // input reads the clipboard on paste; the sliders below them give

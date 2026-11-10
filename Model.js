@@ -341,6 +341,16 @@ function defaultsFor(config, monitor) {
 }
 
 // A default entry is shown with what it currently amounts to on this monitor.
+// The width and height the panel's sliders show. A size entry has its own.
+// An aspect ratio has none, so they show what touching one gives: the
+// defaults for this monitor, which is also what the arrow keys switch an
+// aspect workspace to.
+function sliderSize(resolved, config, monitor) {
+  if (resolved && resolved.mode === "size") return { width: resolved.width, height: resolved.height }
+  var d = defaultsFor(config, monitor)
+  return { width: d.width, height: d.height }
+}
+
 function resolve(entry, config, monitor) {
   if (entry && entry.mode === "default") {
     var d = defaultsFor(config, monitor)

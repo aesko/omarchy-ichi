@@ -209,9 +209,10 @@ ichi save_preset "<name>"` saves any name. The controls stay live on a
 workspace that is off, showing what it would get; touching one turns it on.
 
 Under the sizes is a row of aspect ratios — 16:9, 16:10, 3:2, 4:3 and 1:1.
-Picking one switches this workspace to that shape, which is why the sliders
-stand down for it; `default` or a preset brings them back. Any other ratio is
-`omarchy-shell ichi aspect 21 9`.
+Picking one switches this workspace to that shape. The sliders stay, set to
+the defaults, and touching one switches the workspace to that size instead,
+the same as the arrow keys. Any other ratio is `omarchy-shell ichi aspect
+21 9`.
 
 The cog turns the panel over. On the back are the widget's own settings — what
 it shows in the bar and what left click does — then Ichi's notifications and

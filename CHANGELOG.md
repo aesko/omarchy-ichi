@@ -16,6 +16,10 @@ deadline and a limit on what it reads back. Nothing to do.
 - **Long names are cut short where they are drawn**, with an ellipsis: preset
   names at 32 characters, workspace and display names at 24. They are stored,
   matched and passed to commands whole.
+- **The width and height sliders stay on an aspect ratio.** They show the
+  defaults, and touching one switches the workspace to that size, as the arrow
+  keys already did. Before, picking a ratio hid them until you chose `default`
+  or a preset.
 
 ### Fixed
 
