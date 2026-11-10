@@ -2,7 +2,42 @@
 
 ## Unreleased
 
-Two fixes for Omarchy 4.5. Nothing to do unless you use more than one monitor.
+1.0: the commands, Lua functions, config file and keys listed under Stability
+in `docs/reference.md` now only change in a major release. The commands
+deprecated in 0.7 are gone, and two fixes for Omarchy 4.5 come with it.
+Nothing to do unless a script, binding or menu entry of yours still calls one
+of the removed commands, or you use more than one monitor.
+
+### Removed
+
+- **The commands deprecated in 0.7.** Calling one now prints `Function not
+  found.` and does nothing. Instead:
+
+  | Removed | Instead |
+  |---|---|
+  | `adjust 5 0` | `nudge 1 0`, or `size` |
+  | `defaults 65 85` | `set defaults.width 65`, `set defaults.height 85` |
+  | `max 1800 0` | `set defaults.max_width 1800`, `set defaults.max_height 0` |
+  | `align 50 40` | `set defaults.align_x 50`, `set defaults.align_y 40` |
+  | `step 10`, `fine_step 2` | `set settings.step 10`, `set settings.fine_step 2` |
+  | `windows 2` | `set settings.max_windows 2` |
+  | `all on` | `set settings.all_workspaces on` |
+  | `notify never` | `set settings.notify never` |
+  | `min 10` | nothing: the smallest size has been fixed at 10% since 0.7 |
+- **Their Lua functions**: `ichi.adjust`, `set_defaults`, `set_max`,
+  `set_align`, `set_step`, `set_min_percent`, `set_max_windows`,
+  `set_all_workspaces` and `set_notify`. Call `ichi.set(key, value)` or
+  `ichi.nudge` instead. A binding that calls a removed function fails when
+  pressed.
+
+### Changed
+
+- **The Stability section covers two more things**: where the config file
+  lives, including the pre-0.7 `~/.config/omarchy/ichi.json`, which now keeps
+  working through every 1.x release; and what a workspace key names, which is
+  Hyprland's name for the workspace. Which Hyprland and Omarchy versions Ichi
+  needs stays in the README, and a release that raises them says so here.
+- Tested on Omarchy 4.5 with Hyprland 0.56.2.
 
 ### Fixed
 
