@@ -640,6 +640,16 @@ test("no Ichi QML file creates a native text input, which would read the clipboa
   }
 })
 
+test("Ichi's QML names Omarchy's palette Commons.Color, never a bare Color", () => {
+  // Qt 6.12 added a QtQuick Color type, and a bare Color now resolves to it
+  // rather than to qs.Commons, so Color.foreground reads as undefined.
+  // Omarchy's own QML always writes Commons.Color.
+  for (const [file, text] of ichiQml()) {
+    const code = text.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n")
+    assert.doesNotMatch(code, /(^|[^.\w])Color\.[a-z]/m, file)
+  }
+})
+
 test("every Text in Ichi's QML renders plain text", () => {
   for (const [file, text] of ichiQml()) {
     const lines = text.split("\n")

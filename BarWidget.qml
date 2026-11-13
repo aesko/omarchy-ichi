@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -266,7 +267,7 @@ Panel {
             textFormat: Text.PlainText
             Layout.fillWidth: true
             text: root.workspaceKey === "" ? "Ichi" : "Workspace " + root.workspaceLabel
-            color: root.bar ? root.bar.foreground : Color.foreground
+            color: root.bar ? root.bar.foreground : Commons.Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.body
             elide: Text.ElideRight
@@ -274,14 +275,14 @@ Panel {
 
           ToggleSwitch {
             checked: root.onHere
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onToggled: root.call("cmdToggle")
           }
 
           PanelActionButton {
             iconText: "󰒓"
             tooltipText: "Settings and shortcuts"
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onClicked: root.showSettings(true)
           }
         }
@@ -290,7 +291,7 @@ Panel {
           textFormat: Text.PlainText
           Layout.fillWidth: true
           text: root.summary
-          color: root.bar ? root.bar.foreground : Color.foreground
+          color: root.bar ? root.bar.foreground : Commons.Color.foreground
           opacity: 0.6
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
@@ -302,7 +303,7 @@ Panel {
           Layout.fillWidth: true
           visible: root.lastError !== ""
           text: "Not applied: " + root.lastError
-          color: root.bar ? root.bar.foreground : Color.foreground
+          color: root.bar ? root.bar.foreground : Commons.Color.foreground
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
           wrapMode: Text.WordWrap
@@ -323,7 +324,7 @@ Panel {
           Layout.fillWidth: true
           visible: root.naming
           placeholderText: "name this size, Enter to save"
-          foreground: root.bar ? root.bar.foreground : Color.foreground
+          foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
           onAccepted: root.commitName()
           onEscaped: root.cancelName()
           // Typing over an existing name updates that preset, which is what
@@ -342,7 +343,7 @@ Panel {
             // are user data and are never transformed for display.
             text: "default"
             selected: !!(root.entry && root.entry.mode === "default")
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onClicked: root.call("cmdUseDefaults")
           }
 
@@ -354,7 +355,7 @@ Panel {
               text: Model.clip(modelData, Model.DISPLAY.name)
               selected: modelData === root.presetName
               tooltipText: "Right click to remove"
-              foreground: root.bar ? root.bar.foreground : Color.foreground
+              foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
               onClicked: root.call("cmdPreset", modelData)
               onRightClicked: if (root.ichiService) root.ichiService.cmdRemovePreset(modelData, true)
             }
@@ -367,7 +368,7 @@ Panel {
             tooltipText: root.canSave
               ? "Save this size as a preset"
               : "Turn Ichi on here to save a preset"
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onClicked: root.startName()
           }
         }
@@ -387,7 +388,7 @@ Panel {
               required property var modelData
               text: modelData[0] + ":" + modelData[1]
               selected: root.isAspect(modelData[0], modelData[1])
-              foreground: root.bar ? root.bar.foreground : Color.foreground
+              foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
               onClicked: root.call("cmdAspect", modelData[0], modelData[1])
             }
           }
@@ -407,7 +408,7 @@ Panel {
             from: root.minPercent
             to: 100
             stepSize: 1
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onModified: function (v) { root.applySizeOf(v, Math.round(heightSlider.liveValue)) }
           }
 
@@ -430,7 +431,7 @@ Panel {
             from: root.minPercent
             to: 100
             stepSize: 1
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onModified: function (v) { root.applySizeOf(Math.round(widthSlider.liveValue), v) }
           }
 
@@ -459,7 +460,7 @@ Panel {
             // one. Greyed rather than refusing, now that the panel is silent.
             enabled: root.canAdopt
             opacity: root.canAdopt ? 1 : 0.4
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onClicked: root.call("cmdAdopt", "")
           }
 
@@ -467,7 +468,7 @@ Panel {
             text: "Adopt on monitor"
             enabled: root.canAdopt
             opacity: root.canAdopt ? 1 : 0.4
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onClicked: root.call("cmdAdopt", "monitor")
           }
         }
@@ -485,14 +486,14 @@ Panel {
             textFormat: Text.PlainText
             Layout.fillWidth: true
             text: root.monitorName === "" ? "Run on this monitor" : "Run on " + root.monitorName
-            color: root.bar ? root.bar.foreground : Color.foreground
+            color: root.bar ? root.bar.foreground : Commons.Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.body
           }
 
           ToggleSwitch {
             checked: root.monitorOn
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onToggled: root.call("cmdMonitorToggle")
           }
         }
@@ -505,14 +506,14 @@ Panel {
             textFormat: Text.PlainText
             Layout.fillWidth: true
             text: "Pause everywhere"
-            color: root.bar ? root.bar.foreground : Color.foreground
+            color: root.bar ? root.bar.foreground : Commons.Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.body
           }
 
           ToggleSwitch {
             checked: root.paused
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             // Pause is not about any workspace, so it works before this
             // copy has found its monitor.
             onToggled: if (root.ichiService) root.ichiService.cmdPauseToggle(true)
@@ -548,7 +549,7 @@ Panel {
             PanelActionButton {
               iconText: "󰁍"
               tooltipText: "Back"
-              foreground: root.bar ? root.bar.foreground : Color.foreground
+              foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
               onClicked: root.showSettings(false)
             }
 
@@ -556,7 +557,7 @@ Panel {
               textFormat: Text.PlainText
               Layout.fillWidth: true
               text: "Ichi"
-              color: root.bar ? root.bar.foreground : Color.foreground
+              color: root.bar ? root.bar.foreground : Commons.Color.foreground
               font.family: Style.font.family
               font.pixelSize: Style.font.body
               elide: Text.ElideRight
@@ -566,7 +567,7 @@ Panel {
           PanelSectionHeader {
             Layout.fillWidth: true
             text: "Bar widget"
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
           }
 
           // The widget's own settings, the same keys Omarchy's bar settings
@@ -577,7 +578,7 @@ Panel {
             Layout.fillWidth: true
             label: "Show in the bar"
             options: ["Icon only", "Icon and size", "Icon and preset"]
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onChanged: function (choice) { root.persistSettings({ display: choice }) }
 
             // A Binding element rather than an inline one, which Dropdown's
@@ -589,7 +590,7 @@ Panel {
             Layout.fillWidth: true
             label: "Left click"
             options: ["Open panel", "Toggle"]
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onChanged: function (choice) { root.persistSettings({ clickAction: choice }) }
 
             Binding on value { value: root.clickAction }
@@ -602,7 +603,7 @@ Panel {
           PanelSectionHeader {
             Layout.fillWidth: true
             text: "Behaviour"
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
           }
 
           // Labels for the stored levels: "changes" reports everything but
@@ -613,7 +614,7 @@ Panel {
             Layout.fillWidth: true
             label: "Notifications"
             options: [labels.never, labels.changes, labels.always]
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onChanged: function (choice) {
               for (var level in labels) {
                 if (labels[level] === choice && root.ichiService) root.ichiService.cmdSet("settings.notify", level, true)
@@ -630,7 +631,7 @@ Panel {
             from: 1
             to: 25
             stepSize: 1
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onModified: function (v) { if (root.ichiService) root.ichiService.cmdSet("settings.step", v, true) }
           }
 
@@ -640,7 +641,7 @@ Panel {
             from: 1
             to: 25
             stepSize: 1
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
             onModified: function (v) { if (root.ichiService) root.ichiService.cmdSet("settings.fine_step", v, true) }
           }
 
@@ -649,7 +650,7 @@ Panel {
           PanelSectionHeader {
             Layout.fillWidth: true
             text: "Shortcuts"
-            foreground: root.bar ? root.bar.foreground : Color.foreground
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
           }
 
           // Whatever the user bound and described as Ichi's. Plugins cannot
@@ -662,7 +663,7 @@ Panel {
             text: root.shortcutsFailed
               ? "Couldn't read the keybindings from hyprctl this time; they're listed again the next time this page opens."
               : "No Ichi keybindings yet. Bindings whose description starts with “Ichi:” show up here; the README has a set to paste."
-            color: root.bar ? root.bar.foreground : Color.foreground
+            color: root.bar ? root.bar.foreground : Commons.Color.foreground
             opacity: 0.6
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -682,7 +683,7 @@ Panel {
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignTop
                 text: modelData.action
-                color: root.bar ? root.bar.foreground : Color.foreground
+                color: root.bar ? root.bar.foreground : Commons.Color.foreground
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
                 // Wrapped rather than elided: with four modifiers spelled out
@@ -695,7 +696,7 @@ Panel {
                 textFormat: Text.PlainText
                 Layout.alignment: Qt.AlignTop
                 text: modelData.keys
-                color: root.bar ? root.bar.foreground : Color.foreground
+                color: root.bar ? root.bar.foreground : Commons.Color.foreground
                 opacity: 0.6
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
