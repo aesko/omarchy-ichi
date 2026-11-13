@@ -147,6 +147,28 @@ open 2
 check "a second tiled window restores the normal gaps" plain 2
 close 2
 check "closing it brings the inset back" inset 2
+
+# A ratio, then the same ratio at half its size. The nested session has no
+# bar, so the box is the monitor less the gaps. At full size the base gaps
+# trim the side that fills the monitor, so the ratio is checked at 50.
+box_ratio() { hc monitors -j | jq --argjson g "$(gaps 2)" '.[0] | ((.width / .scale) - $g[1] - $g[3]) / ((.height / .scale) - $g[0] - $g[2])'; }
+near43() { local r; r=$(box_ratio); awk -v r="$r" 'BEGIN { exit !(r > 1.32 && r < 1.35) }'; }
+hc eval 'ichi.set_aspect(4, 3, "2")' >/dev/null
+DETAIL='echo "gaps $(gaps 2)"' check "an aspect workspace is inset" inset 2
+full=$(gaps 2)
+hc eval 'ichi.set_scale(50, "2")' >/dev/null
+grown() { local g; g=$(gaps 2); [[ $g != "$full" ]] && jq -en --argjson a "$full" --argjson b "$g" '$b[0] > $a[0] and $b[1] > $a[1] and $b[2] > $a[2] and $b[3] > $a[3]' >/dev/null; }
+DETAIL='echo "gaps $full, then $(gaps 2)"' check "at scale 50 it shrinks on every side" grown
+DETAIL='echo "gaps $(gaps 2), ratio $(box_ratio)"' check "and is 4:3" near43
+# A nudge of no steps leaves the ratio for a size at the box's own share of
+# the screen, so the gaps stay within a rounding of where they were.
+half=$(gaps 2)
+hc eval 'ichi.nudge(0, 0, false, "2")' >/dev/null
+same_box() { jq -en --argjson a "$half" --argjson b "$(gaps 2)" '[range(4)] | all(($a[.] - $b[.]) | fabs < 15)' >/dev/null; }
+switched() { jq -e '.workspaces["2"].mode == "size"' "$HOME_DIR/.config/ichi/ichi.json" >/dev/null; }
+check "a nudge on a ratio switches it to a size" switched
+DETAIL='echo "gaps $half, then $(gaps 2)"' check "starting from the box on screen" same_box
+hc eval 'ichi.reset("2")' >/dev/null
 focus 4
 open 4
 check "a workspace that is off keeps its normal gaps" test "$(gaps 4)" = null -o "$(gaps 4)" = "[10,10,10,10]"

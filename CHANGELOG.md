@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+An aspect ratio can be sized and keep its shape. Nothing to do.
+
+### Added
+
+- **`scale` on an aspect entry**: the box at a percent of the largest of its
+  ratio, 10–100. Left out, it is 100, which is the box every ratio had until
+  now, and a file without it is written back unchanged. `omarchy-shell ichi
+  scale 80` sets it, `scale_nudge 1` and `scale_nudge -1` step it, and
+  `scale_nudge_fine` steps it finely; from Lua, `ichi.set_scale(p)` and
+  `ichi.nudge_scale(d, fine)`. They have no keys by default; the README has
+  bindings to copy. On a workspace without a ratio they change nothing and say
+  why.
+- **On a ratio, the panel shows one Size slider** in place of width and
+  height, and it keeps the ratio.
+
+### Changed
+
+- **Picking another ratio keeps the scale** of a workspace that already has
+  one. Presets keep their scale, and match on it.
+- **The first arrow-key nudge on a ratio starts from the box on screen**, not
+  from the defaults, so it is one step from what you see. It still leaves the
+  ratio for a free size.
+
+### Fixed
+
+- The panel's controls fell back to an undefined colour when the widget had no
+  bar to take one from: Qt 6.12's own `Color` type had taken the name.
+
 ## 1.0.1 — 2026-11-10
 
 The panel no longer reads the clipboard, and every program Ichi runs now has a

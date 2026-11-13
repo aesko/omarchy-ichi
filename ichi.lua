@@ -2,12 +2,13 @@
 --
 -- On an opted-in workspace holding one tiled window (or up to
 -- settings.max_windows of them), widen that workspace's outer gaps so the
--- window occupies a percentage of the usable area (size mode) or the largest
--- box of a given aspect ratio (aspect mode). One tiled window more than that
--- restores normal gaps. A tabbed group counts as one, since it occupies one
--- tile however many windows it holds. Floating windows are neither
--- counted nor touched. Nothing here floats or moves a window: a tiled window
--- reflows on its own after a monitor teardown, which is the point.
+-- window occupies a percentage of the usable area (size mode) or a box of a
+-- given aspect ratio, at a percentage of the largest that fits (aspect mode).
+-- One tiled window more than that restores normal gaps. A tabbed group
+-- counts as one, since it occupies one tile however many windows it holds.
+-- Floating windows are neither counted nor touched. Nothing here floats or
+-- moves a window: a tiled window reflows on its own after a monitor teardown,
+-- which is the point.
 --
 -- Loaded by a guarded dofile line in ~/.config/hypr/hyprland.lua that the
 -- shell plugin installs. Everything hangs off the global `ichi` table so
@@ -76,7 +77,8 @@ local function clamp(value, lo, hi)
 end
 
 -- Entry shapes: { mode = "default" } follows the defaults (JSON `true`),
--- "size" is a share of the usable area, "aspect" a ratio.
+-- "size" is a share of the usable area, "aspect" a ratio at a scale: the
+-- percent of the largest box of that ratio, 100 when the file leaves it out.
 function M.normalize_entry(entry, defaults)
   defaults = defaults or M.config.defaults
   if entry == true then
@@ -95,7 +97,8 @@ function M.normalize_entry(entry, defaults)
     if not rw or not rh or rw <= 0 or rh <= 0 then
       return nil
     end
-    return { mode = "aspect", ratio_w = rw, ratio_h = rh }
+    local scale = clamp(math.floor(tonumber(entry.scale) or 100), M.limits.min, M.limits.max)
+    return { mode = "aspect", ratio_w = rw, ratio_h = rh, scale = scale }
   end
 
   return {
@@ -188,29 +191,29 @@ function M.logical_size(mon)
   return w, h
 end
 
--- Outer gaps that leave a box of the requested shape in a usable area, centred
--- unless align_x or align_y on the entry say otherwise (0 is the left or top
--- edge, 100 the right or bottom). Never smaller than the base gaps, so an
--- inset of 100% is exactly normal. A positive max_width or max_height caps
--- the box in pixels; an aspect box shrinks on both sides to keep its ratio.
-function M.gaps_for(usable_w, usable_h, entry, base)
+-- The box an entry asks for in a usable area, in the same units. A positive
+-- max_width or max_height caps it in pixels; an aspect box is the largest of
+-- its ratio that fits, at its scale, and a cap shrinks it on both sides to
+-- keep the ratio.
+function M.box_for(usable_w, usable_h, entry)
   local box_w, box_h
   local max_w, max_h = entry.max_width or 0, entry.max_height or 0
   if entry.mode == "aspect" then
-    local fit_w, fit_h = usable_w, usable_h
+    if usable_w * entry.ratio_h > usable_h * entry.ratio_w then
+      box_h = usable_h
+      box_w = usable_h * entry.ratio_w / entry.ratio_h
+    else
+      box_w = usable_w
+      box_h = usable_w * entry.ratio_h / entry.ratio_w
+    end
+    local shrink = (entry.scale or 100) / 100
     if max_w > 0 then
-      fit_w = math.min(fit_w, max_w)
+      shrink = math.min(shrink, max_w / box_w)
     end
     if max_h > 0 then
-      fit_h = math.min(fit_h, max_h)
+      shrink = math.min(shrink, max_h / box_h)
     end
-    if fit_w * entry.ratio_h > fit_h * entry.ratio_w then
-      box_h = fit_h
-      box_w = fit_h * entry.ratio_w / entry.ratio_h
-    else
-      box_w = fit_w
-      box_h = fit_w * entry.ratio_h / entry.ratio_w
-    end
+    box_w, box_h = box_w * shrink, box_h * shrink
   else
     box_w = usable_w * entry.width / 100
     box_h = usable_h * entry.height / 100
@@ -221,6 +224,24 @@ function M.gaps_for(usable_w, usable_h, entry, base)
       box_h = math.min(box_h, max_h)
     end
   end
+  return box_w, box_h
+end
+
+-- A monitor's area less what bars and panels reserve, in the units gaps are
+-- laid out in.
+function M.usable_size(mon)
+  local reserved = mon.reserved or {}
+  local logical_w, logical_h = M.logical_size(mon)
+  return logical_w - (reserved.left or 0) - (reserved.right or 0),
+    logical_h - (reserved.top or 0) - (reserved.bottom or 0)
+end
+
+-- Outer gaps that leave the entry's box in a usable area, centred unless
+-- align_x or align_y on the entry say otherwise (0 is the left or top edge,
+-- 100 the right or bottom). Never smaller than the base gaps, so an inset of
+-- 100% is exactly normal.
+function M.gaps_for(usable_w, usable_h, entry, base)
+  local box_w, box_h = M.box_for(usable_w, usable_h, entry)
 
   local slack_w, slack_h = usable_w - box_w, usable_h - box_h
   local left = math.floor(slack_w * (entry.align_x or 50) / 100)
@@ -273,6 +294,7 @@ local function parse_entry(body, defaults)
     height = number_field(body, "height"),
     ratio_w = rw,
     ratio_h = rh,
+    scale = number_field(body, "scale"),
   }, defaults)
 end
 
@@ -439,7 +461,11 @@ function M.encode_entry(e)
   elseif e.mode == "default" then
     return "true"
   elseif e.mode == "aspect" then
-    return string.format('{ "mode": "aspect", "ratio": [%g, %g] }', e.ratio_w, e.ratio_h)
+    -- Left out at 100, so a file from before 1.1 is written back unchanged.
+    if (e.scale or 100) == 100 then
+      return string.format('{ "mode": "aspect", "ratio": [%g, %g] }', e.ratio_w, e.ratio_h)
+    end
+    return string.format('{ "mode": "aspect", "ratio": [%g, %g], "scale": %d }', e.ratio_w, e.ratio_h, e.scale)
   end
   return string.format('{ "mode": "size", "width": %d, "height": %d }', e.width, e.height)
 end
@@ -901,7 +927,8 @@ local function describe(id, entry)
   entry = M.resolve(entry, workspace_monitor(id))
   local label = M.workspace_label(id)
   if entry.mode == "aspect" then
-    return string.format("Ichi: workspace %s at %g:%g%s", label, entry.ratio_w, entry.ratio_h, suffix)
+    local scale = (entry.scale or 100) == 100 and "" or string.format(", %d%%", entry.scale)
+    return string.format("Ichi: workspace %s at %g:%g%s%s", label, entry.ratio_w, entry.ratio_h, scale, suffix)
   end
   return string.format("Ichi: workspace %s at %d%% x %d%%%s", label, entry.width, entry.height, suffix)
 end
@@ -1003,10 +1030,7 @@ function M.apply(id)
   -- Percentages are of the usable area, so the bar's reserved strip does not
   -- push the window off-centre and the proportion holds on any monitor.
   local mon = tiled.monitor
-  local reserved = mon.reserved or {}
-  local logical_w, logical_h = M.logical_size(mon)
-  local usable_w = logical_w - (reserved.left or 0) - (reserved.right or 0)
-  local usable_h = logical_h - (reserved.top or 0) - (reserved.bottom or 0)
+  local usable_w, usable_h = M.usable_size(mon)
 
   -- Named keys are mandatory here: a positional array is silently misparsed.
   hl.workspace_rule({ workspace = selector, gaps_out = M.gaps_for(usable_w, usable_h, M.resolve(entry, mon), base) })
@@ -1114,19 +1138,37 @@ function M.toggle(id)
   end
 end
 
+-- The size entry a nudge starts from. A size entry is its own. An aspect
+-- ratio becomes the share of the screen its box has now, so the first press
+-- is one step from what is on screen; the ratio itself is left behind. A
+-- workspace that is off, or an aspect workspace whose monitor is not known,
+-- starts from the defaults.
+local function size_to_nudge(id)
+  local mon = workspace_monitor(id)
+  local entry = M.resolve(M.entry_for(id), mon)
+  if entry ~= nil and entry.mode == "size" then
+    return entry
+  end
+  local out = M.resolve({ mode = "default" }, mon)
+  if entry ~= nil and entry.mode == "aspect" and mon ~= nil then
+    local usable_w, usable_h = M.usable_size(mon)
+    if usable_w > 0 and usable_h > 0 then
+      local box_w, box_h = M.box_for(usable_w, usable_h, entry)
+      out.width = clamp(math.floor(box_w / usable_w * 100 + 0.5), M.limits.min, M.limits.max)
+      out.height = clamp(math.floor(box_h / usable_h * 100 + 0.5), M.limits.min, M.limits.max)
+    end
+  end
+  return out
+end
+
 -- What nudge does, in points. Nudging an aspect-mode or disabled workspace
--- turns it into size mode from the defaults, so the arrow keys always do
--- something visible.
+-- turns it into size mode, so the arrow keys always do something visible.
 local function adjust(delta_width, delta_height, id)
   id = key_of(id)
   if id == nil then
     return
   end
-  local mon = workspace_monitor(id)
-  local entry = M.resolve(M.entry_for(id), mon)
-  if entry == nil or entry.mode ~= "size" then
-    entry = M.resolve({ mode = "default" }, mon)
-  end
+  local entry = size_to_nudge(id)
   entry.width = clamp(entry.width + (delta_width or 0), M.limits.min, M.limits.max)
   entry.height = clamp(entry.height + (delta_height or 0), M.limits.min, M.limits.max)
   commit(id, entry, describe(id, entry), "always")
@@ -1156,16 +1198,49 @@ function M.nudge(dir_width, dir_height, fine, id)
   adjust((dir_width or 0) * step, (dir_height or 0) * step, id)
 end
 
+-- A workspace that already has a ratio keeps its scale, so switching between
+-- ratios does not reset the size.
 function M.set_aspect(ratio_w, ratio_h, id)
   id = key_of(id)
   if id == nil then
     return
   end
-  local entry = M.normalize_entry({ mode = "aspect", ratio_w = ratio_w, ratio_h = ratio_h })
+  local current = M.entry_for(id)
+  local scale = current and current.mode == "aspect" and current.scale or 100
+  local entry = M.normalize_entry({ mode = "aspect", ratio_w = ratio_w, ratio_h = ratio_h, scale = scale })
   if entry == nil then
     return
   end
   commit(id, entry, describe(id, entry))
+end
+
+-- An aspect workspace's scale: the percent of the largest box of its ratio.
+-- Anything else has no ratio to scale, and hears so rather than being
+-- switched to one.
+local function change_scale(id, to)
+  id = key_of(id)
+  if id == nil then
+    return
+  end
+  local current = M.entry_for(id)
+  if current == nil or current.mode ~= "aspect" then
+    notify(string.format("Ichi: workspace %s is not an aspect ratio, so it has no scale", M.workspace_label(id)))
+    return
+  end
+  local entry = M.normalize_entry({ mode = "aspect", ratio_w = current.ratio_w, ratio_h = current.ratio_h,
+    scale = clamp(math.floor(to(current.scale or 100)), M.limits.min, M.limits.max) })
+  commit(id, entry, describe(id, entry), "always")
+end
+
+function M.set_scale(percent, id)
+  change_scale(id, function(current) return tonumber(percent) or current end)
+end
+
+-- Directions as -1 or 1, scaled by the step, or the fine step when `fine` is
+-- set, as nudge does.
+function M.nudge_scale(dir, fine, id)
+  local step = fine and M.config.settings.fine_step or M.config.settings.step
+  change_scale(id, function(current) return current + (tonumber(dir) or 0) * step end)
 end
 
 -- Back to following the defaults. Unlike reset(), this works on a workspace
@@ -1310,7 +1385,7 @@ local function same_entry(a, b)
     return false
   end
   if a.mode == "aspect" then
-    return a.ratio_w == b.ratio_w and a.ratio_h == b.ratio_h
+    return a.ratio_w == b.ratio_w and a.ratio_h == b.ratio_h and (a.scale or 100) == (b.scale or 100)
   end
   return a.mode == "default" or (a.width == b.width and a.height == b.height)
 end

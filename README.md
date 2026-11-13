@@ -159,6 +159,27 @@ turns it on. The plain arrows move by `step` (5 points) and the shifted ones
 by `fine_step` (1 point). The quickest way to a default you like: turn a
 workspace on, tune it with the arrows, then press adopt.
 
+On an aspect-ratio workspace the arrows leave the ratio for a free size,
+starting from the box you see. Sizing a ratio and keeping its shape has
+commands but no keys by default; if you want them, these sit beside the ones
+above, with a key that switches to 4:3:
+
+```lua
+o.bind("SUPER + CTRL + ALT + EQUAL", "Ichi: bigger ratio", function()
+  if ichi then ichi.nudge_scale(1) end
+end, { repeating = true })
+o.bind("SUPER + CTRL + ALT + MINUS", "Ichi: smaller ratio", function()
+  if ichi then ichi.nudge_scale(-1) end
+end, { repeating = true })
+o.bind("SUPER + CTRL + ALT + 4", "Ichi: 4:3", function()
+  if ichi then ichi.set_aspect(4, 3) end
+end)
+```
+
+With that, `SUPER+CTRL+ALT+4` goes to the ratio and `SUPER+CTRL+ALT+O` back to
+the defaults. A ratio saved as a preset keeps its size, so the preset key
+reaches it too.
+
 Keep the `Ichi:` prefix on the descriptions. The panel's shortcut list matches
 on it, and a Lua bind gives Hyprland nothing else to match — it reports an
 opaque `__lua` dispatcher, so your description is the only link between a key
@@ -209,9 +230,9 @@ ichi save_preset "<name>"` saves any name. The controls stay live on a
 workspace that is off, showing what it would get; touching one turns it on.
 
 Under the sizes is a row of aspect ratios — 16:9, 16:10, 3:2, 4:3 and 1:1.
-Picking one switches this workspace to that shape. The sliders stay, set to
-the defaults, and touching one switches the workspace to that size instead,
-the same as the arrow keys. Any other ratio is `omarchy-shell ichi aspect
+Picking one switches this workspace to that shape, and a Size slider takes the
+place of width and height: it scales the box and keeps the ratio. Default or a
+size preset leaves the ratio. Any other ratio is `omarchy-shell ichi aspect
 21 9`.
 
 The cog turns the panel over. On the back are the widget's own settings — what
@@ -248,6 +269,7 @@ omarchy-shell ichi toggle
 omarchy-shell ichi nudge -1 0     # one step narrower
 omarchy-shell ichi size 65 85     # an absolute size for this workspace
 omarchy-shell ichi aspect 4 3     # switch this workspace to 4:3
+omarchy-shell ichi scale 80       # that ratio at 80% of the largest box
 omarchy-shell ichi preset reading
 omarchy-shell ichi adopt          # this workspace's size becomes the default
 omarchy-shell ichi pause on       # suspend every inset; pause off to resume

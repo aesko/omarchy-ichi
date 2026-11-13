@@ -14,7 +14,8 @@ import Quickshell.Io
 // Two constraints shape the functions. The IPC layer requires every declared
 // argument, so a command with an optional argument is two functions here
 // (adopt and adopt_monitor, cycle and cycle_back, step and fine_step, nudge
-// and nudge_fine). And arguments arrive as strings, so the cmd* side coerces.
+// and nudge_fine, scale_nudge and scale_nudge_fine). And arguments arrive as
+// strings, so the cmd* side coerces.
 Item {
   id: wrapper
 
@@ -84,6 +85,22 @@ Item {
     // The same, scaled by the fine step.
     function nudge_fine(width: string, height: string): void {
       wrapper.api.cmdNudge(width, height, true)
+    }
+
+    // An aspect workspace's size, in percent of the largest box of its
+    // ratio; e.g. scale 80.
+    function scale(percent: string): void {
+      wrapper.api.cmdScale(percent)
+    }
+
+    // A step bigger (1) or smaller (-1), keeping the ratio.
+    function scale_nudge(direction: string): void {
+      wrapper.api.cmdScaleNudge(direction, false)
+    }
+
+    // The same, scaled by the fine step.
+    function scale_nudge_fine(direction: string): void {
+      wrapper.api.cmdScaleNudge(direction, true)
     }
 
 

@@ -21,6 +21,9 @@ omarchy-shell ichi nudge -1 0                     # one step narrower
 omarchy-shell ichi nudge_fine 0 1                 # one fine step taller
 omarchy-shell ichi size 65 85                     # an absolute size for this workspace
 omarchy-shell ichi aspect 4 3                     # switch this workspace to 4:3
+omarchy-shell ichi scale 80                       # a ratio at 80% of the largest box
+omarchy-shell ichi scale_nudge -1                 # one step smaller, keeping the ratio
+omarchy-shell ichi scale_nudge_fine 1             # one fine step bigger
 omarchy-shell ichi preset reading                 # give this workspace a preset
 omarchy-shell ichi cycle                          # next preset
 omarchy-shell ichi cycle_back                     # the previous one
@@ -66,6 +69,7 @@ in on a session without Omarchy:
 ichi.toggle()                  ichi.reset()
 ichi.nudge(dx, dy, fine)       ichi.set_size(w, h)
 ichi.set_aspect(w, h)          ichi.adopt_defaults(id, scope)
+ichi.set_scale(p)              ichi.nudge_scale(d, fine)
 ichi.preset(name)              ichi.cycle(delta)
 ichi.save_preset(name)         ichi.remove_preset(name)
 ichi.set(key, value)           ichi.set_paused(on)
@@ -137,7 +141,7 @@ then run `hyprctl reload` and `omarchy restart shell`.
     "1": true,
     "code": { "mode": "aspect", "ratio": [4, 3] },
     "2": { "mode": "size", "width": 70, "height": 80 },
-    "5": { "mode": "aspect", "ratio": [4, 3] }
+    "5": { "mode": "aspect", "ratio": [4, 3], "scale": 80 }
   }
 }
 ```
@@ -145,7 +149,8 @@ then run `hyprctl reload` and `omarchy restart shell`.
 ### settings
 
 - `step` and `fine_step` are the arrow-key increments in percentage points,
-  for the plain and the shifted arrows.
+  for the plain and the shifted arrows. `scale_nudge` and `scale_nudge_fine`
+  step by them too.
 - `notify` is how much Ichi says: `never` is silent; `changes`, the default,
   reports everything except resizing step by step (arrow-key nudges and
   `size`); `always` reports those too. The panel labels them *Never*, *All but
@@ -214,7 +219,11 @@ A workspace entry is one of three things:
 - `size` is a percentage of the *usable* area — the monitor minus the bar — so
   the proportion holds on any display. Width and height
   are each clamped to 10–100; at 100 the inset is exactly your normal gaps.
-- `aspect` is the largest box of that ratio, centred.
+- `aspect` is a box of that ratio, centred. `scale` is its size in percent
+  of the largest box of that ratio that fits, clamped to 10–100; left out, it
+  is 100. `aspect` on a workspace that already has a ratio keeps its scale.
+  An arrow-key nudge leaves the ratio for a `size` entry, starting from the
+  box on screen.
 
 `false` opts a workspace out, which only matters when `all_workspaces` is on.
 

@@ -1075,6 +1075,80 @@ check("turning it off there says nothing about floating", fake.notes[1] and fake
 os.execute("rm -rf '" .. M.workspace_layouts_dir .. "'")
 fake.windows[4] = { { floating = false, monitor = screen } }
 
+-- Scale: an aspect box at a percent of the largest of its ratio.
+local half = M.gaps_for(usable_w, usable_h, { mode = "aspect", ratio_w = 4, ratio_h = 3, scale = 50 }, base)
+check("scale 50 halves a 4:3 box on both sides", half.left == 808 and half.top == 353, half.left .. "/" .. half.top)
+local scaled_capped = M.gaps_for(usable_w, usable_h, { mode = "aspect", ratio_w = 4, ratio_h = 3, scale = 90, max_width = 1600 }, base)
+check("a cap below the scaled box still wins", scaled_capped.left == 480 and scaled_capped.top == 107,
+  scaled_capped.left .. "/" .. scaled_capped.top)
+local scaled_under_cap = M.gaps_for(usable_w, usable_h, { mode = "aspect", ratio_w = 4, ratio_h = 3, scale = 50, max_width = 1600 }, base)
+check("a cap above the scaled box does nothing", scaled_under_cap.left == 808, scaled_under_cap.left)
+check("scale is 100 when left out", M.normalize_entry({ mode = "aspect", ratio_w = 4, ratio_h = 3 }).scale == 100)
+check("scale is clamped and floored", M.normalize_entry({ mode = "aspect", ratio_w = 4, ratio_h = 3, scale = 5 }).scale == 10
+  and M.normalize_entry({ mode = "aspect", ratio_w = 4, ratio_h = 3, scale = 150 }).scale == 100
+  and M.normalize_entry({ mode = "aspect", ratio_w = 4, ratio_h = 3, scale = 55.7 }).scale == 55)
+
+local scaled_cfg = M.parse_config([[{ "workspaces": { "3": { "mode": "aspect", "ratio": [4, 3], "scale": 80 }, "5": { "mode": "aspect", "ratio": [4, 3] } } }]])
+check("parse reads scale", scaled_cfg.workspaces["3"].scale == 80 and scaled_cfg.workspaces["5"].scale == 100)
+check("encode writes a scale below 100", M.encode_entry(scaled_cfg.workspaces["3"]) == '{ "mode": "aspect", "ratio": [4, 3], "scale": 80 }',
+  M.encode_entry(scaled_cfg.workspaces["3"]))
+check("encode leaves scale 100 out, as before 1.1", M.encode_entry(scaled_cfg.workspaces["5"]) == '{ "mode": "aspect", "ratio": [4, 3] }',
+  M.encode_entry(scaled_cfg.workspaces["5"]))
+
+-- Workspace 4 is on `screen`: 2560x1440 with a 26px bar, so 2560x1414 usable.
+M.set("settings.step", 12)
+M.set("settings.fine_step", 3)
+M.set("settings.notify", "always")
+M.config.workspaces["4"] = { mode = "aspect", ratio_w = 4, ratio_h = 3, scale = 100 }
+fake.notes = {}
+M.set_scale(80, 4)
+check("set_scale scales an aspect workspace", M.config.workspaces["4"].scale == 80 and M.config.workspaces["4"].ratio_w == 4)
+check("and says so with the scale", fake.notes[1] and fake.notes[1]:find("at 4:3, 80%", 1, true) ~= nil, fake.notes[1])
+M.set_aspect(16, 10, 4)
+check("set_aspect keeps the scale of a workspace that has a ratio",
+  M.config.workspaces["4"].ratio_w == 16 and M.config.workspaces["4"].scale == 80)
+M.set_scale(3, 4)
+check("set_scale clamps to the minimum", M.config.workspaces["4"].scale == 10)
+M.nudge_scale(1, false, 4)
+check("nudge_scale steps by the step", M.config.workspaces["4"].scale == 22)
+M.nudge_scale(-1, true, 4)
+check("nudge_scale fine steps by the fine step", M.config.workspaces["4"].scale == 19)
+M.save_preset("small", 4)
+local small = M.config.presets[#M.config.presets]
+check("a preset keeps the scale", small.name == "small" and small.entry.scale == 19)
+M.set_scale(50, 4)
+M.preset("small", 4)
+check("and gives it back", M.config.workspaces["4"].scale == 19)
+M.remove_preset("small")
+
+M.config.workspaces["4"] = { mode = "size", width = 70, height = 80 }
+fake.notes = {}
+M.set_scale(50, 4)
+M.nudge_scale(1, false, 4)
+check("scale leaves a workspace without a ratio alone", M.config.workspaces["4"].mode == "size"
+  and M.config.workspaces["4"].width == 70)
+check("and says why", #fake.notes == 2 and fake.notes[1]:find("has no scale", 1, true) ~= nil, fake.notes[1])
+M.set_aspect(4, 3, 4)
+check("set_aspect on a workspace without a ratio starts at 100", M.config.workspaces["4"].scale == 100)
+
+-- A nudge on a ratio starts from the box on screen: 4:3 at 100 is 1885x1414,
+-- 74% x 100% of the usable area, and at 50 it is 37% x 50%.
+M.nudge(-1, 0, false, 4)
+check("the first nudge on a ratio starts from its box", M.config.workspaces["4"].mode == "size"
+  and M.config.workspaces["4"].width == 62 and M.config.workspaces["4"].height == 100,
+  M.config.workspaces["4"].width .. " x " .. M.config.workspaces["4"].height)
+M.config.workspaces["4"] = { mode = "aspect", ratio_w = 4, ratio_h = 3, scale = 50 }
+M.nudge(0, 1, true, 4)
+check("and from its scaled box", M.config.workspaces["4"].width == 37 and M.config.workspaces["4"].height == 53,
+  M.config.workspaces["4"].width .. " x " .. M.config.workspaces["4"].height)
+M.config.workspaces["4"] = { mode = "default" }
+M.config.workspaces["99"] = { mode = "aspect", ratio_w = 4, ratio_h = 3 }
+M.nudge(-1, 0, false, 99)
+check("a ratio on a workspace with no monitor starts from the defaults",
+  M.config.workspaces["99"].width == M.defaults_for(nil).width - 12, M.config.workspaces["99"].width)
+M.config.workspaces["99"] = nil
+M.save()
+
 os.remove(M.config_path)
 os.remove(M.previous_config_path)
 

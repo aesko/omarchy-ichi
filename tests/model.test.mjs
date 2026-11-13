@@ -84,7 +84,7 @@ test("parseConfig normalizes and drops bad entries", () => {
   // A step under defaults, where it lived before 0.2, is no longer read.
   assert.deepEqual(config.settings, { step: 5, fine_step: 1, notify: "changes", all_workspaces: false, max_windows: 1, paused: false })
   assert.deepEqual(config.workspaces["2"], { mode: "size", width: 70, height: 80 })
-  assert.deepEqual(config.workspaces["5"], { mode: "aspect", ratio: [4, 3] })
+  assert.deepEqual(config.workspaces["5"], { mode: "aspect", ratio: [4, 3], scale: 100 })
   assert.equal(config.workspaces["7"], undefined)
   assert.deepEqual(config.workspaces["8"], { mode: "default" })
   assert.deepEqual(config.workspaces["9"], { mode: "default" })
@@ -723,6 +723,30 @@ test("the sliders show a size entry's own size, and the defaults on an aspect ra
   assert.deepEqual(Model.sliderSize({ mode: "size", width: 40, height: 50 }, config, null), { width: 40, height: 50 })
   assert.deepEqual(Model.sliderSize({ mode: "aspect", ratio: [16, 9] }, config, null), { width: 60, height: 80 })
   assert.deepEqual(Model.sliderSize({ mode: "aspect", ratio: [16, 9] }, config, { name: "DP-1", description: "" }), { width: 70, height: 80 })
+})
+
+test("an aspect entry's scale is read as ichi.lua reads it", () => {
+  const config = Model.normalizeConfig({ workspaces: {
+    "1": { mode: "aspect", ratio: [4, 3], scale: 80 },
+    "2": { mode: "aspect", ratio: [4, 3], scale: 5 },
+    "3": { mode: "aspect", ratio: [4, 3], scale: 150 },
+    "4": { mode: "aspect", ratio: [4, 3], scale: 55.7 },
+    "5": { mode: "aspect", ratio: [4, 3], scale: null },
+  } })
+  assert.deepEqual(["1", "2", "3", "4", "5"].map((k) => config.workspaces[k].scale), [80, 10, 100, 55, 100])
+})
+
+test("a scale below 100 shows in the summary, and presets match on it", () => {
+  const config = Model.normalizeConfig({
+    presets: { small: { mode: "aspect", ratio: [4, 3], scale: 80 }, full: { mode: "aspect", ratio: [4, 3] } },
+    workspaces: { "1": { mode: "aspect", ratio: [4, 3], scale: 80 }, "2": { mode: "aspect", ratio: [4, 3] }, "3": { mode: "aspect", ratio: [4, 3], scale: 81 } },
+  })
+  assert.equal(Model.status(config, 1).summary, "4:3, 80%")
+  assert.equal(Model.status(config, 2).summary, "4:3")
+  assert.equal(Model.status(config, 1).preset, "small")
+  assert.equal(Model.status(config, 2).preset, "full")
+  assert.equal(Model.status(config, 3).preset, null)
+  assert.equal(Model.status(config, 1).resolved.scale, 80)
 })
 
 console.log(passed + " passed")

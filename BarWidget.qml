@@ -98,12 +98,13 @@ Panel {
   // ratio gives it nothing to do.
   readonly property bool canAdopt: !!(entry && entry.mode === "size")
   readonly property bool aspectMode: !!(resolved && resolved.mode === "aspect")
-  // What the sliders show. On an aspect ratio, which has no percentage, they
-  // stay live at the defaults for this monitor, the way they do on a
-  // workspace that is off: touching one switches it to that size.
+  // What the width and height sliders show. On a workspace that is off they
+  // stay live at the defaults for this monitor: touching one switches it on
+  // at that size. An aspect ratio shows a Size slider for its scale instead.
   readonly property var sliderSize: ready ? Model.sliderSize(resolved, ichiService.config, screenMonitor) : null
   readonly property int sizeWidth: sliderSize ? sliderSize.width : 0
   readonly property int sizeHeight: sliderSize ? sliderSize.height : 0
+  readonly property int scaleValue: aspectMode && resolved.scale ? resolved.scale : 100
 
   readonly property string glyph: ""
   // Mirrors manifest.json's barWidget.defaults.
@@ -373,8 +374,9 @@ Panel {
           }
         }
 
-        // The other way to say what shape this workspace is. The sliders
-        // below stay; touching one leaves the ratio for that size.
+        // The other way to say what shape this workspace is. On a ratio the
+        // width and height sliders below give way to one Size slider, which
+        // keeps the ratio; Default or a size preset above leaves it.
         Flow {
           Layout.fillWidth: true
           Layout.preferredHeight: implicitHeight
@@ -394,10 +396,41 @@ Panel {
           }
         }
 
+        // An aspect ratio's scale: the percent of the largest box of that
+        // ratio, so it keeps its shape however it is sized.
         ColumnLayout {
           Layout.fillWidth: true
           spacing: Style.space(6)
-          visible: !!root.resolved
+          visible: root.aspectMode
+
+          Stepper {
+            label: "Size"
+            value: Math.round(scaleSlider.liveValue)
+            from: root.minPercent
+            to: 100
+            stepSize: 1
+            foreground: root.bar ? root.bar.foreground : Commons.Color.foreground
+            onModified: function (v) { root.applyScaleOf(v) }
+          }
+
+          PanelSlider {
+            id: scaleSlider
+            Layout.fillWidth: true
+            bar: root.bar
+            minimum: root.minPercent
+            maximum: 100
+            step: 1
+            integer: true
+            value: root.scaleValue
+            onMoved: root.throttledScale()
+            onReleased: { scaleCommit.stop(); root.applyScale() }
+          }
+        }
+
+        ColumnLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(6)
+          visible: !!root.resolved && !root.aspectMode
 
           // Steppers rather than the kit's NumberField, whose editable text
           // input reads the clipboard on paste; the sliders below them give
@@ -823,5 +856,25 @@ Panel {
     interval: 150
     repeat: false
     onTriggered: root.applySize()
+  }
+
+  function applyScaleOf(percent) {
+    call("cmdScale", percent)
+  }
+
+  function applyScale() {
+    applyScaleOf(Math.round(scaleSlider.liveValue))
+  }
+
+  // The same rate limit as the size sliders'.
+  function throttledScale() {
+    if (!scaleCommit.running) scaleCommit.start()
+  }
+
+  Timer {
+    id: scaleCommit
+    interval: 150
+    repeat: false
+    onTriggered: root.applyScale()
   }
 }

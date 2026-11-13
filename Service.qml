@@ -367,6 +367,16 @@ Item {
     run("ichi.set_aspect(" + rw + ", " + rh + ", " + target(workspace) + ")", quiet)
   }
 
+  // An aspect workspace's scale, in percent of the largest box of its ratio.
+  function cmdScale(percent, quiet, workspace) {
+    run("ichi.set_scale(" + (Number(percent) || 0) + ", " + target(workspace) + ")", quiet)
+  }
+
+  // A direction as -1 or 1, scaled by the step or the fine step.
+  function cmdScaleNudge(direction, fine, quiet, workspace) {
+    run("ichi.nudge_scale(" + (Number(direction) || 0) + ", " + (fine === true) + ", " + target(workspace) + ")", quiet)
+  }
+
   // An absolute size for a workspace, which is what a slider has.
   function cmdSize(width, height, quiet, workspace) {
     run("ichi.set_size(" + (Number(width) || 0) + ", " + (Number(height) || 0)

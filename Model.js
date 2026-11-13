@@ -103,6 +103,9 @@ var HELP_TEXT = [
   "  aspect <w> <h>            a ratio instead, e.g. 4 3",
   "  nudge <dw> <dh>           steps wider or taller, e.g. -1 0",
   "  nudge_fine <dw> <dh>      the same, in fine steps",
+  "  scale <percent>           a ratio's size, in percent of the largest",
+  "  scale_nudge <d>           a step bigger (1) or smaller (-1), keeping the ratio",
+  "  scale_nudge_fine <d>      the same, in fine steps",
   "",
   "This monitor:",
   "  monitor on|off            whether Ichi runs on this monitor at all",
@@ -152,7 +155,8 @@ function clamp(value, lo, hi) {
 }
 
 // `true` (or mode "default") follows the defaults; "size" and "aspect" are
-// fixed for that workspace.
+// fixed for that workspace. An aspect entry's scale is the percent of the
+// largest box of its ratio, 100 when the file leaves it out.
 function normalizeEntry(entry, defaults, min) {
   if (entry === true) return { mode: "default" }
   if (entry === false) return false
@@ -162,7 +166,9 @@ function normalizeEntry(entry, defaults, min) {
     var ratio = Array.isArray(entry.ratio) ? entry.ratio : []
     var rw = Number(ratio[0]), rh = Number(ratio[1])
     if (!(rw > 0) || !(rh > 0)) return null
-    return { mode: "aspect", ratio: [rw, rh] }
+    var scale = Number(entry.scale)
+    scale = clamp(Math.floor(isFinite(scale) && entry.scale !== null ? scale : 100), min, LIMITS.max)
+    return { mode: "aspect", ratio: [rw, rh], scale: scale }
   }
   var width = Number(entry.width), height = Number(entry.height)
   return {
@@ -341,10 +347,9 @@ function defaultsFor(config, monitor) {
 }
 
 // A default entry is shown with what it currently amounts to on this monitor.
-// The width and height the panel's sliders show. A size entry has its own.
-// An aspect ratio has none, so they show what touching one gives: the
-// defaults for this monitor, which is also what the arrow keys switch an
-// aspect workspace to.
+// The width and height the panel's sliders show. A size entry has its own;
+// anything else shows what touching one gives, the defaults for this monitor.
+// An aspect ratio shows its scale instead, on a slider of its own.
 function sliderSize(resolved, config, monitor) {
   if (resolved && resolved.mode === "size") return { width: resolved.width, height: resolved.height }
   var d = defaultsFor(config, monitor)
@@ -363,13 +368,13 @@ function describe(entry, config, monitor) {
   if (!entry) return "off"
   var suffix = entry.mode === "default" ? " (default)" : ""
   entry = resolve(entry, config, monitor)
-  if (entry.mode === "aspect") return entry.ratio[0] + ":" + entry.ratio[1]
+  if (entry.mode === "aspect") return entry.ratio[0] + ":" + entry.ratio[1] + (entry.scale < 100 ? ", " + entry.scale + "%" : "")
   return entry.width + "% x " + entry.height + "%" + suffix
 }
 
 function sameEntry(a, b) {
   if (!a || !b || a.mode !== b.mode) return false
-  if (a.mode === "aspect") return a.ratio[0] === b.ratio[0] && a.ratio[1] === b.ratio[1]
+  if (a.mode === "aspect") return a.ratio[0] === b.ratio[0] && a.ratio[1] === b.ratio[1] && a.scale === b.scale
   return a.mode === "default" || (a.width === b.width && a.height === b.height)
 }
 
