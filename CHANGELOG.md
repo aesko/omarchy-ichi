@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 — 2026-11-13
 
 An aspect ratio can be sized and keep its shape. Nothing to do.
 
