@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# The shell side against a real Quickshell, offscreen: the preset-name field,
-# the steppers, BoundedProcess and Service.qml's action queue. Run it by hand
-# before a release, next to tests/nested.sh:
+# The shell side against a real Quickshell and the installed Omarchy shell,
+# offscreen: the preset-name field, the steppers, BoundedProcess and
+# Service.qml's action queue; that the qs.Commons members, plugin API
+# functions and omarchy-* commands Ichi uses are all there; and that
+# BarWidget.qml compiles against this qs.Ui. Run it by hand before a release,
+# next to tests/nested.sh, and after an Omarchy update (ichi-upstream-check
+# runs it):
 #
 #   tests/shell.sh
 #
@@ -42,10 +46,19 @@ chmod +x "$S/bin/hyprctl"
 ln -s /usr/bin/mkdir "$S/bin/mkdir"
 echo ok >"$S/mode"
 
+# Code only, comments dropped: QML's // and Lua's --.
+code() { sed -E 's#(^|[[:space:]])(//|--).*##' "$@"; }
+# Every Style., Color. and Border. member Ichi's QML reads, with a trailing (
+# for one it calls. A member the kit drops reads as undefined, which QML
+# draws as nothing or NaN rather than failing, so each is looked up here.
+kit_members=$(code "$ROOT"/*.qml | grep -ohE '\b(Style|Color|Border)(\.[A-Za-z_]+)+\(?' | sort -u |
+  sed 's/.*/"&"/' | paste -sd, -)
+
 cat >"$S/qs/shell.qml" <<EOF
 import QtQuick
 import QtTest
 import Quickshell
+import qs.Commons as Commons
 import "file:$ROOT"
 
 ShellRoot {
@@ -156,6 +169,27 @@ ShellRoot {
   Component.onCompleted: {
     var big = "x".repeat(1000000)
     steps = [
+      // What Ichi uses of the installed kit.
+      () => {
+        var roots = { Style: Commons.Style, Color: Commons.Color, Border: Commons.Border }
+        var used = [$kit_members]
+        var missing = used.filter((name) => {
+          var call = name.endsWith("(")
+          var v = roots
+          for (var part of name.replace(/\\($/, "").split(".")) v = v === undefined || v === null ? undefined : v[part]
+          return call ? typeof v !== "function" : v === undefined || v === null
+        })
+        check("qs.Commons has the " + used.length + " Style, Color and Border members Ichi uses",
+          used.length > 0 && missing.length === 0, "missing " + missing.join(" "))
+        // Plugins get a PluginShellApi as bar.shell. BarWidget.qml checks for
+        // these before calling them, so a rename would go quiet, not fail.
+        var api = Qt.createComponent("file:$OMARCHY/shell/services/PluginShellApi.qml")
+        var shellApi = api.status === Component.Ready ? api.createObject(shell, { pluginId: "io.github.aesko.ichi" }) : null
+        check("the plugin shell API loads", shellApi !== null, api.errorString())
+        if (shellApi) for (var fn of ["serviceFor", "updateEntryInline"])
+          check("the plugin shell API has " + fn + "()", typeof shellApi[fn] === "function", typeof shellApi[fn])
+      },
+
       // The preset-name field.
       () => {
         field.forceActiveFocus()
@@ -294,6 +328,19 @@ if [[ -z $results ]]; then
   sed 's/\x1b\[[0-9;]*m//g' <<<"$out" | grep -iE 'error|unavailable|not found|warn' | head -20
   exit 1
 fi
+# The commands Ichi runs, found in its code, and omarchy-shell, which every
+# `omarchy-shell ichi ...` command and binding goes through. Ichi passes -u
+# to omarchy-notification-send, so check that it still documents it.
+for c in omarchy-shell $(code "$ROOT"/*.qml "$ROOT"/ichi.lua | grep -ohE '\bomarchy-[a-z]+(-[a-z]+)+' | sort -u); do
+  if [[ -x $OMARCHY/bin/$c ]]; then results+=$'\n'"ok   $c is installed"
+  else results+=$'\n'"FAIL $c is installed: not in $OMARCHY/bin"; fi
+done
+if grep -q -- '-u <low|normal|critical>' "$OMARCHY/bin/omarchy-notification-send" 2>/dev/null; then
+  results+=$'\n'"ok   omarchy-notification-send still takes -u"
+else
+  results+=$'\n'"FAIL omarchy-notification-send still takes -u: its usage no longer lists -u <low|normal|critical>"
+fi
+
 # The widget itself, compiled against this Omarchy's qs.Ui. KeyboardPanel
 # needs Quickshell.Wayland, which the offscreen platform lacks, so this one
 # connects to the running session; it only compiles, and opens no window.
