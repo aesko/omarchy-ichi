@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.1 — 2026-11-19
 
 Settings that were saved but did not come back after a reload now do. Nothing
 to do.
