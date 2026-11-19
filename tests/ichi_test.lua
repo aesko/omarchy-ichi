@@ -268,8 +268,29 @@ check("a fixed entry keeps its size but takes the monitor's caps", M.resolve({ m
   and M.resolve({ mode = "size", width = 80, height = 80 }, big).max_width == 1600)
 local layered_text = M.encode_config(layered)
 check("encode writes the monitors block", layered_text:find('"desc:ULTRAGEAR": { "width": 50, "max_width": 1600 }', 1, true) ~= nil
-  and layered_text:find('"eDP-1": { "width": 95, "height": 95 }', 1, true) ~= nil, layered_text)
+  and layered_text:find('"eDP-1": { "width": 95, "height": 95, "max_width": 0 }', 1, true) ~= nil, layered_text)
 check("encode/parse round-trips monitors", #M.parse_config(layered_text).monitors == 2)
+-- In a monitor block an absent field means "as the defaults say", so a zero
+-- cap is an override and has to be written. Until 1.1.1 it was dropped like
+-- the defaults' own zero, and after a save and reload the laptop got the
+-- global cap back. What counts is the size a monitor resolves to.
+M.config = M.parse_config(layered_text)
+check("a monitor's zero cap survives a save and reload", M.resolve({ mode = "default" }, laptop).max_width == 0
+  and M.resolve({ mode = "default" }, big).max_width == 1600 and M.resolve({ mode = "default" }, other).max_width == 2000,
+  M.resolve({ mode = "default" }, laptop).max_width)
+local centred = M.parse_config([[
+{
+  "defaults": { "width": 60, "height": 90, "align_x": 30, "max_height": 1200 },
+  "monitors": { "eDP-1": { "align_x": 50, "max_height": 0 } }
+}
+]])
+M.config = M.parse_config(M.encode_config(centred))
+local centred_laptop = M.resolve({ mode = "default" }, laptop)
+check("a monitor's centred alignment and zero cap survive a save and reload", centred_laptop.align_x == 50
+  and centred_laptop.max_height == 0 and M.resolve({ mode = "default" }, other).align_x == 30,
+  M.encode_config(centred))
+check("the defaults still leave out a zero cap and the centre",
+  M.encode_config(M.parse_config('{ "defaults": { "max_width": 0, "align_x": 50 } }')):find('"defaults": { "width": 70, "height": 80 }', 1, true) ~= nil)
 check("encode omits an empty monitors block", M.encode_config(M.parse_config("")):find("monitors", 1, true) == nil)
 M.config = M.parse_config("")
 
@@ -451,15 +472,19 @@ check("unpausing leaves the display off", fake.rules["4"].left == 10 and fake.ru
   fake.rules["4"].left .. "/" .. fake.rules["7"].left)
 M.set_monitor_enabled(true, 4)
 
--- A description with a quote in it cannot be a key: the reader does not
--- unescape keys, and with the quote taken out it is no longer part of the
--- description. The connector name is what still finds the display.
+-- A description with a quote in it is still the key, escaped in the file and
+-- decoded on the way back, and the block it writes survives a reload. Until
+-- 1.1.1 the reader could not decode a key, so this fell back to the connector
+-- name.
 local quoted_desc = other_screen.description
 other_screen.description = 'Acme "27" Laptop'
 M.config.monitors = {}
 M.set_monitor_enabled(false, 7)
-check("a quoted description keys the block by connector name",
-  #M.config.monitors == 1 and M.config.monitors[1].key == "eDP-1", M.config.monitors[1] and M.config.monitors[1].key)
+check("a quoted description keys the block by its description",
+  #M.config.monitors == 1 and M.config.monitors[1].key == 'desc:Acme "27" Laptop', M.config.monitors[1] and M.config.monitors[1].key)
+local reloaded_quoted = M.parse_config(M.encode_config(M.config))
+check("and that block reads back with the quote in it", #reloaded_quoted.monitors == 1
+  and reloaded_quoted.monitors[1].key == 'desc:Acme "27" Laptop' and reloaded_quoted.monitors[1].enabled == false)
 check("and the block it wrote switches that display off", M.monitor_enabled(other_screen) == false
   and fake.rules["7"].left == 10, fake.rules["7"].left)
 M.toggle_monitor(7)
@@ -469,8 +494,8 @@ M.set_monitor_enabled(true, 7)
 check("and switching it on drops the block again", #M.config.monitors == 0)
 adjust(5, 0, 7)
 M.adopt_defaults(7, "monitor")
-check("adopt monitor keys a quoted description by connector name too",
-  #M.config.monitors == 1 and M.config.monitors[1].key == "eDP-1" and M.monitor_block(other_screen) == M.config.monitors[1])
+check("adopt monitor keys a quoted description by its description too",
+  #M.config.monitors == 1 and M.config.monitors[1].key == 'desc:Acme "27" Laptop' and M.monitor_block(other_screen) == M.config.monitors[1])
 M.config.monitors = {}
 other_screen.description = quoted_desc
 
@@ -576,17 +601,42 @@ local plain_cfg = M.parse_config("")
 plain_cfg.workspaces["3"] = { mode = "default" }
 check("encode leaves an ordinary key alone", M.encode_config(plain_cfg):find("\\", 1, true) == nil, M.encode_config(plain_cfg))
 
--- Escaping keeps the document valid, but this file's own reader matches keys
--- with a plain "([^"]+)" and will not find an escaped one, so the setting does
--- not come back after a reload. That has to be said rather than just happening.
-M.set("settings.notify", "changes")
-local before_notes = #fake.notes
-M.enable('say "hi"')
-local said = false
-for i = before_notes + 1, #fake.notes do
-  if fake.notes[i]:find("will not survive a reload", 1, true) then said = true end
+-- And the reader decodes what the writer escaped, so the setting comes back
+-- after a reload under the same name. Until 1.1.1 it matched keys with a
+-- plain "([^"]+)", never found an escaped one, and said so instead.
+local odd_names = { 'say "hi"', "back\\slash", 'both \\"', "new\nline", "tab\there", "brace } in it",
+  "{ open", "\195\188mlaut", "workspaces", "presets" }
+local odd = M.parse_config("")
+for i, name in ipairs(odd_names) do
+  odd.workspaces[name] = { mode = "size", width = 40 + i, height = 50 }
+  odd.presets[#odd.presets + 1] = { name = name, entry = { mode = "aspect", ratio_w = i, ratio_h = 1 } }
 end
-check("a workspace name that cannot round-trip says so", said, table.concat(fake.notes, " | "))
+odd.workspaces["7"] = { mode = "size", width = 66, height = 77 }
+local odd_text = M.encode_config(odd)
+check("a document with odd names is well formed", M.well_formed(odd_text), odd_text)
+local odd_back = M.parse_config(odd_text)
+for i, name in ipairs(odd_names) do
+  local entry = odd_back.workspaces[name]
+  check("encode/parse round-trips workspace " .. M.json_string(name), entry ~= nil and entry.width == 40 + i, odd_text)
+  local preset = odd_back.presets[i]
+  check("encode/parse round-trips preset " .. M.json_string(name), preset ~= nil and preset.name == name
+    and preset.entry.ratio_w == i)
+end
+check("odd names leave the other workspaces alone", odd_back.workspaces["7"] ~= nil and odd_back.workspaces["7"].width == 66)
+local odd_count = 0
+for _ in pairs(odd_back.workspaces) do odd_count = odd_count + 1 end
+check("odd names read back no more and no fewer workspaces", odd_count == #odd_names + 1, odd_count)
+
+-- A file another tool wrote may escape what Ichi writes raw.
+local foreign = M.parse_config([[{ "workspaces": { "\u0063ode": true, "caf\u00e9": true, "\ud83d\ude00": true, "a\/b": true } }]])
+check("parse decodes \\u escapes and \\/ in a key", foreign.workspaces["code"] ~= nil and foreign.workspaces["caf\195\169"] ~= nil
+  and foreign.workspaces["\240\159\152\128"] ~= nil and foreign.workspaces["a/b"] ~= nil)
+check("parse passes over a key with an escape JSON does not have", next(M.parse_config([[{ "workspaces": { "a\qb": true } }]]).workspaces) == nil)
+
+-- And through the real save and load, from a command.
+M.enable('say "hi"')
+check("a quoted workspace name survives a reload",
+  M.parse_config(io.open(M.config_path):read("*a")).workspaces['say "hi"'] ~= nil)
 M.config.workspaces['say "hi"'] = nil
 
 -- Quiet mode: what the panel uses, because it shows its own result in the

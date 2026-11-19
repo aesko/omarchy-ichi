@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+Settings that were saved but did not come back after a reload now do. Nothing
+to do.
+
+### Fixed
+
+- **A monitor's `"max_width": 0` or `"max_height": 0` is kept when Ichi
+  saves.** It clears the global cap for that display, but the save left it out,
+  so after the next reload the display had the cap again. The same went for a
+  monitor's `"align_x": 50` or `"align_y": 50` when the defaults align
+  elsewhere.
+- **A workspace whose name has a quote, a backslash or a control character in
+  it keeps its setting across a reload.** Ichi wrote it escaped but could not
+  read it back, and said so; it now reads it back. A display whose description
+  has a quote or backslash in it is now keyed by that description rather than
+  by its connector name, so its block survives replugging too.
+- **A workspace or preset name with a brace in it, or a preset named
+  `workspaces`, no longer costs other settings on reload.** A `}` in a name
+  ended its block early, losing every entry after it, and a preset named
+  `workspaces` was read in place of the workspaces block, losing all of them.
+- Keys written with JSON escapes by another tool, such as `é`, are read
+  as the characters they stand for.
+
 ## 1.1.0 — 2026-11-13
 
 An aspect ratio can be sized and keep its shape. Nothing to do.

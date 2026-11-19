@@ -68,7 +68,7 @@ M.config = default_config()
 -- Workspaces enabled at some point this session, so disabling one still gets
 -- its gaps reset instead of keeping the last inset that was applied.
 local touched = {}
-local warned = { builtin = false, layouts = {}, names = {} }
+local warned = { builtin = false, layouts = {} }
 
 -- ------------------------------------------------------------------ pure --
 
@@ -255,26 +255,164 @@ function M.gaps_for(usable_w, usable_h, entry, base)
 end
 
 -- The config is a fixed, flat shape, so a real JSON parser is not needed; a
--- hand-edit that gets something wrong loses that entry, not the file.
-local function find_object(text, key)
-  local start = text:find('"' .. key .. '"%s*:%s*{')
-  if not start then
-    return nil
+-- hand-edit that gets something wrong loses that entry, not the file. Keys
+-- are read as real JSON strings, though. A workspace key is the live
+-- workspace's name, which M.json_string escapes rather than rewrites, so a
+-- reader that took the text between two quotes would never find a name with
+-- a quote or backslash in it again, and one with a brace in it would end its
+-- block early.
+
+-- A code point as UTF-8. Arithmetic rather than bit operators, which Lua 5.1
+-- and LuaJIT cannot even parse.
+local function utf8_bytes(code)
+  if code < 0x80 then
+    return string.char(code)
+  elseif code < 0x800 then
+    return string.char(0xC0 + math.floor(code / 0x40), 0x80 + code % 0x40)
+  elseif code < 0x10000 then
+    return string.char(0xE0 + math.floor(code / 0x1000), 0x80 + math.floor(code / 0x40) % 0x40, 0x80 + code % 0x40)
   end
-  local open = text:find("{", start, true)
-  local depth = 0
-  for i = open, #text do
-    local c = text:sub(i, i)
-    if c == "{" then
-      depth = depth + 1
-    elseif c == "}" then
-      depth = depth - 1
+  return string.char(0xF0 + math.floor(code / 0x40000), 0x80 + math.floor(code / 0x1000) % 0x40,
+    0x80 + math.floor(code / 0x40) % 0x40, 0x80 + code % 0x40)
+end
+
+local ESCAPES = { ['"'] = '"', ["\\"] = "\\", ["/"] = "/", b = "\b", f = "\f", n = "\n", r = "\r", t = "\t" }
+
+-- The JSON string whose opening quote is at `pos`: its decoded text, and
+-- where what follows the closing quote starts. Nil when it does not close or
+-- holds an escape JSON does not have.
+local function read_string(text, pos)
+  local out, i = {}, pos + 1
+  while true do
+    local stop = text:find('[\\"]', i)
+    if stop == nil then
+      return nil
+    end
+    out[#out + 1] = text:sub(i, stop - 1)
+    if text:sub(stop, stop) == '"' then
+      return table.concat(out), stop + 1
+    end
+    local e = text:sub(stop + 1, stop + 1)
+    if e == "u" then
+      local hex = text:match("^%x%x%x%x", stop + 2)
+      if hex == nil then
+        return nil
+      end
+      local code = tonumber(hex, 16)
+      i = stop + 6
+      -- A character past the first plane comes as a pair of surrogates.
+      local low = code >= 0xD800 and code < 0xDC00 and text:match("^\\u([dD][c-fC-F]%x%x)", i)
+      if low then
+        code = 0x10000 + (code - 0xD800) * 0x400 + (tonumber(low, 16) - 0xDC00)
+        i = i + 6
+      end
+      out[#out + 1] = utf8_bytes(code)
+    elseif ESCAPES[e] then
+      out[#out + 1] = ESCAPES[e]
+      i = stop + 2
+    else
+      return nil
+    end
+  end
+end
+
+-- Where the string opening at `pos` ends, whatever its escapes say: the
+-- position after its closing quote, or nil when it has none.
+local function skip_string(text, pos)
+  repeat
+    pos = text:find('[\\"]', pos + 1)
+    if pos == nil then
+      return nil
+    end
+    local escape = text:sub(pos, pos) == "\\"
+    if escape then
+      pos = pos + 1
+    end
+  until not escape
+  return pos + 1
+end
+
+-- Where the object or array opening at `open` closes, with strings skipped so
+-- a brace in a name is not counted; nil when it does not close.
+local function closing(text, open)
+  local depth, pos = 0, open
+  while true do
+    pos = text:find('[{}%[%]"]', pos)
+    if pos == nil then
+      return nil
+    end
+    local c = text:sub(pos, pos)
+    if c == '"' then
+      pos = skip_string(text, pos)
+      if pos == nil then
+        return nil
+      end
+    else
+      depth = depth + ((c == "{" or c == "[") and 1 or -1)
       if depth == 0 then
-        return text:sub(open + 1, i - 1)
+        return pos
+      end
+      pos = pos + 1
+    end
+  end
+end
+
+-- The members of an object's body, in file order, as { key = ..., value =
+-- ... }: the value is true, false, or the text inside an object's braces.
+-- Any other value, a number, a string, an array or a typo, is passed over, and
+-- so is a key that is empty or does not decode.
+local function members(body)
+  local list, pos = {}, 1
+  while true do
+    local quote = body:find('"', pos, true)
+    if quote == nil then
+      return list
+    end
+    local key, after = read_string(body, quote)
+    if after == nil then
+      key, after = nil, skip_string(body, quote)
+      if after == nil then
+        return list
+      end
+    end
+    pos = after
+    local at = body:match("^%s*:%s*()", after)
+    if at then
+      local value
+      if body:find("^true", at) then
+        value, pos = true, at + 4
+      elseif body:find("^false", at) then
+        value, pos = false, at + 5
+      elseif body:sub(at, at) == "{" then
+        local close = closing(body, at)
+        if close == nil then
+          return list
+        end
+        value, pos = body:sub(at + 1, close - 1), close + 1
+      else
+        pos = at
+      end
+      if value ~= nil and key ~= nil and key ~= "" then
+        list[#list + 1] = { key = key, value = value }
       end
     end
   end
-  return nil
+end
+
+-- The document's own blocks by name: only its top-level members count, so a
+-- preset or workspace named "workspaces" is not taken for the block itself.
+local function blocks(text)
+  local found = {}
+  local open = text:find("{", 1, true)
+  local close = open and closing(text, open)
+  if close then
+    for _, m in ipairs(members(text:sub(open + 1, close - 1))) do
+      if type(m.value) == "string" then
+        found[m.key] = m.value
+      end
+    end
+  end
+  return found
 end
 
 local function number_field(body, key)
@@ -304,8 +442,9 @@ function M.parse_config(text)
     return cfg
   end
 
-  local defaults = find_object(text, "defaults") or ""
-  local settings = find_object(text, "settings") or ""
+  local top = blocks(text)
+  local defaults = top.defaults or ""
+  local settings = top.settings or ""
   local min = M.limits.min
   cfg.defaults.width = clamp(math.floor(number_field(defaults, "width") or 70), min, M.limits.max)
   cfg.defaults.height = clamp(math.floor(number_field(defaults, "height") or 80), min, M.limits.max)
@@ -323,10 +462,10 @@ function M.parse_config(text)
   cfg.settings.paused = settings:match('"paused"%s*:%s*(%a+)') == "true"
   cfg.settings.max_windows = clamp(math.floor(number_field(settings, "max_windows") or 1), 1, 10)
 
-  local monitors = find_object(text, "monitors")
-  if monitors then
-    for key, body in monitors:gmatch('"([^"]+)"%s*:%s*{(.-)}') do
-      local block = { key = key }
+  for _, m in ipairs(members(top.monitors or "")) do
+    if type(m.value) == "string" then
+      local body = m.value
+      local block = { key = m.key }
       for _, field in ipairs({ "width", "height" }) do
         local v = number_field(body, field)
         if v then
@@ -355,45 +494,31 @@ function M.parse_config(text)
     end
   end
 
-  -- Presets keep file order, which is the cycling order; `true` entries and
-  -- object entries are collected in one pass so the order holds.
-  local presets = find_object(text, "presets")
-  if presets then
-    local pos = 1
-    while true do
-      local _, colon, name = presets:find('"([^"]+)"%s*:%s*', pos)
-      if colon == nil then
-        break
-      end
-      local entry
-      pos = colon + 1
-      if presets:sub(pos, pos + 3) == "true" then
-        entry = { mode = "default" }
-        pos = pos + 4
-      elseif presets:sub(pos, pos) == "{" then
-        local _, close = presets:find("%b{}", pos)
-        entry = close and parse_entry(presets:sub(pos + 1, close - 1), cfg.defaults)
-        pos = (close or pos) + 1
-      end
-      if entry then
-        cfg.presets[#cfg.presets + 1] = { name = name, entry = entry }
-      end
+  -- Presets keep file order, which is the cycling order.
+  for _, m in ipairs(members(top.presets or "")) do
+    local entry
+    if m.value == true then
+      entry = { mode = "default" }
+    elseif m.value then
+      entry = parse_entry(m.value, cfg.defaults)
+    end
+    if entry then
+      cfg.presets[#cfg.presets + 1] = { name = m.key, entry = entry }
     end
   end
 
-  local workspaces = find_object(text, "workspaces")
-  if workspaces then
-    -- Keys are workspace names. Hyprland names a numeric workspace by its
-    -- number, so "2" keeps meaning workspace 2 and a 0.3 config still loads.
-    for key in workspaces:gmatch('"([^"]+)"%s*:%s*true') do
-      cfg.workspaces[key] = { mode = "default" }
-    end
-    -- An explicit off, which only means something with all_workspaces on.
-    for key in workspaces:gmatch('"([^"]+)"%s*:%s*false') do
-      cfg.workspaces[key] = false
-    end
-    for key, body in workspaces:gmatch('"([^"]+)"%s*:%s*{(.-)}') do
-      cfg.workspaces[key] = parse_entry(body, cfg.defaults)
+  -- Keys are workspace names. Hyprland names a numeric workspace by its
+  -- number, so "2" keeps meaning workspace 2 and a 0.3 config still loads.
+  -- An explicit false is an off, which only means something with
+  -- all_workspaces on. A key given twice takes its last value, as JSON.parse
+  -- does on the shell side.
+  for _, m in ipairs(members(top.workspaces or "")) do
+    if m.value == true then
+      cfg.workspaces[m.key] = { mode = "default" }
+    elseif m.value == false then
+      cfg.workspaces[m.key] = false
+    else
+      cfg.workspaces[m.key] = parse_entry(m.value, cfg.defaults)
     end
   end
 
@@ -401,10 +526,11 @@ function M.parse_config(text)
 end
 
 -- Every string this file writes into the document goes through here. Preset
--- names and monitor descriptions have the two characters that would end a
--- JSON string taken out of them when they are set, but a workspace key is the
--- live workspace's name and cannot be rewritten without losing what it points
--- at, so it is escaped instead. Control characters go too: a raw newline
+-- names have the two characters that would end a JSON string taken out of
+-- them when they are set, but a workspace key is the live workspace's name,
+-- and a monitor key part of what the display reports, and neither can be
+-- rewritten without losing what it points at, so they are escaped instead and
+-- parse_config decodes them. Control characters go too: a raw newline
 -- inside a string is invalid JSON, and one such key used to cost the whole
 -- document -- the shell side drops a file it cannot parse and sits on the last
 -- good one, so the widget quietly stops following along.
@@ -416,8 +542,11 @@ function M.json_string(value)
 end
 
 -- The fields of a defaults-like table: width and height when present, caps
--- only when set.
-function M.encode_size(d)
+-- only when set, alignment only off the centre, since that is what an absent
+-- field means in the defaults. A monitor block (`layered`) is different: an
+-- absent field there means "as the defaults say", so a cap of 0 or an
+-- alignment of 50 is an override like any other and is written as it is.
+function M.encode_size(d, layered)
   local parts = {}
   for _, k in ipairs({ "width", "height" }) do
     if d[k] ~= nil then
@@ -425,13 +554,12 @@ function M.encode_size(d)
     end
   end
   for _, k in ipairs({ "max_width", "max_height" }) do
-    if (d[k] or 0) > 0 then
+    if d[k] ~= nil and (layered or d[k] > 0) then
       parts[#parts + 1] = string.format('"%s": %d', k, d[k])
     end
   end
-  -- Alignment only when it is not the centre, which is what an absent field means.
   for _, k in ipairs({ "align_x", "align_y" }) do
-    if d[k] ~= nil and d[k] ~= 50 then
+    if d[k] ~= nil and (layered or d[k] ~= 50) then
       parts[#parts + 1] = string.format('"%s": %d', k, d[k])
     end
   end
@@ -446,7 +574,7 @@ local function encode_monitors(monitors)
   for _, block in ipairs(monitors) do
     -- encode_size covers the fields defaults and presets share; `enabled` is
     -- a monitor's alone, and would be dropped on the next save without this.
-    local body = M.encode_size(block)
+    local body = M.encode_size(block, true)
     if block.enabled == false then
       body = body == "" and '"enabled": false' or (body .. ', "enabled": false')
     end
@@ -1071,15 +1199,6 @@ local function key_of(id)
   return tostring(id)
 end
 
--- Escaping keeps the document valid, but this file's own reader matches keys
--- with a plain "([^"]+)" and will not find one that had to be escaped. The
--- entry is written and the shell side reads it fine; it just will not come
--- back after a reload, so say so once rather than letting a setting look like
--- it never took.
-local function survives_reload(id)
-  return tostring(id):find('[\\"]') == nil
-end
-
 local function commit(id, entry, message, level)
   M.config.workspaces[id] = entry
   M.save()
@@ -1090,11 +1209,6 @@ local function commit(id, entry, message, level)
     message = message .. ", once it stops floating"
   end
   notify(message, level)
-  if not survives_reload(id) and not warned.names[id] then
-    warned.names[id] = true
-    notify(string.format(
-      "Ichi: workspace %s has a quote or backslash in its name, so this setting will not survive a reload", id))
-  end
 end
 
 -- Without an explicit entry the workspace follows the defaults, now and
@@ -1467,13 +1581,13 @@ function M.remove_preset(name)
 end
 
 -- The key a monitor gets in the monitors block: its description when it has
--- one, since that survives replugging, else its connector name. So does a
--- description with a quote or backslash in it: parse_config cannot read an
--- escaped key back, and a key with them taken out is no longer part of the
--- description, so monitor_block would never match it.
+-- one, since that survives replugging, else its connector name. A quote or
+-- backslash in the description is kept: json_string escapes it and
+-- parse_config decodes it, and taking it out would leave a key that is no
+-- longer part of the description, which monitor_block would never match.
 local function monitor_key(mon)
   local desc = mon.description or ""
-  if desc ~= "" and not desc:find('[\\"]') then
+  if desc ~= "" then
     return "desc:" .. desc
   end
   return mon.name
@@ -1498,7 +1612,7 @@ function M.set_monitor_enabled(on, id)
     block.enabled = nil
     -- A block that only ever existed to hold the veto is noise once the veto
     -- is lifted, and the state file is meant to be read.
-    if M.encode_size(block) == "" then
+    if M.encode_size(block, true) == "" then
       for i, b in ipairs(M.config.monitors) do
         if b == block then
           table.remove(M.config.monitors, i)
